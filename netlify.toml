@@ -1,0 +1,8 @@
+[build]  
+command = "npm run build"  
+publish = "dist"  
+  
+[build.environment]  
+GO_VERSION = "1.19"
+NODE_VERSION = "23.5.0"
+
