@@ -39,30 +39,37 @@ const ROLES = {
   super_admin: "Super Admin",
   customer: "Customer",
   collector: "Collector",
-  wastebank_employee: "Wastebank Employee",
+  wastebank_master: "Wastebank Employee",
   wastebank_admin: "Wastebank Admin",
   industry: "Industry",
-  government: "Government"
+  government: "Government",
+  marketplace: "Marketplace",
+  wastebank_master_collector: "Wastebank Master Collector",
 };
+
 
 const ROLE_COLORS = {
   super_admin: "bg-rose-100 text-rose-700",
   customer: "bg-sky-100 text-sky-700",
   collector: "bg-amber-100 text-amber-700",
-  wastebank_employee: "bg-purple-100 text-purple-700",
+  wastebank_master: "bg-purple-100 text-purple-700",
   wastebank_admin: "bg-emerald-100 text-emerald-700", 
   industry: "bg-blue-100 text-blue-700",
-  government: "bg-indigo-100 text-indigo-700"
+  government: "bg-indigo-100 text-indigo-700",
+  wastebank_master_collector: "bg-teal-100 text-teal-700",
+  marketplace: "bg-gray-100 text-gray-700",
 };
 
 const ROLE_DESCRIPTIONS = {
   super_admin: "Manage all aspects of the system and oversee all users.",
-  customer: "Manage household waste and earn rewards",
-  collector: "Collect and transport waste efficiently",
-  wastebank_employee: "Process and manage waste at collection points",
+  customer: "Manage your household waste and earn rewards",
+  collector: "Collect and transport waste efficiently from small wastebank",
+  wastebank_master: "Bank sampah induk",
   wastebank_admin: "Oversee waste bank operations",
   industry: "Access recycling materials and manage sustainability",
-  government: "Monitor and analyze environmental impact"
+  government: "Monitor and analyze environmental impact",
+  marketplace: "Marketplace for buying and selling waste products",
+  wastebank_master_collector: "Collector for waste bank induk",
 };
 
 // Reusable Components
@@ -107,7 +114,7 @@ const Button = ({
     primary: "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-200",
     secondary: "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 shadow-sm",
     danger: "bg-red-50 hover:bg-red-100 text-red-700",
-    ghost: "hover:bg-gray-50 text-gray-700"
+    ghost: "bg-gray-50 text-gray-700"
   };
 
   const sizes = {
@@ -482,7 +489,7 @@ const Users = () => {
           {/* Search Bar */}
           <div className="mb-6">
             <div className="relative max-w-xl">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
                 placeholder="Search by name, email, or role..."
@@ -490,7 +497,7 @@ const Users = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg 
                   focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500
-                  text-gray-700 placeholder:text-gray-400"
+                  text-gray-200 placeholder:text-gray-400"
               />
             </div>
           </div>

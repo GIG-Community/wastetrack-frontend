@@ -1,7 +1,8 @@
 // src/pages/dashboard/customer/CustomerDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import { 
   Home,
   Camera, 
@@ -25,24 +26,30 @@ import SchedulePickup from './SchedulePickup';
 import TrackPickup from './TrackPickup';
 import Rewards from './Rewards';
 import History from './History';
+import Marketplace from './CustomerMarketplace';
+import ProductDetails from './ProductDetails';
+import Checkout from './Checkout';
+import OrderConfirmation from './OrderConfirmation';
 
 const CustomerDashboard = () => {
-  const { userData, signOut } = useAuth();
+  const { userData, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Navigation items configuration
   const navItems = [
     { id: 'home', icon: Home, label: 'Home' },
-    { id: 'detect', icon: Camera, label: 'Detect Waste' },
+    { id: 'detect', icon: Camera, label: 'Detect' },
     { id: 'schedule', icon: Calendar, label: 'Schedule Pickup' },
-    { id: 'track', icon: MapPin, label: 'Track Pickup' },
-    { id: 'rewards', icon: Gift, label: 'Rewards' },
-    { id: 'history', icon: Clock, label: 'History' }
+    { id: 'marketplace', icon: Gift, label: 'Marketplace' },
+    { id: 'history', icon: Clock, label: 'History' },
+    
+    // { id: 'history', icon: Clock, label: 'History' }
   ];
 
   // Simulated notifications
@@ -53,20 +60,62 @@ const CustomerDashboard = () => {
     ]);
   }, []);
 
+  const handleSignOut = async () => {
+    try {
+      const result = await Swal.fire({
+        title: 'Logout Confirmation',
+        text: 'Are you sure you want to logout?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#10B981',
+        cancelButtonColor: '#EF4444',
+        confirmButtonText: 'Yes, logout',
+        cancelButtonText: 'Cancel',
+        customClass: {
+          popup: 'rounded-lg',
+          title: 'text-lg font-semibold text-gray-800',
+          htmlContainer: 'text-gray-600',
+          confirmButton: 'font-medium',
+          cancelButton: 'font-medium'
+        }
+      });
+
+      if (result.isConfirmed) {
+        await logout();
+        
+        await Swal.fire({
+          title: 'Logged Out Successfully',
+          text: 'You have been logged out of your account',
+          icon: 'success',
+          confirmButtonColor: '#10B981',
+          timer: 1500,
+          timerProgressBar: true,
+          showConfirmButton: false,
+          customClass: {
+            popup: 'rounded-lg'
+          }
+        });
+
+        navigate('/login');
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      Swal.fire({
+        title: 'Logout Failed',
+        text: 'An error occurred while logging out. Please try again.',
+        icon: 'error',
+        confirmButtonColor: '#10B981',
+        customClass: {
+          popup: 'rounded-lg'
+        }
+      });
+    }
+  };
+
   // Handle navigation
   const handleNavigation = (tabId) => {
     setActiveTab(tabId);
     setIsMobileMenuOpen(false);
-  };
-
-  // Handle sign out
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      navigate('/login');
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
   };
 
   // Close dropdowns when clicking outside
@@ -84,8 +133,33 @@ const CustomerDashboard = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
+  // Add event listener for tab changes from ProductDetails
+  useEffect(() => {
+    const handleTabChange = (event) => {
+      setActiveTab(event.detail);
+    };
+
+    window.addEventListener('setActiveTab', handleTabChange);
+    return () => window.removeEventListener('setActiveTab', handleTabChange);
+  }, []);
+
+  // Set active tab based on current path when mounting
+  useEffect(() => {
+    if (location.pathname.includes('/marketplace')) {
+      setActiveTab('marketplace');
+    }
+  }, []); // Remove location.pathname from dependency array to prevent unexpected tab changes
+
   // Render active component
   const renderContent = () => {
+    // Only render marketplace component on the main marketplace page
+    if (activeTab === 'marketplace' && 
+        !location.pathname.includes('/product/') && 
+        !location.pathname.includes('/checkout') && 
+        !location.pathname.includes('/order-confirmation')) {
+      return <Marketplace />;
+    }
+
     switch (activeTab) {
       case 'home':
         return <HomePage />;
@@ -93,10 +167,6 @@ const CustomerDashboard = () => {
         return <DetectWaste />;
       case 'schedule':
         return <SchedulePickup />;
-      case 'track':
-        return <TrackPickup />;
-      case 'rewards':
-        return <Rewards />;
       case 'history':
         return <History />;
       default:
@@ -111,7 +181,7 @@ const CustomerDashboard = () => {
         <div className="flex items-center justify-between px-4 h-full">
           {/* Left side - Brand/Logo */}
           <div className="flex items-center gap-3">
-            <button 
+            {/* <button 
               className="lg:hidden p-2 hover:bg-gray-100 rounded-lg"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
@@ -120,7 +190,7 @@ const CustomerDashboard = () => {
               ) : (
                 <Menu className="h-6 w-6 text-gray-600" />
               )}
-            </button>
+            </button> */}
             <h1 className="text-xl font-bold text-emerald-600">WasteTrack</h1>
           </div>
 
@@ -209,27 +279,37 @@ const CustomerDashboard = () => {
       {/* Main Content */}
       <div className="pt-16 pb-16">
         {renderContent()}
+        {/* Render the child routes */}
+        <Routes>
+          <Route path="marketplace/product/:id" element={<ProductDetails />} />
+          <Route path="marketplace/checkout" element={<Checkout />} />
+          <Route path="marketplace/order-confirmation/:id" element={<OrderConfirmation />} />
+        </Routes>
       </div>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50">
-        <div className="flex justify-around items-center h-16">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => handleNavigation(item.id)}
-              className={`flex flex-col items-center p-2 min-w-[64px] transition-colors
-                ${activeTab === item.id 
-                  ? 'text-emerald-500 bg-emerald-50 rounded-lg' 
-                  : 'text-gray-500 hover:text-emerald-400 hover:bg-gray-50'
-                }`}
-            >
-              <item.icon className="h-5 w-5" />
-              <span className="text-xs mt-1 font-medium">{item.label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
+      {/* Bottom Navigation - Only show if not in product detail/checkout/confirmation */}
+      {!location.pathname.includes('/product/') && 
+       !location.pathname.includes('/checkout') && 
+       !location.pathname.includes('/order-confirmation') && (
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50">
+          <div className="flex justify-around items-center h-16">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleNavigation(item.id)}
+                className={`flex flex-col items-center p-2 min-w-[64px] transition-colors
+                  ${activeTab === item.id 
+                    ? 'text-emerald-500 bg-emerald-50 rounded-lg' 
+                    : 'text-gray-500 hover:text-emerald-400 hover:bg-gray-50'
+                  }`}
+              >
+                <item.icon className="h-5 w-5" />
+                <span className="text-xs mt-1 font-medium">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+      )}
     </div>
   );
 };

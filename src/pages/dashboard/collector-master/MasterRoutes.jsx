@@ -61,7 +61,7 @@ const statusColors = {
 // Component for the legend
 const MapLegend = () => (
   <div className="absolute bottom-5 right-5 bg-white p-4 rounded-lg shadow-lg z-[1000]">
-    <h4 className="text-sm font-medium text-gray-900 mb-2">Pickup Status</h4>
+    <h4 className="mb-2 text-sm font-medium text-gray-900">Pickup Status</h4>
     <div className="space-y-2">
       {Object.entries(statusColors).map(([status, color]) => (
         <div key={status} className="flex items-center gap-2">
@@ -100,7 +100,7 @@ const formatDistance = (meters) => {
   return `${km} km`;
 };
 
-const CollectorRoutes = () => {
+const MasterRoutes = () => {
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -275,19 +275,23 @@ const CollectorRoutes = () => {
     setLoading(true);
     try {
       const pickupsQuery = query(
-        collection(db, 'pickups'),
+        collection(db, 'masterBankRequests'),
         where('collectorId', '==', currentUser.uid)
       );
       
       const snapshot = await getDocs(pickupsQuery);
       const allPickupsData = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        // Ensure waste quantities are properly mapped
+        wasteQuantities: doc.data().wasteQuantities || {},
+        userName: doc.data().wasteBankName, // Use wasteBankName as the user name
+        location: doc.data().address || doc.data().location?.address, // Handle both direct address and nested location
+        coordinates: doc.data().coordinates || doc.data().location?.coordinates // Handle both direct coordinates and nested location
       }));
 
-      // Filter for only pickup deliveryType and ensure coordinates exist
+      // Filter for requests with valid coordinates
       const pickupsData = allPickupsData.filter(pickup => 
-        pickup.deliveryType === 'pickup' && 
         pickup.coordinates !== null && 
         pickup.coordinates.lat !== undefined
       );
@@ -317,21 +321,21 @@ const CollectorRoutes = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center">
-          <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">{error}</h3>
+          <AlertCircle className="w-10 h-10 mx-auto mb-4 text-red-500" />
+          <h3 className="mb-2 text-lg font-medium text-gray-900">{error}</h3>
           <button
             onClick={fetchPickups}
-            className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+            className="px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
           >
             Try Again
           </button>
@@ -354,7 +358,7 @@ const CollectorRoutes = () => {
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              <div className="p-2 bg-white rounded-xl shadow-sm border border-gray-200">
+              <div className="p-2 bg-white border border-gray-200 shadow-sm rounded-xl">
                 <Route className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
@@ -365,26 +369,26 @@ const CollectorRoutes = () => {
 
             {/* Quick Stats */}
             <div className="flex gap-4">
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+              <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl">
                 <p className="text-sm text-gray-500">Pending Pickups</p>
                 <p className="text-2xl font-semibold text-blue-600">
-                  {pickups.filter(p => p.status === 'assigned').length}
+                  {pickups.filter(p => !p.status || p.status === 'assigned').length}
                 </p>
               </div>
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+              <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl">
                 <p className="text-sm text-gray-500">In Progress</p>
                 <p className="text-2xl font-semibold text-yellow-600">
                   {pickups.filter(p => p.status === 'in_progress').length}
                 </p>
               </div>
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+              <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl">
                 <p className="text-sm text-gray-500">Completed Today</p>
                 <p className="text-2xl font-semibold text-emerald-600">
                   {pickups.filter(p => {
                     if (p.status !== 'completed') return false;
                     const today = new Date();
-                    const pickupDate = new Date(p.completedAt?.seconds * 1000);
-                    return pickupDate.toDateString() === today.toDateString();
+                    const pickupDate = p.completedAt ? new Date(p.completedAt.seconds * 1000) : null;
+                    return pickupDate && pickupDate.toDateString() === today.toDateString();
                   }).length}
                 </p>
               </div>
@@ -393,10 +397,10 @@ const CollectorRoutes = () => {
 
           {/* Route Stats Card */}
           {routeStats.totalDistance > 0 && (
-            <div className="mb-6 bg-white rounded-xl border border-gray-200 p-4">
+            <div className="p-4 mb-6 bg-white border border-gray-200 rounded-xl">
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-50 rounded-lg">
+                  <div className="p-2 rounded-lg bg-blue-50">
                     <RouteIcon className="w-5 h-5 text-blue-500" />
                   </div>
                   <div>
@@ -411,12 +415,12 @@ const CollectorRoutes = () => {
           )}
 
           {/* Map Container */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="overflow-hidden bg-white border border-gray-200 shadow-sm rounded-xl">
             <div className="relative h-[600px]">
               <MapContainer 
                 center={mapCenter} 
                 zoom={13} 
-                className="h-full w-full"
+                className="w-full h-full"
               >
                 <MapUpdater center={mapCenter} />
                 <TileLayer
@@ -459,9 +463,9 @@ const CollectorRoutes = () => {
                     <Popup>
                       <div className="p-2">
                         <h3 className="font-medium text-gray-900">
-                          {pickup.userName}
+                          {pickup.wasteBankName}
                         </h3>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="mt-1 text-sm text-gray-500">
                           {pickup.location}
                         </p>
                         <div className="flex flex-col gap-2 mt-2">
@@ -473,16 +477,22 @@ const CollectorRoutes = () => {
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-1">
-                            {Object.entries(pickup.wasteQuantities || {}).map(([type, quantity]) => (
+                            {Object.entries(pickup.wasteWeights || {}).map(([type, weight]) => (
                               <Badge key={type} variant={pickup.status}>
-                                {type}: {quantity}
+                                {type}: {weight} kg
                               </Badge>
                             ))}
                           </div>
                         </div>
+                        <div className="mt-2">
+                          <div className="text-sm text-gray-600">
+                            <div>Time: {pickup.time || 'Not specified'}</div>
+                            <div>Value: Rp {pickup.totalValue?.toLocaleString() || '0'}</div>
+                          </div>
+                        </div>
                         <div className="mt-3">
-                          <Badge variant={pickup.status}>
-                            {pickup.status.charAt(0).toUpperCase() + pickup.status.slice(1)}
+                          <Badge variant={pickup.status || 'assigned'}>
+                            {(pickup.status || 'assigned').charAt(0).toUpperCase() + (pickup.status || 'assigned').slice(1)}
                           </Badge>
                         </div>
                       </div>
@@ -507,18 +517,18 @@ const CollectorRoutes = () => {
 
           {/* Route Summary */}
           {optimalRoute.length > 0 && (
-            <div className="mt-6 bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
+            <div className="p-6 mt-6 bg-white border border-gray-200 rounded-xl">
+              <h2 className="mb-4 text-lg font-semibold text-gray-800">
                 Suggested Route Order
               </h2>
               <div className="space-y-4">
                 {routeStats.segments.map((segment, index) => (
                   <div 
                     key={segment.pickup.id}
-                    className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                    className="flex items-center gap-4 p-4 transition-colors rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
                     onClick={() => handlePickupClick(segment.pickup)}
                   >
-                    <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                    <div className="flex items-center justify-center flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100">
                       <span className="text-sm font-medium text-emerald-700">
                         {index + 1}
                       </span>
@@ -541,11 +551,15 @@ const CollectorRoutes = () => {
                       <div className="flex items-center gap-2">
                         <Package className="w-4 h-4 text-gray-400" />
                         <span className="text-sm text-gray-600">
-                          {segment.pickup.quantity} bags
+                          {Object.values(segment.pickup.wasteQuantities || {})
+                            .reduce((sum, quantity) => sum + quantity, 0)} items
                         </span>
                       </div>
-                      <Badge variant={segment.pickup.status}>
-                        {segment.pickup.status.charAt(0).toUpperCase() + segment.pickup.status.slice(1)}
+                      <div className="text-sm text-gray-600">
+                        Rp {segment.pickup.totalValue?.toLocaleString() || '0'}
+                      </div>
+                      <Badge variant={segment.pickup.status || 'assigned'}>
+                        {(segment.pickup.status || 'assigned').charAt(0).toUpperCase() + (segment.pickup.status || 'assigned').slice(1)}
                       </Badge>
                       <ArrowRight className="w-5 h-5 text-gray-400" />
                     </div>
@@ -557,14 +571,14 @@ const CollectorRoutes = () => {
 
           {/* No Routes Message */}
           {optimalRoute.length === 0 && !loading && (
-            <div className="mt-6 bg-white rounded-xl border border-gray-200 p-8 text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="p-8 mt-6 text-center bg-white border border-gray-200 rounded-xl">
+              <div className="flex items-center justify-center w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full">
                 <Route className="w-8 h-8 text-gray-400" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
+              <h3 className="mb-2 text-lg font-medium text-gray-900">
                 No Active Routes
               </h3>
-              <p className="text-gray-500 max-w-md mx-auto">
+              <p className="max-w-md mx-auto text-gray-500">
                 There are currently no pending pickups assigned to you. New pickups will appear here when they are assigned.
               </p>
             </div>
@@ -575,4 +589,4 @@ const CollectorRoutes = () => {
   );
 };
 
-export default CollectorRoutes;
+export default MasterRoutes;

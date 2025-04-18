@@ -2,6 +2,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 // Konfigurasi Firebase menggunakan variabel lingkungan dari .env
 const firebaseConfig = {
@@ -16,9 +17,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// Ekspor instance Auth dan Firestore
+// Ekspor instance Auth, Firestore, and Storage
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 
 // Atur persistensi otentikasi (misalnya, local persistence)
 setPersistence(auth, browserLocalPersistence).catch((err) => {

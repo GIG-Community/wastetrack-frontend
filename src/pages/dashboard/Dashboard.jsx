@@ -6,7 +6,6 @@ import { useAuth } from '../../hooks/useAuth';
 const Dashboard = () => {
   const { userData } = useAuth();
 
-  // Jika data user belum ada, tampilkan pesan loading
   if (!userData || !userData.role) {
     return <div className="p-6 text-center">Loading dashboard...</div>;
   }
@@ -17,8 +16,10 @@ const Dashboard = () => {
       return <Navigate to="/dashboard/super-admin" replace />;
     case 'wastebank_admin':
       return <Navigate to="/dashboard/wastebank" replace />;
-    case 'wastebank_employee':
-      return <Navigate to="/dashboard/wastebank-employee" replace />;
+    case 'wastebank_master':
+      return <Navigate to="/dashboard/wastebank-master" replace />;
+    case 'wastebank_master_collector':
+      return <Navigate to="/dashboard/collector-master" replace />;
     case 'collector':
       return <Navigate to="/dashboard/collector" replace />;
     case 'customer':
@@ -27,6 +28,8 @@ const Dashboard = () => {
       return <Navigate to="/dashboard/government" replace />;
     case 'industry':
       return <Navigate to="/dashboard/industry" replace />;
+    case 'marketplace':
+      return <Navigate to="/dashboard/marketplace" replace />;
     default:
       return <div className="p-6 text-center">Role tidak dikenali.</div>;
   }

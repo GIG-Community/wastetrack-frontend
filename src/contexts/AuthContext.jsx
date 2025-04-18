@@ -51,7 +51,10 @@ export function AuthProvider({ children }) {
       const result = await signInWithEmailAndPassword(auth, email, password);
       const userDoc = await getDoc(doc(db, 'users', result.user.uid));
       if (userDoc.exists()) {
-        const data = userDoc.data();
+        const data = {
+          id: result.user.uid,  // Menambahkan id ke data user
+          ...userDoc.data()
+        };
         setUserData(data);
       }
       return result;
@@ -65,6 +68,7 @@ export function AuthProvider({ children }) {
   async function logout() {
     try {
       await signOut(auth);
+      setCurrentUser(null);
       setUserData(null);
     } catch (error) {
       console.error("Error in logout:", error);
@@ -77,7 +81,10 @@ export function AuthProvider({ children }) {
     try {
       const userDoc = await getDoc(doc(db, 'users', uid));
       if (userDoc.exists()) {
-        return userDoc.data();
+        return {
+          id: uid,  // Menambahkan id ke data user
+          ...userDoc.data()
+        };
       }
       return null;
     } catch (error) {
@@ -89,9 +96,16 @@ export function AuthProvider({ children }) {
   // Listener otentikasi: perbarui currentUser dan userData saat status otentikasi berubah
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('Auth state changed - user:', user?.uid);
       if (user) {
         const data = await getUserData(user.uid);
-        setUserData(data);
+        console.log('User data fetched:', data);
+        const updatedUserData = {
+          id: user.uid,
+          ...data
+        };
+        console.log('Setting userData to:', updatedUserData);
+        setUserData(updatedUserData);
       } else {
         setUserData(null);
       }

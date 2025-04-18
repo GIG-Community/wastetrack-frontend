@@ -13,12 +13,9 @@ import {
   Users,
   Truck,
   Container,
-  TreePine,
-  TreePineIcon,
-  BoxSelectIcon,
   ChevronRight
 } from 'lucide-react';
-import { collection, query, getDocs, updateDoc, doc, where, getDoc } from 'firebase/firestore';
+import { collection, query, getDocs, updateDoc, doc, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -103,7 +100,7 @@ const QuickAction = ({ icon: Icon, label, onClick, variant = "default" }) => {
   );
 };
 
-const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) => {
+const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const statusColors = {
     pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -164,7 +161,7 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-800 transition-colors group-hover:text-emerald-600">
-                {pickup.userName}
+                {pickup.wasteBankName}
               </h3>
               <div className="flex items-center gap-3 mt-2">
                 <div className="flex items-center gap-1.5">
@@ -228,13 +225,15 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
               <MapPin className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
               <div>
                 <p className="text-sm font-medium text-gray-700">Location</p>
-                <p className="mt-1 text-sm text-gray-600">{pickup.location}</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  {typeof pickup.location === 'object' ? pickup.location.address : pickup.location}
+                </p>
                 {pickup.notes && (
                   <p className="mt-1 text-sm italic text-gray-500">"{pickup.notes}"</p>
                 )}
-                {pickup.coordinates && (
+                {pickup.location && pickup.location.coordinates && (
                   <p className="mt-1 text-xs text-gray-500">
-                    {pickup.coordinates.lat.toFixed(6)}, {pickup.coordinates.lng.toFixed(6)}
+                    {pickup.location.coordinates.lat.toFixed(6)}, {pickup.location.coordinates.lng.toFixed(6)}
                   </p>
                 )}
               </div>
@@ -242,17 +241,12 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
 
             {isCompleted ? (
               <div className="flex items-start gap-3 p-4 transition-colors bg-emerald-50 rounded-xl">
-                <TreePine className="w-5 h-5 text-emerald-600" />
+                <Container className="w-5 h-5 text-emerald-600" />
                 <div>
                   <p className="text-sm font-medium text-emerald-700">Collection Results</p>
                   <p className="mt-2 text-sm text-emerald-600">
                     Total Value: <span className="font-semibold">{formatCurrency(pickup.totalValue)}</span>
                   </p>
-                  {pickup.pointsAmount && (
-                    <p className="text-sm text-emerald-600">
-                      Points Earned: <span className="font-semibold">{pickup.pointsAmount}</span>
-                    </p>
-                  )}
                 </div>
               </div>
             ) : (
@@ -321,20 +315,6 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
               onClick={() => onStatusChange(pickup)}
               variant={pickup.status === 'completed' ? 'success' : 'default'}
             />
-            {isCompleted && !pickup.pointsAdded && pickup.wastes && (
-              <QuickAction
-                icon={TreePine}
-                label="Add Points"
-                variant="success"
-                onClick={() => onUpdatePoints(pickup)}
-              />
-            )}
-            {isCompleted && pickup.pointsAdded && (
-              <span className="flex items-center gap-1 text-sm text-emerald-600">
-                <CheckCircle2 className="w-4 h-4" />
-                Points Added: {pickup.pointsAmount}
-              </span>
-            )}
           </div>
           
           {pickup.status === 'pending' && (
@@ -351,10 +331,10 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
   );
 };
 
-const Transaction = () => {
+const MasterTransaction = () => {
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [pickups, setPickups] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [collectors, setCollectors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -364,74 +344,89 @@ const Transaction = () => {
 
   // Fetch data when authenticated
   useEffect(() => {
-    if (currentUser?.uid) {
-      fetchInitialData();
-      fetchCollectors();
-    }
-  }, [currentUser?.uid]);
-
-  const fetchInitialData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await fetchPickups();
-    } catch (err) {
-      setError('Failed to load data. Please try again.');
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to load data',
-        icon: 'error',
-        confirmButtonColor: '#10B981'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchPickups = async () => {
-    if (!currentUser?.uid) {
-      setError('Authentication required');
-      return;
-    }
+    let unsubscribe;
     
-    try {
-      const pickupsQuery = query(
-        collection(db, 'pickups'),
-        where('wasteBankId', '==', currentUser.uid)
-      );
+    const fetchData = async () => {
+      if (!currentUser?.uid) return;
       
-      const snapshot = await getDocs(pickupsQuery);
-      const pickupsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      setPickups(pickupsData);
-    } catch (error) {
-      console.error('Error fetching pickups:', error);
-      throw error;
-    }
-  };
+      try {
+        setLoading(true);
+        console.log("Fetching requests for master bank ID:", currentUser.uid);
+        
+        // Create the query
+        const requestsQuery = query(
+          collection(db, 'masterBankRequests'),
+          where('masterBankId', '==', currentUser.uid)
+        );
+        
+        // Set up real-time listener
+        unsubscribe = onSnapshot(requestsQuery, 
+          (snapshot) => {
+            console.log(`Found ${snapshot.size} masterBankRequests documents`);
+            
+            const requestsData = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data(),
+              // Calculate derived fields
+              totalWeight: Object.values(doc.data().wasteWeights || {})
+                .reduce((sum, weight) => sum + Number(weight), 0),
+              totalValue: Object.values(doc.data().wastes || {})
+                .reduce((sum, waste) => sum + (Number(waste.value) || 0), 0),
+            }));
+            
+            console.log("Retrieved data:", requestsData);
+            setRequests(requestsData);
+            setLoading(false);
+          },
+          (error) => {
+            console.error('Error fetching requests:', error);
+            setError('Failed to load collections. Please check your network connection and try again.');
+            setLoading(false);
+          }
+        );
+      } catch (err) {
+        console.error('Error setting up listener:', err);
+        setError('Failed to set up data connection. Please reload the page.');
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+
+    // Cleanup function to unsubscribe when component unmounts
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [currentUser?.uid]);
 
   const fetchCollectors = async () => {
     try {
+      console.log('Fetching collectors for master bank:', currentUser.uid);
       const collectorsQuery = query(
         collection(db, 'users'),
-        where('role', '==', 'collector'),
-        where('profile.institution', '==', userData.id)
+        where('role', '==', 'wastebank_master_collector'),
+        where('profile.institution', '==', currentUser.uid)  // Changed to use profile.institution
       );
       const snapshot = await getDocs(collectorsQuery);
       const collectorsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      console.log('Fetched collectors:', collectorsData);
       setCollectors(collectorsData);
+      return collectorsData;
     } catch (error) {
       console.error('Error fetching collectors:', error);
+      return [];
     }
   };
 
-  const openChangeStatusModal = async (pickup) => {
+  const openChangeStatusModal = async (request) => {
+    // Fetch collectors first
+    const currentCollectors = await fetchCollectors();
+    
     const statusOptions = [
       { value: 'pending', label: 'Pending', icon: '⏳', color: 'bg-yellow-50 text-yellow-600' },
       { value: 'assigned', label: 'Assigned', icon: '🚛', color: 'bg-blue-50 text-blue-600' },
@@ -440,21 +435,12 @@ const Transaction = () => {
       { value: 'cancelled', label: 'Cancelled', icon: '❌', color: 'bg-red-50 text-red-600' }
     ];
 
-    const handleCollectorSelect = (status) => {
-      const collectorDiv = document.getElementById('collectorSelectDiv');
-      if (collectorDiv) {
-        collectorDiv.style.display = status === 'assigned' ? 'block' : 'none';
-      }
-    };
-
     // Format collector options untuk dropdown
-    const collectorOptions = collectors
+    const collectorOptions = currentCollectors
       .map(collector => `
         <option value="${collector.id}" 
-          ${pickup.collectorId === collector.id ? 'selected' : ''}
-          ${collector.status !== 'active' ? 'disabled' : ''}>
+          ${request.collectorId === collector.id ? 'selected' : ''}>
           ${collector.profile?.fullName || collector.email || 'Unnamed Collector'}
-          ${collector.status !== 'active' ? ' (Inactive)' : ''}
         </option>
       `).join('');
 
@@ -467,9 +453,9 @@ const Transaction = () => {
           <div class="mb-6 bg-gray-50 p-4 rounded-lg">
             <p class="text-sm font-medium text-gray-600 mb-2">Current Status</p>
             <div class="flex items-center gap-2">
-              <span class="text-base">${statusOptions.find(s => s.value === pickup.status)?.icon}</span>
-              <span class="font-medium ${statusOptions.find(s => s.value === pickup.status)?.color} px-3 py-1 rounded-lg">
-                ${pickup.status.charAt(0).toUpperCase() + pickup.status.slice(1)}
+              <span class="text-base">${statusOptions.find(s => s.value === request.status)?.icon}</span>
+              <span class="font-medium ${statusOptions.find(s => s.value === request.status)?.color} px-3 py-1 rounded-lg">
+                ${request.status.charAt(0).toUpperCase() + request.status.slice(1)}
               </span>
             </div>
           </div>
@@ -481,17 +467,17 @@ const Transaction = () => {
             </label>
             <select id="newStatus" class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg
               focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 
-              transition-all shadow-sm text-gray-700" onchange="handleStatusChange(this.value)">
+              transition-all shadow-sm text-gray-700">
               ${statusOptions.map(status => `
-                <option value="${status.value}" ${pickup.status === status.value ? 'selected' : ''}>
+                <option value="${status.value}" ${request.status === status.value ? 'selected' : ''}>
                   ${status.icon} ${status.label}
                 </option>
               `).join('')}
             </select>
           </div>
 
-          <!-- Collector Selection - Always visible but conditionally required -->
-          <div id="collectorSelectDiv" class="mb-4">
+          <!-- Collector Selection -->
+          <div id="collectorSelectDiv" class="mb-4" style="display: ${request.status === 'assigned' ? 'block' : 'none'}">
             <label for="collectorSelect" class="block text-sm font-medium text-gray-700 mb-2">
               Assign Collector
             </label>
@@ -509,9 +495,14 @@ const Transaction = () => {
       `,
       didOpen: () => {
         const statusSelect = document.getElementById('newStatus');
+        const collectorDiv = document.getElementById('collectorSelectDiv');
+        
         if (statusSelect) {
-          handleCollectorSelect(statusSelect.value);
-          statusSelect.addEventListener('change', (e) => handleCollectorSelect(e.target.value));
+          statusSelect.addEventListener('change', (e) => {
+            if (collectorDiv) {
+              collectorDiv.style.display = e.target.value === 'assigned' ? 'block' : 'none';
+            }
+          });
         }
       },
       showCancelButton: true,
@@ -536,7 +527,7 @@ const Transaction = () => {
 
     try {
       setProcessing(true);
-      const pickupRef = doc(db, 'pickups', pickup.id);
+      const requestRef = doc(db, 'masterBankRequests', request.id);
       const updates = {
         status: formValues.newStatus,
         updatedAt: new Date(),
@@ -550,8 +541,7 @@ const Transaction = () => {
         updates.completedAt = new Date();
       }
 
-      await updateDoc(pickupRef, updates);
-      await fetchPickups();
+      await updateDoc(requestRef, updates);
 
       Swal.fire({
         icon: 'success',
@@ -572,189 +562,153 @@ const Transaction = () => {
     }
   };
 
-  const handleUpdatePoints = async (pickup) => {
-    if (!pickup.id || pickup.pointsAdded || !pickup.wastes || !pickup.userId) return;
-
-    try {
-      setProcessing(true);
-      const pickupRef = doc(db, 'pickups', pickup.id);
-      const userRef = doc(db, 'users', pickup.userId);
-      
-      // Calculate points based on actual waste weights
-      let totalPoints = 0;
-      Object.entries(pickup.wastes).forEach(([type, data]) => {
-        // Basic points calculation: 10 points per kg
-        // You can adjust this formula based on your requirements
-        const pointsForType = Math.floor(data.weight * 10);
-        totalPoints += pointsForType;
-      });
-
-      // Get current user data
-      const userSnapshot = await getDoc(userRef);
-      if (!userSnapshot.exists()) {
-        throw new Error('User not found');
-      }
-
-      const userData = userSnapshot.data();
-      const currentPoints = userData.rewards?.points || 0;
-      const newTotalPoints = currentPoints + totalPoints;
-
-      // Update both pickup and user documents
-      await Promise.all([
-        updateDoc(pickupRef, {
-          pointsAdded: true,
-          pointsAddedAt: new Date(),
-          pointsAmount: totalPoints
-        }),
-        updateDoc(userRef, {
-          'rewards.points': newTotalPoints,
-          updatedAt: new Date()
-        })
-      ]);
-
-      await fetchPickups();
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Points Added',
-        text: `${totalPoints} points have been successfully added. Customer's total points: ${newTotalPoints}`,
-        confirmButtonColor: '#10B981'
-      });
-    } catch (error) {
-      console.error('Error updating points:', error);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Failed to add points. Please try again.',
-        confirmButtonColor: '#10B981'
-      });
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  // Filter pickups based on status and search term
-  const filteredPickups = pickups.filter(pickup => {
-    const matchesStatus = filterStatus === 'all' || pickup.status === filterStatus;
-    const matchesSearch = 
-      pickup.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pickup.location?.toLowerCase().includes(searchTerm.toLowerCase());
+  // Filter requests based on status and search term
+  const filteredRequests = requests.filter(request => {
+    console.log("Filtering request:", request);
+    const matchesStatus = filterStatus === 'all' || request.status === filterStatus;
+    console.log("Matches status:", matchesStatus, "filterStatus:", filterStatus, "request.status:", request.status);
+    
+    // If no searchTerm, consider it a match
+    const matchesSearch = searchTerm === '' || 
+      (request.userName && request.userName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (request.location && typeof request.location === 'string' && request.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (request.location && request.location.address && request.location.address.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (request.wasteBankName && request.wasteBankName.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    console.log("Matches search:", matchesSearch, "searchTerm:", searchTerm);
+    
     return matchesStatus && matchesSearch;
   });
+  
+  console.log("Filtered requests length:", filteredRequests.length, "out of total:", requests.length);
 
   // Get counts for each status
-  const statusCounts = pickups.reduce((acc, pickup) => {
-    acc[pickup.status] = (acc[pickup.status] || 0) + 1;
+  const statusCounts = requests.reduce((acc, request) => {
+    acc[request.status] = (acc[request.status] || 0) + 1;
     return acc;
   }, {});
 
   return (
-    <div className="flex min-h-screen bg-zinc-50">
+    <div className="flex min-h-screen bg-zinc-50/50">
       <Sidebar 
-        collapsed={isSidebarCollapsed}
-        setCollapsed={setIsSidebarCollapsed}
-        role="wastebank_admin"
+        role="wastebank_master"
+        onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
-      
-      <div className="flex-1">
-        <div className="p-4 sm:p-8">
-          <div className="mx-auto max-w-7xl">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+
+      <main className={`flex-1 transition-all duration-300 ease-in-out
+        ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
+      >
+        <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
+                <Package className="w-6 h-6 text-emerald-500" />
+              </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-800">Waste Collections</h1>
-                <p className="mt-1 text-sm text-gray-500">
+                <h1 className="text-2xl font-semibold text-zinc-800">Waste Collections</h1>
+                <p className="mt-1 text-sm text-zinc-500">
                   Manage and track all waste collection requests
                 </p>
               </div>
             </div>
+          </div>
 
-            {/* Status Cards */}
-            <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
-              <StatusCard
-                label="Total Collections"
-                count={pickups.length}
-                icon={Package}
-                description="All time collections"
-              />
-              <StatusCard
-                label="Pending"
-                count={statusCounts.pending || 0}
-                icon={Clock}
-                description="Awaiting processing"
-                className="border-yellow-200"
-              />
-              <StatusCard
-                label="In Progress"
-                count={statusCounts.processing || 0}
-                icon={Truck}
-                description="Currently being processed"
-                className="border-blue-200"
-              />
-              <StatusCard
-                label="Completed"
-                count={statusCounts.completed || 0}
-                icon={CheckCircle2}
-                description="Successfully completed"
-                className="border-emerald-200"
-              />
-            </div>
+          {/* Status Cards */}
+          <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
+            <StatusCard
+              label="Total Collections"
+              count={requests.length}
+              icon={Package}
+              description="All time collections"
+            />
+            <StatusCard
+              label="Pending"
+              count={statusCounts.pending || 0}
+              icon={Clock}
+              description="Awaiting processing"
+              className="border-yellow-200"
+            />
+            <StatusCard
+              label="In Progress"
+              count={statusCounts.processing || 0}
+              icon={Truck}
+              description="Currently being processed"
+              className="border-blue-200"
+            />
+            <StatusCard
+              label="Completed"
+              count={statusCounts.completed || 0}
+              icon={CheckCircle2}
+              description="Successfully completed"
+              className="border-emerald-200"
+            />
+          </div>
 
-            {/* Filters and Search */}
-            <div className="flex flex-col gap-4 mb-6 sm:flex-row">
-              <div className="flex-1">
+          {/* Filters and Search */}
+          <div className="flex flex-col gap-4 mb-6 sm:flex-row">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute w-5 h-5 -translate-y-1/2 left-3 top-1/2 text-zinc-400" />
                 <Input
                   type="text"
                   placeholder="Search by customer name or location..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="max-w-md"
+                  className="max-w-md pl-10"
                 />
               </div>
-              <Select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full sm:w-48"
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="processing">Processing</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </Select>
             </div>
-
-            {/* Pickup Cards */}
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
-              </div>
-            ) : error ? (
-              <div className="py-12 text-center">
-                <p className="text-red-500">{error}</p>
-              </div>
-            ) : filteredPickups.length === 0 ? (
-              <div className="py-12 text-center">
-                <p className="text-gray-500">No collections found</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-6">
-                {filteredPickups.map((pickup) => (
-                  <PickupCard
-                    key={pickup.id}
-                    pickup={pickup}
-                    onStatusChange={openChangeStatusModal}
-                    onUpdatePoints={handleUpdatePoints}
-                    isProcessing={processing}
-                  />
-                ))}
-              </div>
-            )}
+            <Select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full sm:w-48"
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </Select>
           </div>
+
+          {/* Request Cards */}
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+            </div>
+          ) : error ? (
+            <div className="py-12 text-center">
+              <p className="text-red-500">{error}</p>
+            </div>
+          ) : filteredRequests.length === 0 ? (
+            <div className="py-12 text-center bg-white border rounded-xl border-zinc-200">
+              <Package className="w-12 h-12 mx-auto mb-4 text-zinc-400" />
+              <h3 className="mb-1 text-lg font-medium text-zinc-800">
+                No collections found
+              </h3>
+              <p className="max-w-sm mx-auto text-zinc-500">
+                {searchTerm || filterStatus !== 'all' 
+                  ? 'Try adjusting your filters or search terms'
+                  : 'No waste collections have been recorded yet'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-6">
+              {filteredRequests.map((request) => (
+                <PickupCard
+                  key={request.id}
+                  pickup={request}
+                  onStatusChange={openChangeStatusModal}
+                  isProcessing={processing}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      </main>
     </div>
   );
 };
 
-export default Transaction;
+export default MasterTransaction;

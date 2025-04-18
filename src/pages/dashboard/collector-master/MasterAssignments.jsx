@@ -64,12 +64,12 @@ const LocationDisplay = ({ location }) => {
   const address = typeof location === 'object' ? location.address : location;
 
   return (
-    <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg">
-      <MapPin className="w-5 h-5 text-blue-500 mt-1" />
+    <div className="flex items-start gap-3 p-4 rounded-lg bg-blue-50">
+      <MapPin className="w-5 h-5 mt-1 text-blue-500" />
       <div className="space-y-2">
         <div>
           <p className="text-sm font-medium text-blue-900">Pickup Address</p>
-          <p className="text-sm text-blue-700 mt-1">
+          <p className="mt-1 text-sm text-blue-700">
             {address || 'No address provided'}
           </p>
         </div>
@@ -88,7 +88,7 @@ const PickupCard = ({ pickup, onSelect }) => {
       onSelect(pickup, newStatus);
     } else if (newStatus === 'completed') {
       if (pickup.id) {
-        navigate(`/dashboard/collector/update-collection/${pickup.id}`);
+        navigate(`/dashboard/collector-master/update-collection/${pickup.id}`);
       } else {
         Swal.fire({
           title: 'Error',
@@ -101,11 +101,11 @@ const PickupCard = ({ pickup, onSelect }) => {
   };
 
   return (
-    <div className="bg-white p-6 rounded-xl border border-gray-200 hover:shadow-md transition-all">
+    <div className="p-6 transition-all bg-white border border-gray-200 rounded-xl hover:shadow-md">
       {/* Header */}
-      <div className="flex justify-between items-start mb-4">
+      <div className="flex items-start justify-between mb-4">
         <div className="flex items-start gap-3">
-          <div className="p-2 bg-emerald-50 rounded-lg">
+          <div className="p-2 rounded-lg bg-emerald-50">
             <Truck className="w-5 h-5 text-emerald-600" />
           </div>
           <div>
@@ -121,23 +121,6 @@ const PickupCard = ({ pickup, onSelect }) => {
           </div>
         </div>
         <Badge variant="default">{pickup.time}</Badge>
-      </div>
-
-      {/* Customer Info */}
-      <div className="flex items-start gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
-        <User className="w-5 h-5 text-gray-400" />
-        <div>
-          <p className="text-sm font-medium text-gray-900">{pickup.userName}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <Phone className="w-4 h-4 text-gray-400" />
-            <p className="text-sm text-gray-600">{pickup.phone || 'No phone number'}</p>
-          </div>
-          {pickup.wasteBankName && (
-            <p className="text-sm text-gray-600 mt-1">
-              Waste Bank: {pickup.wasteBankName}
-            </p>
-          )}
-        </div>
       </div>
 
       {/* Pickup Details */}
@@ -174,12 +157,11 @@ const PickupCard = ({ pickup, onSelect }) => {
 
       {/* Actions */}
       {(pickup.status === 'assigned' || pickup.status === 'in_progress') && (
-        <div className="mt-4 pt-4 border-t border-gray-200">
+        <div className="pt-4 mt-4 border-t border-gray-200">
           {pickup.status === 'assigned' ? (
             <button 
               onClick={() => handleAction(pickup, 'in_progress')}
-              className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 
-                transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              className="flex items-center justify-center w-full gap-2 px-4 py-2 text-sm font-medium text-white transition-colors bg-blue-500 rounded-lg hover:bg-blue-600"
             >
               <Truck className="w-4 h-4" />
               Start Collection
@@ -187,8 +169,7 @@ const PickupCard = ({ pickup, onSelect }) => {
           ) : (
             <button 
               onClick={() => handleAction(pickup, 'completed')}
-              className="w-full px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 
-                transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              className="flex items-center justify-center w-full gap-2 px-4 py-2 text-sm font-medium text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
             >
               <Scale className="w-4 h-4" />
               Record Collection
@@ -200,7 +181,7 @@ const PickupCard = ({ pickup, onSelect }) => {
   );
 };
 
-const Assignments = () => {
+const MasterAssignment = () => {
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [assignments, setAssignments] = useState([]);
@@ -219,7 +200,7 @@ const Assignments = () => {
     setLoading(true);
     try {
       const assignmentsQuery = query(
-        collection(db, 'pickups'),
+        collection(db, 'masterBankRequests'),
         where('collectorId', '==', currentUser.uid),
         where('status', 'in', ['assigned', 'in_progress', 'completed'])
       );
@@ -257,7 +238,7 @@ const Assignments = () => {
       if ((assignment.status === 'assigned' && newStatus === 'in_progress') ||
           (assignment.status === 'in_progress' && newStatus === 'completed')) {
         
-        const pickupRef = doc(db, 'pickups', assignment.id);
+        const pickupRef = doc(db, 'masterBankRequests', assignment.id);
         await updateDoc(pickupRef, {
           status: newStatus,
           updatedAt: new Date()
@@ -312,7 +293,7 @@ const Assignments = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <div className="p-2 bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="p-2 bg-white border border-gray-200 shadow-sm rounded-xl">
               <Truck className="w-6 h-6 text-emerald-500" />
             </div>
             <div>
@@ -323,24 +304,13 @@ const Assignments = () => {
 
           {/* Quick Stats */}
           <div className="flex gap-4">
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-              <p className="text-sm text-gray-500">Today's Pickups</p>
-              <p className="text-2xl font-semibold text-emerald-600">
-                {/* {assignments.filter(a => {
-                  const today = new Date();
-                  const assignmentDate = new Date(a.date.seconds * 1000);
-                  return assignmentDate.toDateString() === today.toDateString();
-                }).length} */}
-                {assignments.filter(a => a.status === 'completed').length}
-              </p>
-            </div>
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl">
               <p className="text-sm text-gray-500">In Progress Pickups</p>
               <p className="text-2xl font-semibold text-blue-600">
                 {assignments.filter(a => a.status === 'in_progress').length}
               </p>
             </div>
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl">
               <p className="text-sm text-gray-500">Pending Pickups</p>
               <p className="text-2xl font-semibold text-blue-600">
                 {assignments.filter(a => a.status === 'assigned').length}
@@ -352,7 +322,7 @@ const Assignments = () => {
         {/* Filters */}
         <div className="flex gap-4 mb-6">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <Search className="absolute w-5 h-5 text-gray-400 -translate-y-1/2 left-3 top-1/2" />
             <Input
               type="text"
               placeholder="Search by location or customer name..."
@@ -378,25 +348,24 @@ const Assignments = () => {
         {/* Content */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mb-4" />
+            <Loader2 className="w-8 h-8 mb-4 animate-spin text-emerald-500" />
             <p className="text-gray-500">Loading assignments...</p>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <AlertCircle className="w-8 h-8 text-red-500 mb-4" />
+            <AlertCircle className="w-8 h-8 mb-4 text-red-500" />
             <p className="text-gray-500">{error}</p>
             <button
               onClick={fetchAssignments}
-              className="mt-4 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 
-                transition-colors text-sm font-medium"
+              className="px-4 py-2 mt-4 text-sm font-medium text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
             >
               Try Again
             </button>
           </div>
         ) : filteredAssignments.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
-          <Truck className="w-12 h-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-1">No assignments found</h3>
+          <Truck className="w-12 h-12 mb-4 text-gray-400" />
+          <h3 className="mb-1 text-lg font-medium text-gray-900">No assignments found</h3>
           <p className="text-gray-500">
             {searchTerm || filterStatus !== 'all'
               ? 'Try adjusting your filters'
@@ -404,7 +373,7 @@ const Assignments = () => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           {filteredAssignments.map((assignment) => (
             <PickupCard 
               key={assignment.id} 
@@ -419,4 +388,4 @@ const Assignments = () => {
 );
 };
 
-export default Assignments;
+export default MasterAssignment;

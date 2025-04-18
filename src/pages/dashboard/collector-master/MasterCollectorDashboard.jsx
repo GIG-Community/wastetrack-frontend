@@ -36,7 +36,7 @@ const getStatusCounts = (pickups) => ({
   completed: pickups.filter(p => p.status === 'completed').length
 });
 
-const CollectorDashboard = () => {
+const MasterCollectorDashboard = () => {
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -78,7 +78,7 @@ const CollectorDashboard = () => {
     try {
       // Fetch all pickups for this collector only
       const pickupsQuery = query(
-        collection(db, 'pickups'),
+        collection(db, 'masterBankRequests'),
         where('collectorId', '==', currentUser.uid)
       );
       
@@ -267,11 +267,11 @@ const CollectorDashboard = () => {
       <div className="flex items-start justify-between">
         <div className="space-y-3">
           <div className="p-2.5 bg-zinc-100 rounded-lg w-fit">
-            <Icon className="h-6 w-6 text-zinc-600" />
+            <Icon className="w-6 h-6 text-zinc-600" />
           </div>
           <div>
             <p className="text-sm font-medium text-zinc-600">{label}</p>
-            <p className="text-2xl font-semibold text-zinc-800 mt-1">{value}</p>
+            <p className="mt-1 text-2xl font-semibold text-zinc-800">{value}</p>
           </div>
         </div>
         {trend && (
@@ -280,16 +280,16 @@ const CollectorDashboard = () => {
              variant === 'danger' ? 'bg-red-50 text-red-600' : 'bg-zinc-50 text-zinc-600'}`}
           >
             {variant === 'success' ? (
-              <ArrowUpRight className="h-4 w-4" />
+              <ArrowUpRight className="w-4 h-4" />
             ) : (
-              <ArrowDownRight className="h-4 w-4" />
+              <ArrowDownRight className="w-4 h-4" />
             )}
             {trend_value}
           </div>
         )}
       </div>
       {trend && (
-        <p className="text-sm text-zinc-500 mt-2">{trend}</p>
+        <p className="mt-2 text-sm text-zinc-500">{trend}</p>
       )}
     </div>
   );
@@ -315,8 +315,8 @@ const CollectorDashboard = () => {
         <div className="p-8">
           {/* Header */}
           <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 bg-white rounded-xl shadow-sm border border-zinc-200">
-              <Building2 className="h-6 w-6 text-emerald-500" />
+            <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <Building2 className="w-6 h-6 text-emerald-500" />
             </div>
             <div>
               <h1 className="text-2xl font-semibold text-zinc-800">My Collection Overview</h1>
@@ -325,7 +325,7 @@ const CollectorDashboard = () => {
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-3">
             {/* Earnings Card */}
             <StatCard
               icon={DollarSign}
@@ -368,16 +368,16 @@ const CollectorDashboard = () => {
           </div>
 
           {/* Charts Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-3">
             {/* Pickup Trends */}
-            <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-zinc-200">
+            <div className="p-6 bg-white border lg:col-span-2 rounded-xl border-zinc-200">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-lg font-semibold text-zinc-800">Collection Trends</h2>
                   <p className="text-sm text-zinc-500">Daily collection stats</p>
                 </div>
-                <div className="p-2 bg-emerald-50 rounded-lg">
-                  <Calendar className="h-5 w-5 text-emerald-500" />
+                <div className="p-2 rounded-lg bg-emerald-50">
+                  <Calendar className="w-5 h-5 text-emerald-500" />
                 </div>
               </div>
               <div className="h-80">
@@ -433,14 +433,14 @@ const CollectorDashboard = () => {
             </div>
 
             {/* Waste Distribution */}
-            <div className="bg-white rounded-xl p-6 border border-zinc-200">
+            <div className="p-6 bg-white border rounded-xl border-zinc-200">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-lg font-semibold text-zinc-800">Waste Distribution</h2>
                   <p className="text-sm text-zinc-500">By type collected</p>
                 </div>
-                <div className="p-2 bg-emerald-50 rounded-lg">
-                  <Recycle className="h-5 w-5 text-emerald-500" />
+                <div className="p-2 rounded-lg bg-emerald-50">
+                  <Recycle className="w-5 h-5 text-emerald-500" />
                 </div>
               </div>
               <div className="h-80">
@@ -468,7 +468,7 @@ const CollectorDashboard = () => {
                     />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="space-y-2 mt-4">
+                <div className="mt-4 space-y-2">
                   {wasteTypes.map((type, index) => (
                     <div key={type.name} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -489,7 +489,7 @@ const CollectorDashboard = () => {
           </div>
 
           {/* Recent Pickups */}
-          <div className="bg-white rounded-xl border border-zinc-200">
+          <div className="bg-white border rounded-xl border-zinc-200">
             <div className="p-6 border-b border-zinc-200">
               <div className="flex items-center justify-between">
                 <div>
@@ -517,7 +517,7 @@ const CollectorDashboard = () => {
                       Rp {pickup.collectorEarnings.toLocaleString()}
                     </span>
                   </div>
-                  <div className="flex gap-4 flex-wrap">
+                  <div className="flex flex-wrap gap-4">
                     {pickup.wastes && Object.entries(pickup.wastes).map(([type, data]) => (
                       <div key={type} className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -545,4 +545,4 @@ const CollectorDashboard = () => {
   );
 };
 
-export default CollectorDashboard;
+export default MasterCollectorDashboard;

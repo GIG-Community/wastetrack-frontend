@@ -71,22 +71,22 @@ const StatCard = ({ icon: Icon, label, value, trend, className = "" }) => (
     <div className="flex items-start justify-between">
       <div>
         <p className="text-sm font-medium text-zinc-600">{label}</p>
-        <p className="text-2xl font-semibold text-zinc-800 mt-1">{value}</p>
+        <p className="mt-1 text-2xl font-semibold text-zinc-800">{value}</p>
       </div>
-      <div className="p-2 bg-emerald-50 rounded-lg">
-        <Icon className="h-5 w-5 text-emerald-500" />
+      <div className="p-2 rounded-lg bg-emerald-50">
+        <Icon className="w-5 h-5 text-emerald-500" />
       </div>
     </div>
     {trend && (
       <div className="flex items-center gap-1 mt-2">
-        <Activity className="h-4 w-4 text-emerald-500" />
+        <Activity className="w-4 h-4 text-emerald-500" />
         <span className="text-sm text-emerald-600">{trend}</span>
       </div>
     )}
   </div>
 );
 
-const Employees = () => {
+const MasterCollector = () => {
   const { userData } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [collectors, setCollectors] = useState([]);
@@ -120,7 +120,7 @@ const Employees = () => {
 
       const collectorsQuery = query(
         collection(db, 'users'),
-        where('role', '==', 'collector'),
+        where('role', '==', 'wastebank_master_collector'),
         where('profile.institution', '==', userData.id)
       );
       
@@ -191,12 +191,12 @@ const Employees = () => {
       <main className={`flex-1 transition-all duration-300 ease-in-out
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
           {/* Header with Action Button */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div className="flex flex-col items-start justify-between gap-4 mb-8 sm:flex-row sm:items-center">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-white rounded-xl shadow-sm border border-zinc-200">
-                <Users className="h-6 w-6 text-emerald-500" />
+              <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
+                <Users className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
                 <h1 className="text-2xl font-semibold text-zinc-800">
@@ -207,14 +207,14 @@ const Employees = () => {
                 </p>
               </div>
             </div>
-            <button className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors">
-              <Plus className="h-5 w-5" />
+            <button className="inline-flex items-center gap-2 px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600">
+              <Plus className="w-5 h-5" />
               Add Collector
             </button>
           </div>
 
           {/* Stats Overview - Made more compact on mobile */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 gap-4 mb-8 lg:grid-cols-4">
             <StatCard
               icon={Users}
               label="Total Collectors"
@@ -239,9 +239,9 @@ const Employees = () => {
           </div>
 
           {/* Search and Filters - Stack on mobile */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex flex-col gap-4 mb-6 sm:flex-row">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
+              <Search className="absolute w-5 h-5 -translate-y-1/2 left-3 top-1/2 text-zinc-400" />
               <Input
                 type="text"
                 placeholder="Search collectors..."
@@ -263,37 +263,37 @@ const Employees = () => {
 
           {/* Collectors List */}
           {loading ? (
-            <div className="flex justify-center items-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
             </div>
           ) : filteredCollectors.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-zinc-200">
-              <UserX className="h-12 w-12 text-zinc-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-zinc-800 mb-1">
+            <div className="py-12 text-center bg-white border rounded-xl border-zinc-200">
+              <UserX className="w-12 h-12 mx-auto mb-4 text-zinc-400" />
+              <h3 className="mb-1 text-lg font-medium text-zinc-800">
                 No collectors found
               </h3>
-              <p className="text-zinc-500 max-w-sm mx-auto">
+              <p className="max-w-sm mx-auto text-zinc-500">
                 {searchTerm || filterStatus !== 'all' 
                   ? 'Try adjusting your filters or search terms'
                   : 'Start by adding your first collector'}
               </p>
-              <button className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors">
-                <Plus className="h-5 w-5" />
+              <button className="inline-flex items-center gap-2 px-4 py-2 mt-4 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600">
+                <Plus className="w-5 h-5" />
                 Add Collector
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredCollectors.map((collector) => (
                 <div 
                   key={collector.id}
-                  className="bg-white rounded-xl p-6 border border-zinc-200 hover:border-emerald-500/20 hover:shadow-lg transition-all duration-200"
+                  className="p-6 transition-all duration-200 bg-white border rounded-xl border-zinc-200 hover:border-emerald-500/20 hover:shadow-lg"
                 >
                   {/* Collector Header */}
-                  <div className="flex justify-between items-start mb-6">
+                  <div className="flex items-start justify-between mb-6">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                        <Users className="h-6 w-6 text-emerald-600" />
+                      <div className="flex items-center justify-center w-12 h-12 rounded-full bg-emerald-100">
+                        <Users className="w-6 h-6 text-emerald-600" />
                       </div>
                       <div>
                         <h3 className="font-medium text-zinc-800 line-clamp-1">
@@ -314,7 +314,7 @@ const Employees = () => {
                   <div className="space-y-4">
                     {/* Location */}
                     <div className="flex items-start gap-3">
-                      <MapPin className="h-5 w-5 text-zinc-400 mt-1 flex-shrink-0" />
+                      <MapPin className="flex-shrink-0 w-5 h-5 mt-1 text-zinc-400" />
                       <div>
                         <p className="text-sm font-medium text-zinc-600">Location</p>
                         <p className="text-sm text-zinc-800 line-clamp-2">
@@ -331,7 +331,7 @@ const Employees = () => {
 
                     {/* Contact */}
                     <div className="flex items-start gap-3">
-                      <PhoneCall className="h-5 w-5 text-zinc-400 mt-1 flex-shrink-0" />
+                      <PhoneCall className="flex-shrink-0 w-5 h-5 mt-1 text-zinc-400" />
                       <div>
                         <p className="text-sm font-medium text-zinc-600">Contact</p>
                         <p className="text-sm text-zinc-800">{collector.profile?.phone || 'No phone number'}</p>
@@ -340,20 +340,20 @@ const Employees = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex flex-wrap gap-2 mt-6 pt-4 border-t border-zinc-200">
+                  <div className="flex flex-wrap gap-2 pt-4 mt-6 border-t border-zinc-200">
                     <button
                       onClick={() => collector.profile?.phone ? window.location.href = `tel:${collector.profile.phone}` : null}
-                      className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-lg text-sm hover:bg-emerald-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-1 justify-center"
+                      className="flex items-center justify-center flex-1 gap-2 px-4 py-2 text-sm transition-colors rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={!collector.profile?.phone}
                     >
-                      <PhoneCall className="h-4 w-4" />
+                      <PhoneCall className="w-4 h-4" />
                       Call
                     </button>
                     <button
                       onClick={() => collector.email ? window.location.href = `mailto:${collector.email}` : null}
-                      className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-lg text-sm hover:bg-emerald-100 transition-colors flex-1 justify-center"
+                      className="flex items-center justify-center flex-1 gap-2 px-4 py-2 text-sm transition-colors rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                     >
-                      <Mail className="h-4 w-4" />
+                      <Mail className="w-4 h-4" />
                       Email
                     </button>
                     <button
@@ -369,12 +369,12 @@ const Employees = () => {
                     >
                       {collector.status === 'active' ? (
                         <>
-                          <UserX className="h-4 w-4" />
+                          <UserX className="w-4 h-4" />
                           Set Inactive
                         </>
                       ) : (
                         <>
-                          <UserCheck className="h-4 w-4" />
+                          <UserCheck className="w-4 h-4" />
                           Set Active
                         </>
                       )}
@@ -390,4 +390,4 @@ const Employees = () => {
   );
 };
 
-export default Employees;
+export default MasterCollector;

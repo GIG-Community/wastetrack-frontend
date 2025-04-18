@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@react-leaflet/core": "2.1.0",
+    "@react-three/drei": "^9.0.1",
+    "@react-three/fiber": "^8.13.7",
     "firebase": "^11.5.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.268.0",
@@ -17,7 +19,8 @@
     "react-leaflet": "^4.2.1",
     "react-router-dom": "^6.8.0",
     "recharts": "^2.15.1",
-    "sweetalert2": "^11.16.0"
+    "sweetalert2": "^11.17.2",
+    "three": "^0.150.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^3.0.0",

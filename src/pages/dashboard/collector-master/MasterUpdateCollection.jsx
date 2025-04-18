@@ -5,7 +5,6 @@ import {
   User,
   Loader2,
   AlertCircle,
-  Coins,
   Calculator
 } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -15,10 +14,8 @@ import Sidebar from '../../../components/Sidebar';
 import { useParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { 
-  calculatePoints, 
   calculateTotalValue, 
-  WASTE_PRICES, 
-  POINTS_CONVERSION_RATE,
+  WASTE_PRICES,
   getWasteDetails 
 } from '../../../lib/constants';
 
@@ -26,7 +23,7 @@ import {
 const Input = ({ label, error, className = "", ...props }) => (
   <div>
     {label && (
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block mb-1 text-sm font-medium text-gray-700">{label}</label>
     )}
     <input
       className={`w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg
@@ -41,14 +38,13 @@ const Input = ({ label, error, className = "", ...props }) => (
   </div>
 );
 
-const UpdateCollection = () => {
+const MasterUpdateCollection = () => {
   const { userData } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [pickup, setPickup] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [wasteData, setWasteData] = useState({});
-  const [calculatedPoints, setCalculatedPoints] = useState(0);
   const [totalValue, setTotalValue] = useState(0);
   const { pickupId } = useParams();
   const navigate = useNavigate();
@@ -56,7 +52,7 @@ const UpdateCollection = () => {
   useEffect(() => {
     const fetchPickup = async () => {
       try {
-        const pickupRef = doc(db, 'pickups', pickupId);
+        const pickupRef = doc(db, 'masterBankRequests', pickupId);
         const pickupSnap = await getDoc(pickupRef);
 
         if (!pickupSnap.exists()) {
@@ -95,7 +91,7 @@ const UpdateCollection = () => {
     }
   }, [pickupId]);
 
-  // Calculate points and value whenever waste data changes
+  // Calculate value whenever waste data changes
   useEffect(() => {
     const wastes = {};
     Object.entries(wasteData).forEach(([typeId, data]) => {
@@ -110,9 +106,6 @@ const UpdateCollection = () => {
     });
 
     const total = calculateTotalValue(wastes);
-    const points = calculatePoints(total);
-
-    setCalculatedPoints(points);
     setTotalValue(total);
   }, [wasteData]);
 
@@ -136,21 +129,19 @@ const UpdateCollection = () => {
         throw new Error('Please enter weights for at least one waste type');
       }
 
-      const pickupRef = doc(db, 'pickups', pickupId);
+      const pickupRef = doc(db, 'masterBankRequests', pickupId);
       
-      // Prepare wastes object with weights, values and points
+      // Prepare wastes object with weights and values
       const wastes = {};
       
       Object.entries(wasteData).forEach(([type, data]) => {
         if (data.weight > 0) {
-          // Get base type (remove any prefixes/suffixes)
           const baseType = type.split('-').pop().toLowerCase();
           const price = WASTE_PRICES[baseType] || 1000; // Default price if type not found
           
           wastes[type] = {
             weight: data.weight,
-            value: data.weight * price,
-            points: calculatePoints(data.weight)
+            value: data.weight * price
           };
         }
       });
@@ -160,8 +151,6 @@ const UpdateCollection = () => {
         completedAt: new Date(),
         wastes,
         totalValue,
-        pointsAmount: calculatedPoints,
-        pointsAdded: false, // Will be set to true by the waste bank
         updatedAt: new Date()
       });
 
@@ -207,7 +196,7 @@ const UpdateCollection = () => {
             <p className="text-gray-600">{error}</p>
             <button
               onClick={() => navigate('/dashboard/collector')}
-              className="px-4 py-2 bg-emerald-500 text-white rounded-lg"
+              className="px-4 py-2 text-white rounded-lg bg-emerald-500"
             >
               Return to Dashboard
             </button>
@@ -225,7 +214,7 @@ const UpdateCollection = () => {
         <div className="flex items-center gap-4 mb-8">
           <button
             onClick={() => navigate('/dashboard/collector')}
-            className="p-2 hover:bg-gray-100 rounded-lg"
+            className="p-2 rounded-lg hover:bg-gray-100"
           >
             <ArrowLeft className="w-6 h-6 text-gray-500" />
           </button>
@@ -236,62 +225,48 @@ const UpdateCollection = () => {
         </div>
 
         {/* Customer Info */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200 mb-6">
+        <div className="p-6 mb-6 bg-white border border-gray-200 rounded-xl">
           <div className="flex items-start gap-4">
             <User className="w-5 h-5 text-emerald-500" />
             <div>
               <h3 className="font-medium text-gray-900">{pickup?.userName}</h3>
               <p className="text-sm text-gray-600">{pickup?.phone}</p>
-              <p className="text-sm text-gray-600 mt-1">{pickup?.wasteBankName}</p>
+              <p className="mt-1 text-sm text-gray-600">{pickup?.wasteBankName}</p>
             </div>
           </div>
         </div>
 
-        {/* Points and Value Summary */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200 mb-6">
-          <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+        {/* Value Summary */}
+        <div className="p-6 mb-6 bg-white border border-gray-200 rounded-xl">
+          <h3 className="flex items-center gap-2 mb-4 font-medium text-gray-900">
             <Calculator className="w-5 h-5 text-emerald-500" />
-            Points & Value Calculation
+            Value Calculation
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-emerald-50 p-4 rounded-lg">
-              <div className="flex items-start gap-3">
-                <Coins className="w-5 h-5 text-emerald-600" />
-                <div>
-                  <p className="text-sm font-medium text-emerald-800">Total Points</p>
-                  <p className="text-2xl font-semibold text-emerald-700 mt-1">
-                    {calculatedPoints} points
-                  </p>
-                  <p className="text-xs text-emerald-600 mt-1">1 point per {POINTS_CONVERSION_RATE} Rupiah</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="flex items-start gap-3">
-                <Scale className="w-5 h-5 text-blue-600" />
-                <div>
-                  <p className="text-sm font-medium text-blue-800">Total Value</p>
-                  <p className="text-2xl font-semibold text-blue-700 mt-1">
-                    Rp {totalValue.toLocaleString()}
-                  </p>
-                  <p className="text-xs text-blue-600 mt-1">
-                    Based on waste type market values
-                  </p>
-                </div>
+          <div className="p-4 rounded-lg bg-blue-50">
+            <div className="flex items-start gap-3">
+              <Scale className="w-5 h-5 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium text-blue-800">Total Value</p>
+                <p className="mt-1 text-2xl font-semibold text-blue-700">
+                  Rp {totalValue.toLocaleString()}
+                </p>
+                <p className="mt-1 text-xs text-blue-600">
+                  Based on waste type market values
+                </p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Waste Weights Form */}
-        <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl border border-gray-200">
+        <form onSubmit={handleSubmit} className="p-6 bg-white border border-gray-200 rounded-xl">
           <div className="space-y-4">
             {pickup?.wasteQuantities && Object.entries(pickup.wasteQuantities).map(([typeId, quantity]) => {
               const wasteDetails = getWasteDetails(typeId);
               const price = WASTE_PRICES[typeId] || 0;
               
               return (
-                <div key={typeId} className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                <div key={typeId} className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-gray-50">
                   <div>
                     <p className="font-medium text-gray-900">
                       {wasteDetails ? wasteDetails.name : typeId}
@@ -299,9 +274,6 @@ const UpdateCollection = () => {
                     <p className="text-sm text-gray-500">Quantity: {quantity} bags</p>
                     {wasteData[typeId]?.weight > 0 && (
                       <div className="mt-2 text-sm">
-                        <p className="text-emerald-600">
-                          Points: {calculatePoints(wasteData[typeId].weight * price)}
-                        </p>
                         <p className="text-blue-600">
                           Value: Rp {(wasteData[typeId].weight * price).toLocaleString()}
                         </p>
@@ -322,7 +294,7 @@ const UpdateCollection = () => {
             })}
           </div>
 
-          <div className="mt-6 flex justify-end">
+          <div className="flex justify-end mt-6">
             <button
               type="submit"
               className="px-6 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 
@@ -337,4 +309,4 @@ const UpdateCollection = () => {
   );
 };
 
-export default UpdateCollection;
+export default MasterUpdateCollection;
