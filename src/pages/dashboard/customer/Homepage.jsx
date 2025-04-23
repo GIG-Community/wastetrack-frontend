@@ -130,10 +130,10 @@ const HomePage = () => {
       <div className="relative p-6 overflow-hidden text-white rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-700">
         <div className="relative z-10">
           <h1 className="mb-2 text-2xl font-bold">
-            Welcome back, {userData?.profile?.fullName || 'User'}!
+            Selamat datang kembali, {userData?.profile?.fullName || 'Pengguna'}!
           </h1>
           <p className="mb-4 text-sm text-emerald-50">
-            Your eco-journey continues here
+            Perjalanan ramah lingkungan Anda berlanjut di sini
           </p>
 
           {/* Rewards Display */}
@@ -141,9 +141,9 @@ const HomePage = () => {
             <div className="flex items-center gap-2">
               <Award className="w-6 h-6 text-yellow-300" />
               <div>
-                <p className="text-lg font-bold">{stats.points} pts</p>
+                <p className="text-lg font-bold">{stats.points} poin</p>
                 <p className="text-xs text-emerald-100">
-                  {getCurrentTier(stats.points).toUpperCase()} TIER
+                  TINGKAT {getCurrentTier(stats.points).toUpperCase()}
                 </p>
               </div>
             </div>
@@ -163,7 +163,7 @@ const HomePage = () => {
                 />
               </div>
               <p className="text-xs text-emerald-100">
-                {calculateNextTier().remaining} points to {calculateNextTier().nextTier}
+                {calculateNextTier().remaining} poin untuk ke tingkat {calculateNextTier().nextTier}
               </p>
             </div>
           )}
@@ -176,12 +176,12 @@ const HomePage = () => {
 
       {/* Environmental Impact Grid */}
       <div className="p-4 bg-white shadow-sm rounded-xl">
-        <h2 className="mb-3 text-lg font-semibold text-gray-800">Environmental Impact</h2>
+        <h2 className="mb-3 text-lg font-semibold text-gray-800">Dampak Lingkungan</h2>
         <div className="grid grid-cols-2 gap-3">
           <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50">
             <Recycle className="w-5 h-5 text-emerald-600" />
             <div>
-              <p className="text-sm text-emerald-600">CO₂ Reduced</p>
+              <p className="text-sm text-emerald-600">CO₂ Berkurang</p>
               <p className="text-lg font-bold text-emerald-700">
                 {formatNumber(stats.impact.carbonReduced || 0)} kg
               </p>
@@ -191,7 +191,7 @@ const HomePage = () => {
           <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50">
             <Droplet className="w-5 h-5 text-emerald-600" />
             <div>
-              <p className="text-sm text-emerald-600">Water Saved</p>
+              <p className="text-sm text-emerald-600">Air Terhemat</p>
               <p className="text-lg font-bold text-emerald-700">
                 {formatNumber(stats.impact.waterSaved || 0)} L
               </p>
@@ -201,7 +201,7 @@ const HomePage = () => {
           <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50">
             <TreesIcon className="w-5 h-5 text-emerald-600" />
             <div>
-              <p className="text-sm text-emerald-600">Trees</p>
+              <p className="text-sm text-emerald-600">Pohon</p>
               <p className="text-lg font-bold text-emerald-700">
                 {formatNumber(stats.impact.treesPreserved || 0)}
               </p>
@@ -211,9 +211,9 @@ const HomePage = () => {
           <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50">
             <Package className="w-5 h-5 text-emerald-600" />
             <div>
-              <p className="text-sm text-emerald-600">Waste</p>
+              <p className="text-sm text-emerald-600">Sampah</p>
               <p className="text-lg font-bold text-emerald-700">
-                {stats.waste.total || 0} bags
+                {stats.waste.total || 0} kantong
               </p>
             </div>
           </div>
@@ -223,10 +223,10 @@ const HomePage = () => {
       {/* Recent Pickups */}
       <div className="p-4 bg-white shadow-sm rounded-xl">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-800">Recent Pickups</h2>
+          <h2 className="text-lg font-semibold text-gray-800">Pengambilan Terbaru</h2>
           {stats.pickups.pending > 0 && (
             <span className="px-2 py-1 text-xs text-yellow-600 rounded-full bg-yellow-50">
-              {stats.pickups.pending} pending
+              {stats.pickups.pending} menunggu
             </span>
           )}
         </div>
@@ -243,17 +243,14 @@ const HomePage = () => {
                         // New format: Sum up the total bags from wastes
                         Object.values(pickup.wastes).reduce((total, waste) => 
                           total + Math.ceil((waste.weight || 0) / 5), 0)
-                        : pickup.quantity || 0} bag{(pickup.wastes ? 
-                          Object.values(pickup.wastes).reduce((total, waste) => 
-                            total + Math.ceil((waste.weight || 0) / 5), 0)
-                          : pickup.quantity) !== 1 ? 's' : ''} • {
+                        : pickup.quantity || 0} kantong • {
                         pickup.wastes ? 
                           Object.keys(pickup.wastes).join(', ') :
                           pickup.wasteTypes.join(', ')
                       }
                     </p>
                     <p className="text-xs text-gray-500">
-                      {new Date(pickup.date.seconds * 1000).toLocaleDateString('en-US', {
+                      {new Date(pickup.date.seconds * 1000).toLocaleDateString('id-ID', {
                         month: 'short',
                         day: 'numeric'
                       })} • {pickup.time}
@@ -265,12 +262,14 @@ const HomePage = () => {
                     pickup.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
                     'bg-gray-50 text-gray-600'}`}
                 >
-                  {pickup.status}
+                  {pickup.status === 'pending' ? 'Menunggu' : 
+                   pickup.status === 'completed' ? 'Selesai' : 
+                   pickup.status}
                 </span>
               </div>
             ))
           ) : (
-            <p className="py-3 text-sm text-center text-gray-500">No pickups scheduled yet</p>
+            <p className="py-3 text-sm text-center text-gray-500">Belum ada pengambilan yang dijadwalkan</p>
           )}
         </div>
       </div>
@@ -282,10 +281,10 @@ const HomePage = () => {
             <Lightbulb className="w-5 h-5 text-emerald-600" />
           </div>
           <div>
-            <h2 className="mb-1 text-lg font-semibold text-gray-800">Eco Tip</h2>
+            <h2 className="mb-1 text-lg font-semibold text-gray-800">Tips Ramah Lingkungan</h2>
             <p className="text-sm text-gray-600">
-              By properly sorting your waste, you're helping to increase recycling efficiency 
-              and reduce your carbon footprint. Each bag of recyclables contributes to a healthier planet!
+              Dengan memilah sampah dengan benar, Anda membantu meningkatkan efisiensi daur ulang
+              dan mengurangi jejak karbon Anda. Setiap kantong daur ulang berkontribusi untuk planet yang lebih sehat!
             </p>
           </div>
         </div>

@@ -649,82 +649,88 @@ const Transaction = () => {
   }, {});
 
   return (
-    <div className="flex min-h-screen bg-zinc-50">
+    <div className="flex min-h-screen bg-zinc-50/50">
       <Sidebar 
-        collapsed={isSidebarCollapsed}
-        setCollapsed={setIsSidebarCollapsed}
-        role="wastebank_admin"
+        role={userData?.role}
+        onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
-      
-      <div className="flex-1">
-        <div className="p-4 sm:p-8">
-          <div className="mx-auto max-w-7xl">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+
+      <main className={`flex-1 transition-all duration-300 ease-in-out
+        ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
+      >
+        <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
+                <Package className="w-6 h-6 text-emerald-500" />
+              </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-800">Waste Collections</h1>
+                <h1 className="text-2xl font-semibold text-gray-800">Pengumpulan Sampah</h1>
                 <p className="mt-1 text-sm text-gray-500">
-                  Manage and track all waste collection requests
+                  Kelola dan pantau semua permintaan pengumpulan sampah
                 </p>
               </div>
             </div>
+          </div>
 
-            {/* Status Cards */}
-            <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
-              <StatusCard
-                label="Total Collections"
-                count={pickups.length}
-                icon={Package}
-                description="All time collections"
-              />
-              <StatusCard
-                label="Pending"
-                count={statusCounts.pending || 0}
-                icon={Clock}
-                description="Awaiting processing"
-                className="border-yellow-200"
-              />
-              <StatusCard
-                label="In Progress"
-                count={statusCounts.processing || 0}
-                icon={Truck}
-                description="Currently being processed"
-                className="border-blue-200"
-              />
-              <StatusCard
-                label="Completed"
-                count={statusCounts.completed || 0}
-                icon={CheckCircle2}
-                description="Successfully completed"
-                className="border-emerald-200"
+          {/* Status Cards */}
+          <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
+            <StatusCard
+              label="Total Pengumpulan"
+              count={pickups.length}
+              icon={Package}
+              description="Total semua pengumpulan"
+            />
+            <StatusCard
+              label="Menunggu"
+              count={statusCounts.pending || 0}
+              icon={Clock}
+              description="Belum diproses"
+              className="border-yellow-200"
+            />
+            <StatusCard
+              label="Sedang Diproses"
+              count={statusCounts.processing || 0}
+              icon={Truck}
+              description="Sedang dalam pengumpulan"
+              className="border-blue-200"
+            />
+            <StatusCard
+              label="Selesai"
+              count={statusCounts.completed || 0}
+              icon={CheckCircle2}
+              description="Berhasil diselesaikan"
+              className="border-emerald-200"
+            />
+          </div>
+
+          {/* Filters and Search */}
+          <div className="flex flex-col gap-4 mb-6 sm:flex-row">
+            <div className="flex-1">
+              <Input
+                type="text"
+                placeholder="Cari berdasarkan nama pelanggan atau lokasi..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="max-w-md"
               />
             </div>
+            <Select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full sm:w-48"
+            >
+              <option value="all">Semua Status</option>
+              <option value="pending">Menunggu</option>
+              <option value="processing">Diproses</option>
+              <option value="completed">Selesai</option>
+              <option value="cancelled">Dibatalkan</option>
+            </Select>
+          </div>
 
-            {/* Filters and Search */}
-            <div className="flex flex-col gap-4 mb-6 sm:flex-row">
-              <div className="flex-1">
-                <Input
-                  type="text"
-                  placeholder="Search by customer name or location..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="max-w-md"
-                />
-              </div>
-              <Select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full sm:w-48"
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="processing">Processing</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </Select>
-            </div>
-
-            {/* Pickup Cards */}
+          {/* Pickup Cards */}
+          <div className="pb-8">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
@@ -735,7 +741,7 @@ const Transaction = () => {
               </div>
             ) : filteredPickups.length === 0 ? (
               <div className="py-12 text-center">
-                <p className="text-gray-500">No collections found</p>
+                <p className="text-gray-500">Tidak ada data pengumpulan ditemukan</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-6">
@@ -752,7 +758,7 @@ const Transaction = () => {
             )}
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

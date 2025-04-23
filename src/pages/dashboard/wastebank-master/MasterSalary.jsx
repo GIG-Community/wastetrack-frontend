@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, setDoc, getDoc, runTransaction } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, getDoc, runTransaction, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { Search, AlertCircle, UserCheck, User, Users, Filter, Wallet, Calculator } from 'lucide-react';
+import { Search, AlertCircle, UserCheck, User, Users, Filter, Wallet, Calculator, Clock } from 'lucide-react';
 import Swal from 'sweetalert2';
 import Sidebar from '../../../components/Sidebar';
 import { useAuth } from '../../../hooks/useAuth';
@@ -9,6 +9,7 @@ import { useAuth } from '../../../hooks/useAuth';
 export default function MasterSalaryManagement() {
   const { userData } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,6 +27,37 @@ export default function MasterSalaryManagement() {
     balance: 0
   });
   const [wasteBankBalance, setWasteBankBalance] = useState(0);
+  const [transactions, setTransactions] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+
+  const fetchTransactionHistory = async (userId) => {
+    if (!userId) return;
+    
+    try {
+      setLoadingTransactions(true);
+      const transactionsQuery = query(
+        collection(db, 'transactions'),
+        where('userId', '==', userId)
+      );
+      
+      const transactionsSnapshot = await getDocs(transactionsQuery);
+      const transactionsData = transactionsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date()
+      }));
+      
+      const sortedTransactions = transactionsData.sort((a, b) => 
+        b.createdAt.getTime() - a.createdAt.getTime()
+      ).slice(0, 10);
+      
+      setTransactions(sortedTransactions);
+    } catch (error) {
+      console.error('Error fetching transaction history:', error);
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
 
   const fetchWasteBankBalance = async () => {
     if (!userData?.id) return;
@@ -40,60 +72,84 @@ export default function MasterSalaryManagement() {
     }
   };
 
-  // Fetch waste bank balance
   useEffect(() => {
     fetchWasteBankBalance();
   }, [userData]);
 
-  // Fetch all users (collectors and customers)
   useEffect(() => {
     const fetchUsers = async () => {
       if (!userData?.id) return;
       
       try {
-        setLoading(true);
+        setLoadingUsers(true);
         
-        // First get all pickups associated with this waste bank
         const pickupsQuery = query(
           collection(db, 'masterBankRequests'),
           where('masterBankId', '==', userData.id)
         );
-        const pickupsSnapshot = await getDocs(pickupsQuery);
         
-        // Get unique customer IDs from pickups
+        let pickupsSnapshot;
+        try {
+          pickupsSnapshot = await getDocs(pickupsQuery);
+        } catch (error) {
+          console.error('Error fetching pickups:', error);
+          pickupsSnapshot = { docs: [] };
+        }
+        
         const customerIds = [...new Set(
           pickupsSnapshot.docs.map(doc => doc.data().userId)
-        )].filter(Boolean); // Remove any undefined/null values
+        )].filter(Boolean);
         
-        // Separate queries for collectors and customers
         const collectorQuery = query(
           collection(db, 'users'),
           where('role', '==', 'wastebank_master_collector'),
           where('profile.institution', '==', userData.id)
         );
+        
         const wasteBankQuery = query(
           collection(db, 'users'),
-          where('role', '==', 'wastebank_admin'),
+          where('role', '==', 'wastebank_admin')
         );
         
-        const customerQuery = query(
-          collection(db, 'users'),
-          where('role', '==', 'customer'),
-          where('__name__', 'in', customerIds.length ? customerIds : ['dummy']) // Prevent empty 'in' query
-        );
+        let collectorSnapshot, wasteBankSnapshot, customerSnapshot;
         
-        const [collectorSnapshot, customerSnapshot] = await Promise.all([
-          getDocs(collectorQuery),
-          getDocs(wasteBankQuery),
-          getDocs(customerQuery)
-        ]);
+        try {
+          [collectorSnapshot, wasteBankSnapshot] = await Promise.all([
+            getDocs(collectorQuery),
+            getDocs(wasteBankQuery)
+          ]);
+        } catch (error) {
+          console.error('Error fetching collectors or waste banks:', error);
+          collectorSnapshot = { docs: [] };
+          wasteBankSnapshot = { docs: [] };
+        }
+        
+        if (customerIds.length > 0) {
+          try {
+            const customerQuery = query(
+              collection(db, 'users'),
+              where('role', '==', 'customer'),
+              where('__name__', 'in', customerIds)
+            );
+            customerSnapshot = await getDocs(customerQuery);
+          } catch (error) {
+            console.error('Error fetching customers:', error);
+            customerSnapshot = { docs: [] };
+          }
+        } else {
+          customerSnapshot = { docs: [] };
+        }
         
         const usersData = [
           ...collectorSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           })),
-          ...customerSnapshot.docs.map(doc => ({
+          ...wasteBankSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })),
+          ...(customerSnapshot?.docs || []).map(doc => ({
             id: doc.id,
             ...doc.data()
           }))
@@ -108,14 +164,13 @@ export default function MasterSalaryManagement() {
           text: 'Failed to load users data',
         });
       } finally {
-        setLoading(false);
+        setLoadingUsers(false);
       }
     };
 
     fetchUsers();
   }, [userData]);
 
-  // Fetch user details with points/balance
   const fetchUserDetails = async (userId) => {
     try {
       setLoading(true);
@@ -128,10 +183,8 @@ export default function MasterSalaryManagement() {
 
       const userData = userDoc.data();
       
-      // Reset points to convert
       setPointsToConvert(0);
       
-      // Set salary config for collectors only
       if (userData.role === 'collector') {
         const salaryDoc = await getDoc(doc(db, 'salaries', userId));
         setSalaryConfig({
@@ -139,7 +192,6 @@ export default function MasterSalaryManagement() {
         });
       }
 
-      // Simplified query to avoid composite index requirement
       const pickupsQuery = query(
         collection(db, 'pickups'),
         where(userData.role === 'collector' ? 'collectorId' : 'userId', '==', userId)
@@ -152,7 +204,6 @@ export default function MasterSalaryManagement() {
 
       pickupsSnapshot.forEach((doc) => {
         const data = doc.data();
-        // Only count completed pickups
         if (data.status === 'completed') {
           totalCollections++;
           totalValue += data.totalValue || 0;
@@ -173,6 +224,8 @@ export default function MasterSalaryManagement() {
         points: userData.role === 'customer' ? userData.rewards?.points || 0 : 0,
       });
 
+      await fetchTransactionHistory(userId);
+
     } catch (error) {
       console.error('Error fetching user details:', error);
       Swal.fire({
@@ -185,38 +238,9 @@ export default function MasterSalaryManagement() {
     }
   };
 
-  const handleSelectUser = async (userId) => {
+  const handleSelectUser = (userId) => {
     setSelectedUserId(userId);
-    await fetchUserDetails(userId);
-  };
-
-  const handleSaveSalaryConfig = async () => {
-    if (!selectedUserId) return;
-
-    try {
-      setLoading(true);
-      await setDoc(doc(db, 'salaries', selectedUserId), {
-        config: salaryConfig,
-        wasteBankId: userData.id,
-        userId: selectedUserId,
-        lastUpdated: new Date(),
-      });
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Success',
-        text: 'Configuration saved successfully',
-      });
-    } catch (error) {
-      console.error('Error saving config:', error);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Failed to save configuration',
-      });
-    } finally {
-      setLoading(false);
-    }
+    fetchUserDetails(userId);
   };
 
   const handlePayment = async () => {
@@ -228,7 +252,6 @@ export default function MasterSalaryManagement() {
       const selectedUser = users.find(u => u.id === selectedUserId);
       const isCustomer = selectedUser?.role === 'customer';
       
-      // Calculate payment amount
       let paymentAmount = 0;
       
       if (isCustomer) {
@@ -249,7 +272,6 @@ export default function MasterSalaryManagement() {
         throw new Error('Insufficient waste bank balance');
       }
 
-      // Perform transaction
       await runTransaction(db, async (transaction) => {
         const wasteBankRef = doc(db, 'users', userData.id);
         const userRef = doc(db, 'users', selectedUserId);
@@ -261,15 +283,12 @@ export default function MasterSalaryManagement() {
           throw new Error('Insufficient waste bank balance');
         }
         
-        // Update waste bank balance
         transaction.update(wasteBankRef, {
           balance: currentBalance - paymentAmount,
           updatedAt: new Date()
         });
         
-        // Update user data
         if (isCustomer) {
-          // For customers, only deduct the converted points
           transaction.update(userRef, {
             balance: (selectedUser.balance || 0) + paymentAmount,
             'rewards.points': userStats.points - pointsToConvert,
@@ -278,12 +297,10 @@ export default function MasterSalaryManagement() {
         } else {
           transaction.update(userRef, {
             balance: (selectedUser.balance || 0) + paymentAmount,
-            // earnings: (selectedUser.earnings || 0) + paymentAmount,
             updatedAt: new Date()
           });
         }
         
-        // Record transaction
         const transactionRef = doc(collection(db, 'transactions'));
         transaction.set(transactionRef, {
           userId: selectedUserId,
@@ -296,13 +313,13 @@ export default function MasterSalaryManagement() {
         });
       });
 
-      // Refresh data
       await Promise.all([
         fetchUserDetails(selectedUserId),
-        fetchWasteBankBalance()
+        fetchWasteBankBalance(),
+        fetchTransactionHistory(selectedUserId)
       ]);
 
-      setPointsToConvert(0); // Reset points input
+      setPointsToConvert(0);
 
       Swal.fire({
         icon: 'success',
@@ -321,7 +338,6 @@ export default function MasterSalaryManagement() {
     }
   };
 
-  // Filter users based on search term and role
   const filteredUsers = users.filter(user => {
     const matchesRole = selectedRole === 'all' || user.role === selectedRole;
     const matchesSearch = 
@@ -332,6 +348,52 @@ export default function MasterSalaryManagement() {
     
     return matchesRole && matchesSearch;
   });
+
+  const UserListSkeleton = () => (
+    <>
+      {[1, 2, 3, 4, 5].map((item) => (
+        <div key={item} className="w-full p-3 border rounded-lg border-zinc-200 animate-pulse">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="w-5 h-5 mr-2 rounded-full bg-zinc-200"></div>
+              <div>
+                <div className="w-32 h-4 rounded-md bg-zinc-200"></div>
+                <div className="w-24 h-3 mt-1.5 bg-zinc-200 rounded-md"></div>
+              </div>
+            </div>
+            <div className="w-16 h-5 rounded-full bg-zinc-200"></div>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+
+  const UserDetailsSkeleton = () => (
+    <div className="space-y-4 animate-pulse">
+      <div className="w-full h-10 mb-6 rounded-md bg-zinc-200"></div>
+      <div className="grid grid-cols-1 gap-6">
+        <div>
+          <div className="w-32 h-5 mb-2 rounded-md bg-zinc-200"></div>
+          <div className="w-full h-10 rounded-md bg-zinc-200"></div>
+        </div>
+      </div>
+      <div className="w-full rounded-md h-60 bg-zinc-200"></div>
+    </div>
+  );
+
+  const TransactionSkeleton = () => (
+    <>
+      {[1, 2, 3].map((item) => (
+        <div key={item} className="p-4 border-b border-zinc-100 animate-pulse">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-40 h-5 rounded-md bg-zinc-200"></div>
+            <div className="w-24 h-5 rounded-md bg-zinc-200"></div>
+          </div>
+          <div className="w-20 h-4 rounded-md bg-zinc-200"></div>
+        </div>
+      ))}
+    </>
+  );
 
   return (
     <div className="flex h-screen bg-zinc-50/50">
@@ -344,7 +406,6 @@ export default function MasterSalaryManagement() {
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
       >
         <div className="p-6">
-          {/* Header with Waste Bank Balance */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
@@ -364,27 +425,37 @@ export default function MasterSalaryManagement() {
             </div>
           </div>
 
-          {/* Stats for selected user */}
           {selectedUserId && (
             <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
-              <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-                <h3 className="text-sm font-medium text-zinc-500">Current Balance</h3>
-                <p className="text-2xl font-semibold text-zinc-800">Rp {userStats.balance.toLocaleString()}</p>
-              </div>
-              <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-                <h3 className="text-sm font-medium text-zinc-500">Total Collections</h3>
-                <p className="text-2xl font-semibold text-zinc-800">{userStats.totalCollections}</p>
-              </div>
-              <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-                <h3 className="text-sm font-medium text-zinc-500">Total Value</h3>
-                <p className="text-2xl font-semibold text-zinc-800">Rp {userStats.totalValue.toLocaleString()}</p>
-              </div>
+              {loading ? (
+                <>
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200 animate-pulse">
+                      <div className="w-32 h-4 mb-2 rounded-md bg-zinc-200"></div>
+                      <div className="w-24 h-8 rounded-md bg-zinc-200"></div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+                    <h3 className="text-sm font-medium text-zinc-500">Current Balance</h3>
+                    <p className="text-2xl font-semibold text-zinc-800">Rp {userStats.balance.toLocaleString()}</p>
+                  </div>
+                  <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+                    <h3 className="text-sm font-medium text-zinc-500">Total Collections</h3>
+                    <p className="text-2xl font-semibold text-zinc-800">{userStats.totalCollections}</p>
+                  </div>
+                  <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+                    <h3 className="text-sm font-medium text-zinc-500">Total Value</h3>
+                    <p className="text-2xl font-semibold text-zinc-800">Rp {userStats.totalValue.toLocaleString()}</p>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
-          {/* Main Content Grid */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            {/* Users List */}
             <div className="p-6 bg-white border shadow-sm rounded-xl border-zinc-200">
               <div className="mb-4 space-y-4">
                 <div className="relative">
@@ -413,100 +484,166 @@ export default function MasterSalaryManagement() {
               </div>
 
               <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                {filteredUsers.map(user => (
-                  <button
-                    key={user.id}
-                    onClick={() => handleSelectUser(user.id)}
-                    className={`w-full p-3 rounded-lg text-left transition-all ${
-                      selectedUserId === user.id
-                        ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm'
-                        : 'bg-white hover:bg-zinc-50 border border-zinc-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <User className="w-5 h-5 mr-2 text-zinc-500" />
-                        <div>
-                          <div className="font-medium text-zinc-800">
-                            {user.profile?.fullName || 'Unnamed User'}
+                {loadingUsers ? (
+                  <UserListSkeleton />
+                ) : (
+                  <>
+                    {filteredUsers.map(user => (
+                      <button
+                        key={user.id}
+                        onClick={() => handleSelectUser(user.id)}
+                        className={`w-full p-3 rounded-lg text-left transition-all ${
+                          selectedUserId === user.id
+                            ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm'
+                            : 'bg-white hover:bg-zinc-50 border border-zinc-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <User className="w-5 h-5 mr-2 text-zinc-500" />
+                            <div>
+                              <div className="font-medium text-zinc-800">
+                                {user.profile?.fullName || 'Unnamed User'}
+                              </div>
+                              <div className="text-sm text-zinc-500">{user.email}</div>
+                            </div>
                           </div>
-                          <div className="text-sm text-zinc-500">{user.email}</div>
+                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                            user.role === 'wastebank_master_collector' 
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {user.role === 'wastebank_master_collector' ? 'Collector' : 'Waste Bank'}
+                          </span>
                         </div>
-                      </div>
-                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                        user.role === 'wastebank_master_collector' 
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-blue-100 text-blue-700'
-                      }`}>
-                        {user.role === 'wastebank_master_collector' ? 'Collector' : 'Waste Bank'}
-                      </span>
-                    </div>
-                  </button>
-                ))}
+                      </button>
+                    ))}
 
-                {filteredUsers.length === 0 && (
-                  <div className="py-4 text-center">
-                    <AlertCircle className="w-5 h-5 mx-auto mb-2 text-zinc-400" />
-                    <p className="text-zinc-500">No users found</p>
-                  </div>
+                    {filteredUsers.length === 0 && (
+                      <div className="py-4 text-center">
+                        <AlertCircle className="w-5 h-5 mx-auto mb-2 text-zinc-400" />
+                        <p className="text-zinc-500">No users found</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
 
-            {/* Configuration Section */}
-            <div className="md:col-span-2">
+            <div className="space-y-6 md:col-span-2">
               {selectedUserId ? (
                 <div className="p-6 bg-white border shadow-sm rounded-xl border-zinc-200">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-semibold text-zinc-800">
-                      {users.find(u => u.id === selectedUserId)?.role === 'wastebank_admin'
-                        ? 'Waste Bank Payment' 
-                        : 'Collector Salary'}
-                    </h2>
-                    <button
-                      onClick={handlePayment}
-                      disabled={loading || !salaryConfig.baseSalary || wasteBankBalance < salaryConfig.baseSalary}
-                      className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {loading ? 'Processing...' : 'Process Payment'}
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-6">
-                    <div>
-                      <label className="block mb-2 text-sm font-medium text-zinc-700">
-                        {users.find(u => u.id === selectedUserId)?.role === 'wastebank_admin'
-                          ? 'Payment Amount'
-                          : 'Salary Amount'}
-                      </label>
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-400">
-                          Rp
-                        </span>
-                        <input
-                          type="number"
-                          value={salaryConfig.baseSalary}
-                          onChange={(e) => setSalaryConfig(prev => ({
-                            ...prev,
-                            baseSalary: Number(e.target.value)
-                          }))}
-                          min={0}
-                          step={100}
-                          className="pl-10 w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                        />
+                  {loading ? (
+                    <UserDetailsSkeleton />
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-xl font-semibold text-zinc-800">
+                          {users.find(u => u.id === selectedUserId)?.role === 'wastebank_admin'
+                            ? 'Waste Bank Payment' 
+                            : 'Collector Salary'}
+                        </h2>
+                        <button
+                          onClick={handlePayment}
+                          disabled={loading || !salaryConfig.baseSalary || wasteBankBalance < salaryConfig.baseSalary}
+                          className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {loading ? 'Processing...' : 'Process Payment'}
+                        </button>
                       </div>
-                      {wasteBankBalance < salaryConfig.baseSalary && (
-                        <p className="mt-2 text-sm text-red-500">
-                          Insufficient balance to process this payment
-                        </p>
-                      )}
-                    </div>
-                  </div>
+
+                      <div className="grid grid-cols-1 gap-6">
+                        <div>
+                          <label className="block mb-2 text-sm font-medium text-zinc-700">
+                            {users.find(u => u.id === selectedUserId)?.role === 'wastebank_admin'
+                              ? 'Payment Amount'
+                              : 'Salary Amount'}
+                          </label>
+                          <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-400">
+                              Rp
+                            </span>
+                            <input
+                              type="number"
+                              value={salaryConfig.baseSalary}
+                              onChange={(e) => setSalaryConfig(prev => ({
+                                ...prev,
+                                baseSalary: Number(e.target.value)
+                              }))}
+                              min={0}
+                              step={100}
+                              className="pl-10 w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                            />
+                          </div>
+                          {wasteBankBalance < salaryConfig.baseSalary && (
+                            <p className="mt-2 text-sm text-red-500">
+                              Insufficient balance to process this payment
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed bg-zinc-50 rounded-xl border-zinc-200 text-zinc-500">
                   <UserCheck className="w-12 h-12 mb-3" />
                   <p>Select a user to view and configure their payment details</p>
+                </div>
+              )}
+              
+              {selectedUserId && (
+                <div className="p-6 bg-white border shadow-sm rounded-xl border-zinc-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold text-zinc-800">Transaction History</h2>
+                    <Clock className="w-5 h-5 text-zinc-500" />
+                  </div>
+
+                  <div className="mt-4 divide-y divide-zinc-100 max-h-[300px] overflow-y-auto">
+                    {loadingTransactions ? (
+                      <TransactionSkeleton />
+                    ) : transactions.length > 0 ? (
+                      transactions.map((transaction) => (
+                        <div key={transaction.id} className="p-4 border-b border-zinc-100">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium text-zinc-800">
+                              {transaction.type === 'salary_payment' 
+                                ? 'Salary Payment' 
+                                : transaction.type === 'points_conversion' 
+                                  ? 'Points Conversion' 
+                                  : 'Transaction'}
+                            </span>
+                            <span className="font-semibold text-emerald-600">
+                              Rp {transaction.amount?.toLocaleString() || 0}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-zinc-500">
+                              {transaction.createdAt.toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                              transaction.status === 'completed' 
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {transaction.status === 'completed' ? 'Completed' : 'Pending'}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-6 text-center">
+                        <AlertCircle className="w-5 h-5 mx-auto mb-2 text-zinc-400" />
+                        <p className="text-zinc-500">No transaction history found</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

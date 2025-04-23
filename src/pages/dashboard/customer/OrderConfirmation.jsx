@@ -41,8 +41,8 @@ const OrderConfirmation = () => {
     return (
       <div className="min-h-screen bg-gray-50 px-4 py-8">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900">Order not found</h2>
-          <p className="mt-2 text-gray-600">The order you're looking for doesn't exist.</p>
+          <h2 className="text-2xl font-bold text-gray-900">Pesanan tidak ditemukan</h2>
+          <p className="mt-2 text-gray-600">Pesanan yang Anda cari tidak ada.</p>
           <button
             onClick={() => {
               navigate('/dashboard/customer/marketplace');
@@ -53,7 +53,7 @@ const OrderConfirmation = () => {
             className="mt-4 inline-flex items-center text-emerald-600 hover:text-emerald-700"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
-            Return to Marketplace
+            Kembali ke Marketplace
           </button>
         </div>
       </div>
@@ -76,7 +76,7 @@ const OrderConfirmation = () => {
           >
             <ArrowLeft className="h-6 w-6" />
           </button>
-          <h1 className="ml-4 text-lg font-semibold text-gray-900">Order Confirmation</h1>
+          <h1 className="ml-4 text-lg font-semibold text-gray-900">Konfirmasi Pesanan</h1>
         </div>
       </header>
 
@@ -86,22 +86,22 @@ const OrderConfirmation = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-full mb-4">
             <CheckCircle className="h-8 w-8 text-emerald-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900">Order Confirmed!</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Pesanan Dikonfirmasi!</h2>
           <p className="mt-2 text-gray-600">
-            Thank you for your order. We'll notify you when your items are on their way.
+            Terima kasih atas pesanan Anda. Kami akan memberi tahu Anda saat pesanan Anda dalam perjalanan.
           </p>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="p-4 border-b">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Order Details</h3>
-              <span className="text-sm text-gray-500">Order #{order.id.slice(0, 8)}</span>
+              <h3 className="font-semibold">Detail Pesanan</h3>
+              <span className="text-sm text-gray-500">Pesanan #{order.id.slice(0, 8)}</span>
             </div>
             
             <div className="space-y-3">
               <div className="flex justify-between">
-                <span className="text-gray-600">Order Date</span>
+                <span className="text-gray-600">Tanggal Pesanan</span>
                 <span className="font-medium">
                   {order.createdAt?.toDate().toLocaleDateString()}
                 </span>
@@ -111,38 +111,38 @@ const OrderConfirmation = () => {
                 <span className="font-medium capitalize">{order.status}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Total Amount</span>
+                <span className="text-gray-600">Total Pembayaran</span>
                 <span className="font-medium text-emerald-600">
                   Rp {order.total?.toLocaleString()}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Payment Method</span>
-                <span className="font-medium">Cash on Delivery</span>
+                <span className="text-gray-600">Metode Pembayaran</span>
+                <span className="font-medium">Bayar di Tempat</span>
               </div>
             </div>
           </div>
 
           <div className="p-4 border-b">
-            <h3 className="font-semibold mb-4">Shipping Information</h3>
+            <h3 className="font-semibold mb-4">Informasi Pengiriman</h3>
             <div className="space-y-3">
               <div className="flex">
-                <span className="w-20 text-gray-600">Name:</span>
+                <span className="w-20 text-gray-600">Nama:</span>
                 <span className="font-medium">{order.customerName}</span>
               </div>
               <div className="flex">
-                <span className="w-20 text-gray-600">Phone:</span>
+                <span className="w-20 text-gray-600">Telepon:</span>
                 <span className="font-medium">{order.customerPhone}</span>
               </div>
               <div className="flex">
-                <span className="w-20 text-gray-600">Address:</span>
+                <span className="w-20 text-gray-600">Alamat:</span>
                 <span className="font-medium">
                   {order.shippingAddress}, {order.city} {order.postalCode}
                 </span>
               </div>
               {order.notes && (
                 <div className="flex">
-                  <span className="w-20 text-gray-600">Notes:</span>
+                  <span className="w-20 text-gray-600">Catatan:</span>
                   <span className="text-gray-600">{order.notes}</span>
                 </div>
               )}
@@ -150,7 +150,7 @@ const OrderConfirmation = () => {
           </div>
 
           <div className="p-4">
-            <h3 className="font-semibold mb-4">Order Items</h3>
+            <h3 className="font-semibold mb-4">Item Pesanan</h3>
             <div className="space-y-4">
               {order.items.map((item, index) => (
                 <div key={index} className="flex items-center justify-between">
@@ -175,7 +175,7 @@ const OrderConfirmation = () => {
         <div className="mt-6 flex flex-col items-center space-y-4">
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Truck className="h-5 w-5 text-emerald-500" />
-            <span>Your items will be processed and shipped within 1-2 business days</span>
+            <span>Pesanan Anda akan diproses dan dikirim dalam 1-2 hari kerja</span>
           </div>
           <button
             onClick={() => {
@@ -187,7 +187,7 @@ const OrderConfirmation = () => {
             className="inline-flex items-center text-emerald-600 hover:text-emerald-700"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
-            Return to Marketplace
+            Kembali ke Marketplace
           </button>
         </div>
       </div>

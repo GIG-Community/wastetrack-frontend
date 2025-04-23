@@ -266,7 +266,7 @@ const BankSettings = () => {
         />
         <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
           <div className="flex items-center justify-center h-screen">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500" />
+            <div className="w-12 h-12 border-b-2 rounded-full animate-spin border-emerald-500" />
           </div>
         </main>
       </div>
@@ -284,8 +284,8 @@ const BankSettings = () => {
         <div className="p-8">
           {/* Header */}
           <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 bg-white rounded-xl shadow-sm border border-zinc-200">
-              <Building2 className="h-6 w-6 text-emerald-500" />
+            <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <Building2 className="w-6 h-6 text-emerald-500" />
             </div>
             <div>
               <h1 className="text-2xl font-semibold text-zinc-800">Warehouse Monitoring</h1>
@@ -295,17 +295,17 @@ const BankSettings = () => {
 
           <div className="max-w-5xl space-y-6">
             {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card className="p-6">
-                <h3 className="text-sm font-medium text-zinc-500 mb-2">Total Kapasitas</h3>
+                <h3 className="mb-2 text-sm font-medium text-zinc-500">Total Kapasitas</h3>
                 <p className="text-2xl font-semibold text-zinc-800">{formatNumber(warehouseStats.totalCapacity)} m³</p>
               </Card>
               <Card className="p-6">
-                <h3 className="text-sm font-medium text-zinc-500 mb-2">Penyimpanan Saat Ini</h3>
+                <h3 className="mb-2 text-sm font-medium text-zinc-500">Penyimpanan Saat Ini</h3>
                 <p className="text-2xl font-semibold text-zinc-800">{formatNumber(warehouseStats.currentStorage.toFixed(1))} m³</p>
               </Card>
               <Card className="p-6">
-                <h3 className="text-sm font-medium text-zinc-500 mb-2">Penggunaan</h3>
+                <h3 className="mb-2 text-sm font-medium text-zinc-500">Penggunaan</h3>
                 <p className="text-2xl font-semibold text-zinc-800">{warehouseStats.usagePercentage.toFixed(1)}%</p>
               </Card>
             </div>
@@ -314,7 +314,7 @@ const BankSettings = () => {
             <Card className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
-                  <Box className="h-5 w-5 text-zinc-600" />
+                  <Box className="w-5 h-5 text-zinc-600" />
                   <div>
                     <h2 className="text-lg font-semibold text-zinc-800">Dimensi Gudang</h2>
                     <p className="text-sm text-zinc-500">Atur ukuran gudang penyimpanan sampah</p>
@@ -322,16 +322,16 @@ const BankSettings = () => {
                 </div>
                 <button
                   onClick={() => isEditingDimensions ? updateWarehouseDimensions() : setIsEditingDimensions(true)}
-                  className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+                  className="px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
                 >
                   {isEditingDimensions ? 'Simpan' : 'Edit'}
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                 {['length', 'width', 'height'].map((dim) => (
                   <div key={dim} className="space-y-2">
-                    <label className="block text-sm font-medium text-zinc-700 capitalize">
+                    <label className="block text-sm font-medium capitalize text-zinc-700">
                       {dim === 'length' ? 'Panjang' : dim === 'width' ? 'Lebar' : 'Tinggi'} (m)
                     </label>
                     <div className="relative">
@@ -358,18 +358,18 @@ const BankSettings = () => {
                         className={`block w-full rounded-lg shadow-sm focus:border-emerald-500 focus:ring-emerald-500 disabled:bg-zinc-50 pr-12
                           ${inputErrors[dim] ? 'border-red-300' : 'border-zinc-300'}`}
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400">
+                      <span className="absolute -translate-y-1/2 right-3 top-1/2 text-zinc-400">
                         m
                       </span>
                     </div>
                     {inputErrors[dim] && (
-                      <p className="text-red-500 text-xs mt-1">{inputErrors[dim]}</p>
+                      <p className="mt-1 text-xs text-red-500">{inputErrors[dim]}</p>
                     )}
                   </div>
                 ))}
               </div>
 
-              <div className="mt-6 p-4 bg-zinc-50 rounded-lg">
+              <div className="p-4 mt-6 rounded-lg bg-zinc-50">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-zinc-600">Total Volume Gudang:</span>
                   <span className="text-lg font-semibold text-zinc-800">
@@ -377,7 +377,7 @@ const BankSettings = () => {
                   </span>
                 </div>
                 {isEditingDimensions && Object.values(dimensions).some(v => !v || v <= 0) && (
-                  <p className="text-xs text-amber-600 mt-2">
+                  <p className="mt-2 text-xs text-amber-600">
                     Catatan: Nilai dimensi harus lebih besar dari 0 untuk dapat disimpan
                   </p>
                 )}
@@ -387,7 +387,7 @@ const BankSettings = () => {
             {/* Storage Overview with 3D Visualization */}
             <Card className="p-6">
               <div className="flex items-center gap-2 mb-6">
-                <PackageOpen className="h-5 w-5 text-zinc-600" />
+                <PackageOpen className="w-5 h-5 text-zinc-600" />
                 <div>
                   <h2 className="text-lg font-semibold text-zinc-800">Visualisasi Penyimpanan</h2>
                   <p className="text-sm text-zinc-500">Lihat penggunaan ruang gudang dalam tampilan 3D</p>
@@ -405,7 +405,7 @@ const BankSettings = () => {
                       dari {formatNumber(warehouseStats.totalCapacity)} m³
                     </span>
                   </div>
-                  <div className="h-4 bg-zinc-100 rounded-full overflow-hidden">
+                  <div className="h-4 overflow-hidden rounded-full bg-zinc-100">
                     <div 
                       className={`h-full rounded-full transition-all ${
                         warehouseStats.usagePercentage >= 100 ? 'bg-red-600' :
@@ -422,7 +422,7 @@ const BankSettings = () => {
                 {/* 3D Visualization component */}
                 <Suspense fallback={
                   <div className="w-full h-[500px] flex items-center justify-center bg-zinc-50 rounded-xl">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500" />
+                    <div className="w-12 h-12 border-b-2 rounded-full animate-spin border-emerald-500" />
                   </div>
                 }>
                   <WarehouseVisualization3D 
@@ -445,7 +445,7 @@ const BankSettings = () => {
                       dari {formatNumber(warehouseStats.totalCapacity)} m³
                     </span>
                   </div>
-                  <div className="h-4 bg-zinc-100 rounded-full overflow-hidden">
+                  <div className="h-4 overflow-hidden rounded-full bg-zinc-100">
                     <div 
                       className={`h-full rounded-full transition-all ${
                         warehouseStats.usagePercentage >= 90 ? 'bg-red-500' :
@@ -487,7 +487,7 @@ const BankSettings = () => {
                             ))}
                           </ul>
                           {alert.type === 'critical' && (
-                            <div className="mt-3 flex items-center gap-2">
+                            <div className="flex items-center gap-2 mt-3">
                               <button className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors">
                                 Hubungi Bank Sampah Induk
                               </button>
@@ -507,7 +507,7 @@ const BankSettings = () => {
             {/* Waste Distribution */}
             <Card className="p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Scale className="h-5 w-5 text-zinc-600" />
+                <Scale className="w-5 h-5 text-zinc-600" />
                 <div>
                   <h2 className="text-lg font-semibold text-zinc-800">Distribusi Sampah</h2>
                   <p className="text-sm text-zinc-500">Rincian jenis sampah yang disimpan</p>
@@ -523,15 +523,15 @@ const BankSettings = () => {
                   const percentage = (volume / warehouseStats.currentStorage) * 100;
 
                   return (
-                    <div key={type} className="border-b border-zinc-200 pb-4">
+                    <div key={type} className="pb-4 border-b border-zinc-200">
                       <div className="flex justify-between mb-2">
                         <div>
                           <span className="text-sm font-medium text-zinc-700">
                             {type.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                           </span>
                           {oldestDate && (
-                            <div className="text-xs text-zinc-400 mt-1">
-                              Batch tertua: {oldestDate.toLocaleDateString()}
+                            <div className="mt-1 text-xs text-zinc-400">
+                              Batch terlama: {oldestDate.toLocaleDateString()}
                             </div>
                           )}
                         </div>
@@ -544,9 +544,9 @@ const BankSettings = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
+                      <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
                         <div 
-                          className="h-full bg-emerald-500 rounded-full"
+                          className="h-full rounded-full bg-emerald-500"
                           style={{ width: `${percentage}%` }}
                         />
                       </div>
@@ -559,7 +559,7 @@ const BankSettings = () => {
             {/* Recent Collections */}
             <Card className="p-6">
               <div className="flex items-center gap-2 mb-6">
-                <ArrowUpCircle className="h-5 w-5 text-zinc-600" />
+                <ArrowUpCircle className="w-5 h-5 text-zinc-600" />
                 <div>
                   <h2 className="text-lg font-semibold text-zinc-800">Koleksi Terbaru</h2>
                   <p className="text-sm text-zinc-500">Riwayat pengumpulan sampah terakhir</p>
@@ -574,7 +574,7 @@ const BankSettings = () => {
 
                   return (
                     <div key={pickup.id} className="py-4">
-                      <div className="flex justify-between items-start">
+                      <div className="flex items-start justify-between">
                         <div>
                           <p className="font-medium text-zinc-800">{pickup.userName}</p>
                           <p className="text-sm text-zinc-500">
@@ -590,12 +590,12 @@ const BankSettings = () => {
                           </p>
                         </div>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 mt-2">
                         {Object.entries(pickup.wastes).map(([type, data]) => {
                           const weight = Number(data.weight) || 0;
                           const volume = weight * VOLUME_CONVERSION_FACTOR;
                           return (
-                            <span key={type} className="px-2 py-1 bg-zinc-100 rounded-full text-xs text-zinc-700">
+                            <span key={type} className="px-2 py-1 text-xs rounded-full bg-zinc-100 text-zinc-700">
                               {type.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}: {formatNumber(volume.toFixed(1))} m³
                             </span>
                           );
@@ -609,8 +609,8 @@ const BankSettings = () => {
 
             {/* Error Message */}
             {error && (
-              <div className="p-4 bg-red-50 border border-red-100 rounded-lg flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-red-500" />
+              <div className="flex items-center gap-2 p-4 border border-red-100 rounded-lg bg-red-50">
+                <AlertCircle className="w-5 h-5 text-red-500" />
                 <p className="text-sm text-red-600">{error}</p>
               </div>
             )}

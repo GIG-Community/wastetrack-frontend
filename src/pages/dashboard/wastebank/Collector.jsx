@@ -200,51 +200,51 @@ const Employees = () => {
               </div>
               <div>
                 <h1 className="text-2xl font-semibold text-zinc-800">
-                  Collector Management
+                  Manajemen Petugas
                 </h1>
                 <p className="text-sm text-zinc-500">
-                  Monitor and manage waste collectors
+                  Pantau dan kelola petugas pengumpul sampah
                 </p>
               </div>
             </div>
             <button className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors">
               <Plus className="h-5 w-5" />
-              Add Collector
+              Tambah Petugas
             </button>
           </div>
 
-          {/* Stats Overview - Made more compact on mobile */}
+          {/* Stats Overview */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <StatCard
               icon={Users}
-              label="Total Collectors"
+              label="Total Petugas"
               value={stats.totalCollectors}
-              trend={`${Math.round((stats.activeCollectors/stats.totalCollectors) * 100) || 0}% Active`}
+              trend={`${Math.round((stats.activeCollectors/stats.totalCollectors) * 100) || 0}% Aktif`}
             />
             <StatCard
               icon={UserCheck}
-              label="Active Collectors"
+              label="Petugas Aktif"
               value={stats.activeCollectors}
             />
             <StatCard
               icon={Package}
-              label="Total Pickups"
+              label="Total Pengumpulan"
               value={stats.totalPickups || 0}
             />
             <StatCard
               icon={Star}
-              label="Average Rating"
+              label="Rata-rata Rating"
               value={stats.avgRating || '0.0'}
             />
           </div>
 
-          {/* Search and Filters - Stack on mobile */}
+          {/* Search and Filters */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
               <Input
                 type="text"
-                placeholder="Search collectors..."
+                placeholder="Cari petugas..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -255,9 +255,9 @@ const Employees = () => {
               onChange={(e) => setFilterStatus(e.target.value)}
               className="w-full sm:w-48"
             >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="all">Semua Status</option>
+              <option value="active">Aktif</option>
+              <option value="inactive">Tidak Aktif</option>
             </Select>
           </div>
 
@@ -270,16 +270,16 @@ const Employees = () => {
             <div className="text-center py-12 bg-white rounded-xl border border-zinc-200">
               <UserX className="h-12 w-12 text-zinc-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-zinc-800 mb-1">
-                No collectors found
+                Tidak ada petugas ditemukan
               </h3>
               <p className="text-zinc-500 max-w-sm mx-auto">
                 {searchTerm || filterStatus !== 'all' 
-                  ? 'Try adjusting your filters or search terms'
-                  : 'Start by adding your first collector'}
+                  ? 'Coba sesuaikan filter atau kata kunci pencarian'
+                  : 'Mulai dengan menambahkan petugas pertama'}
               </p>
               <button className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors">
                 <Plus className="h-5 w-5" />
-                Add Collector
+                Tambah Petugas
               </button>
             </div>
           ) : (
@@ -297,7 +297,7 @@ const Employees = () => {
                       </div>
                       <div>
                         <h3 className="font-medium text-zinc-800 line-clamp-1">
-                          {collector.profile?.fullName || 'Unnamed Collector'}
+                          {collector.profile?.fullName || 'Petugas Tanpa Nama'}
                         </h3>
                         <p className="text-sm text-zinc-500 line-clamp-1">{collector.email}</p>
                       </div>
@@ -306,7 +306,7 @@ const Employees = () => {
                       variant={collector.status === 'active' ? 'success' : 'warning'}
                       className="flex-shrink-0"
                     >
-                      {collector.status || 'inactive'}
+                      {collector.status === 'active' ? 'Aktif' : 'Tidak Aktif'}
                     </Badge>
                   </div>
 
@@ -316,15 +316,15 @@ const Employees = () => {
                     <div className="flex items-start gap-3">
                       <MapPin className="h-5 w-5 text-zinc-400 mt-1 flex-shrink-0" />
                       <div>
-                        <p className="text-sm font-medium text-zinc-600">Location</p>
+                        <p className="text-sm font-medium text-zinc-600">Lokasi</p>
                         <p className="text-sm text-zinc-800 line-clamp-2">
-                          {collector.profile?.location?.address || 'No address provided'}
+                          {collector.profile?.location?.address || 'Alamat belum diisi'}
                         </p>
                         <p className="text-sm text-zinc-500">
                           {[
                             collector.profile?.location?.city,
                             collector.profile?.location?.province
-                          ].filter(Boolean).join(', ') || 'Location not specified'}
+                          ].filter(Boolean).join(', ') || 'Lokasi belum ditentukan'}
                         </p>
                       </div>
                     </div>
@@ -333,8 +333,8 @@ const Employees = () => {
                     <div className="flex items-start gap-3">
                       <PhoneCall className="h-5 w-5 text-zinc-400 mt-1 flex-shrink-0" />
                       <div>
-                        <p className="text-sm font-medium text-zinc-600">Contact</p>
-                        <p className="text-sm text-zinc-800">{collector.profile?.phone || 'No phone number'}</p>
+                        <p className="text-sm font-medium text-zinc-600">Kontak</p>
+                        <p className="text-sm text-zinc-800">{collector.profile?.phone || 'Belum ada nomor telepon'}</p>
                       </div>
                     </div>
                   </div>
@@ -347,7 +347,7 @@ const Employees = () => {
                       disabled={!collector.profile?.phone}
                     >
                       <PhoneCall className="h-4 w-4" />
-                      Call
+                      Hubungi
                     </button>
                     <button
                       onClick={() => collector.email ? window.location.href = `mailto:${collector.email}` : null}
@@ -370,12 +370,12 @@ const Employees = () => {
                       {collector.status === 'active' ? (
                         <>
                           <UserX className="h-4 w-4" />
-                          Set Inactive
+                          Non-aktifkan
                         </>
                       ) : (
                         <>
                           <UserCheck className="h-4 w-4" />
-                          Set Active
+                          Aktifkan
                         </>
                       )}
                     </button>

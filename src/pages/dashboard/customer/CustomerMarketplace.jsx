@@ -30,13 +30,13 @@ const CustomerMarketplace = () => {
   const [showFilters, setShowFilters] = useState(false);
 
   const categories = [
-    { id: 'all', label: 'All Products' },
-    { id: 'recycledPaper', label: 'Recycled Paper' },
-    { id: 'recycledPlastic', label: 'Recycled Plastic' },
-    { id: 'compost', label: 'Compost' },
-    { id: 'recycledCrafts', label: 'Recycled Crafts' },
-    { id: 'recycledRawMaterials', label: 'Raw Materials' },
-    { id: 'ecoFriendlyProducts', label: 'Eco-Friendly Products' }
+    { id: 'all', label: 'Semua Produk' },
+    { id: 'recycledPaper', label: 'Kertas Daur Ulang' },
+    { id: 'recycledPlastic', label: 'Plastik Daur Ulang' },
+    { id: 'compost', label: 'Kompos' },
+    { id: 'recycledCrafts', label: 'Kerajinan Daur Ulang' },
+    { id: 'recycledRawMaterials', label: 'Bahan Baku Daur Ulang' },
+    { id: 'ecoFriendlyProducts', label: 'Produk Ramah Lingkungan' }
   ];
 
   useEffect(() => {
@@ -181,7 +181,7 @@ const CustomerMarketplace = () => {
             <div className="relative">
               <input
                 type="text"
-                placeholder="Search eco-friendly products..."
+                placeholder="Cari produk ramah lingkungan..."
                 className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -192,18 +192,18 @@ const CustomerMarketplace = () => {
               onClick={() => setShowFilters(!showFilters)}
               className="w-full px-4 py-2.5 bg-emerald-50 text-emerald-700 rounded-lg flex items-center justify-center gap-2 hover:bg-emerald-100"
             >
-              <Filter className="h-5 w-5" />
-              Filters
+              <Filter className="w-5 h-5" />
+              Filter
               <ChevronDown className={`h-4 w-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
             </button>
           </div>
 
           {/* Filters Panel */}
           {showFilters && (
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 space-y-4">
+            <div className="p-4 space-y-4 bg-white border border-gray-200 rounded-lg shadow-sm">
               {/* Category Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                <label className="block mb-2 text-sm font-medium text-gray-700">Kategori</label>
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
@@ -219,7 +219,7 @@ const CustomerMarketplace = () => {
 
               {/* Price Range Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Price Range</label>
+                <label className="block mb-2 text-sm font-medium text-gray-700">Rentang Harga</label>
                 <div className="flex gap-2">
                   <input
                     type="number"
@@ -240,14 +240,14 @@ const CustomerMarketplace = () => {
 
               {/* Condition Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Condition</label>
+                <label className="block mb-2 text-sm font-medium text-gray-700">Kondisi</label>
                 <select
                   value={selectedCondition}
                   onChange={(e) => setSelectedCondition(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 p-2.5"
                 >
-                  <option value="all">All Conditions</option>
-                  <option value="readyToUse">Ready to Use</option>
+                  <option value="all">Semua Kondisi</option>
+                  <option value="readyToUse">Siap Pakai</option>
                   <option value="preOrder">Pre-Order</option>
                   <option value="madeToOrder">Made to Order</option>
                 </select>
@@ -259,34 +259,34 @@ const CustomerMarketplace = () => {
         {/* Products Grid */}
         {loading ? (
           <div className="flex items-center justify-center min-h-[400px]">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500" />
+            <div className="w-12 h-12 border-b-2 rounded-full animate-spin border-emerald-500" />
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {products.map(product => (
               <div
                 key={product.id}
-                className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-200 hover:shadow-md transition-shadow"
+                className="overflow-hidden transition-shadow bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md"
                 onClick={() => navigate(`/dashboard/customer/marketplace/product/${product.id}`)}
               >
                 <div className="aspect-w-1 aspect-h-1">
                   <img
                     src={product.imageUrl}
                     alt={product.name}
-                    className="w-full h-full object-cover"
+                    className="object-cover w-full h-full"
                   />
                 </div>
                 <div className="p-3 space-y-1">
-                  <h3 className="font-medium text-gray-800 text-sm line-clamp-2">{product.name}</h3>
+                  <h3 className="text-sm font-medium text-gray-800 line-clamp-2">{product.name}</h3>
                   <div className="flex items-center gap-1">
-                    <Tag className="h-3 w-3 text-emerald-500" />
+                    <Tag className="w-3 h-3 text-emerald-500" />
                     <span className="text-base font-bold text-emerald-600">
                       Rp {product.price.toLocaleString()}
                     </span>
                   </div>
                   <div className="flex items-center gap-1 text-xs text-gray-600">
-                    <Package className="h-3 w-3" />
-                    <span>Stock: {product.stock}</span>
+                    <Package className="w-3 h-3" />
+                    <span>Stok: {product.stock}</span>
                   </div>
                 </div>
               </div>
@@ -300,11 +300,11 @@ const CustomerMarketplace = () => {
             onClick={() => navigate('/dashboard/customer/marketplace/checkout', { 
               state: { items: cart }
             })}
-            className="fixed bottom-20 right-4 z-50 bg-emerald-600 text-white rounded-full p-4 shadow-lg hover:bg-emerald-700"
+            className="fixed z-50 p-4 text-white rounded-full shadow-lg bottom-20 right-4 bg-emerald-600 hover:bg-emerald-700"
           >
             <div className="relative">
-              <ShoppingCart className="h-6 w-6" />
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+              <ShoppingCart className="w-6 h-6" />
+              <span className="absolute flex items-center justify-center w-5 h-5 text-xs text-white bg-red-500 rounded-full -top-2 -right-2">
                 {cart.length}
               </span>
             </div>

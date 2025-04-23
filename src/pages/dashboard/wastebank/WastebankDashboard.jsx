@@ -15,7 +15,7 @@ import {
   Clock,
   DollarSign
 } from 'lucide-react';
-import { collection, query, getDocs, where } from 'firebase/firestore';
+import { collection, query, getDocs, where, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -54,7 +54,15 @@ const WastebankDashboard = () => {
     thisMonthWaste: 0,
     lastMonthWaste: 0,
     thisMonthEarnings: 0,
-    lastMonthEarnings: 0
+    lastMonthEarnings: 0,
+    balance: 0,
+    pendingPayments: 0,
+    institutionName: '',
+    location: {
+      address: '',
+      city: '',
+      province: ''
+    }
   });
   const [pickupTrends, setPickupTrends] = useState([]);
   const [wasteTypes, setWasteTypes] = useState([]);
@@ -74,10 +82,27 @@ const WastebankDashboard = () => {
 
     setLoading(true);
     try {
+      // Fetch waste bank data
+      const wasteBankDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      const wasteBankData = wasteBankDoc.data();
+
+      // Update institution info
+      const institutionInfo = {
+        balance: wasteBankData.balance || 0,
+        pendingPayments: wasteBankData.pendingPayments || 0,
+        institutionName: wasteBankData.profile?.institutionName || '',
+        location: {
+          address: wasteBankData.location?.address || '',
+          city: wasteBankData.location?.city || '',
+          province: wasteBankData.location?.province || ''
+        }
+      };
+
       // Fetch collectors
       const collectorsQuery = query(
         collection(db, 'users'),
-        where('role', '==', 'collector')
+        where('role', '==', 'collector'),
+        where('profile.institution', '==', currentUser.uid)
       );
       const collectorsSnapshot = await getDocs(collectorsQuery);
       const collectorsData = collectorsSnapshot.docs.map(doc => ({
@@ -103,20 +128,21 @@ const WastebankDashboard = () => {
 
       // Function to check if a date is in specified month
       const isInMonth = (timestamp, month, year) => {
+        if (!timestamp) return false;
         const date = new Date(timestamp.seconds * 1000);
         return date.getMonth() === month && date.getFullYear() === year;
       };
 
       // Calculate this month's stats
       const thisMonthPickups = pickupsData.filter(p => 
-        isInMonth(p.createdAt || p.date, thisMonth, thisYear)
+        isInMonth(p.completedAt, thisMonth, thisYear)
       );
 
       // Calculate last month's stats
       const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
       const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
       const lastMonthPickups = pickupsData.filter(p => 
-        isInMonth(p.createdAt || p.date, lastMonth, lastMonthYear)
+        isInMonth(p.completedAt, lastMonth, lastMonthYear)
       );
 
       // Calculate waste totals and earnings
@@ -140,8 +166,9 @@ const WastebankDashboard = () => {
       const assignedPickups = pickupsData.filter(p => p.status === 'assigned').length;
       const completedPickups = pickupsData.filter(p => p.status === 'completed').length;
 
-      // Set stats
+      // Set stats with institution info
       setStats({
+        ...institutionInfo,
         totalCollectors: collectorsData.length,
         activeCollectors: collectorsData.filter(c => c.status === 'active').length,
         totalPickups: pickupsData.length,
@@ -166,7 +193,7 @@ const WastebankDashboard = () => {
         nextDay.setDate(date.getDate() + 1);
 
         const dayPickups = pickupsData.filter(p => {
-          const pickupDate = new Date(p.createdAt?.seconds * 1000 || p.date.seconds * 1000);
+          const pickupDate = new Date(p.completedAt?.seconds * 1000 || p.date?.seconds * 1000);
           return pickupDate >= date && pickupDate < nextDay;
         });
 
@@ -187,6 +214,7 @@ const WastebankDashboard = () => {
           Object.entries(pickup.wastes).forEach(([type, data]) => {
             if (!wasteTypeTotals[type]) {
               wasteTypeTotals[type] = {
+                name: type.replace(/-/g, ' '),
                 weight: 0,
                 value: 0
               };
@@ -197,11 +225,12 @@ const WastebankDashboard = () => {
         }
       });
 
-      const wasteTypeData = Object.entries(wasteTypeTotals).map(([type, data]) => ({
-        name: type.charAt(0).toUpperCase() + type.slice(1),
-        weight: data.weight,
-        value: data.value
-      }));
+      const wasteTypeData = Object.values(wasteTypeTotals)
+        .sort((a, b) => b.weight - a.weight)
+        .map(type => ({
+          ...type,
+          name: type.name.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+        }));
       setWasteTypes(wasteTypeData);
 
       // Set recent pickups (last 5 completed)
@@ -220,6 +249,7 @@ const WastebankDashboard = () => {
       setLoading(false);
     }
   };
+
   // Base components
 const Button = ({ 
   variant = "primary", 
@@ -263,11 +293,11 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
     <div className="flex items-start justify-between">
       <div className="space-y-3">
         <div className="p-2.5 bg-zinc-100 rounded-lg w-fit">
-          <Icon className="h-6 w-6 text-zinc-600" />
+          <Icon className="w-6 h-6 text-zinc-600" />
         </div>
         <div>
           <p className="text-sm font-medium text-zinc-600">{label}</p>
-          <p className="text-2xl font-semibold text-zinc-800 mt-1">{value}</p>
+          <p className="mt-1 text-2xl font-semibold text-zinc-800">{value}</p>
         </div>
       </div>
       {trend && (
@@ -276,16 +306,16 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
            variant === 'danger' ? 'bg-red-50 text-red-600' : 'bg-zinc-50 text-zinc-600'}`}
         >
           {variant === 'success' ? (
-            <ArrowUpRight className="h-4 w-4" />
+            <ArrowUpRight className="w-4 h-4" />
           ) : (
-            <ArrowDownRight className="h-4 w-4" />
+            <ArrowDownRight className="w-4 h-4" />
           )}
           {trend_value}
         </div>
       )}
     </div>
     {trend && (
-      <p className="text-sm text-zinc-500 mt-2">{trend}</p>
+      <p className="mt-2 text-sm text-zinc-500">{trend}</p>
     )}
   </div>
 );
@@ -303,8 +333,8 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
         <div className="p-8">
           {/* Header */}
           <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 bg-white rounded-xl shadow-sm border border-zinc-200">
-              <Building2 className="h-6 w-6 text-emerald-500" />
+            <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <Building2 className="w-6 h-6 text-emerald-500" />
             </div>
             <div>
               <h1 className="text-2xl font-semibold text-zinc-800">Waste Bank Overview</h1>
@@ -313,8 +343,18 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {/* Earnings Card */}
+          <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
+            {/* Current Balance Card */}
+            <StatCard
+              icon={DollarSign}
+              label="Current Balance"
+              value={`Rp ${stats.balance.toLocaleString()}`}
+              trend="Pending payments"
+              trend_value={`Rp ${stats.pendingPayments.toLocaleString()}`}
+              variant={stats.pendingPayments === 0 ? 'success' : 'danger'}
+            />
+
+            {/* Total Earnings Card */}
             <StatCard
               icon={DollarSign}
               label="Total Earnings"
@@ -322,16 +362,6 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
               trend="vs last month"
               trend_value={`${((stats.thisMonthEarnings - stats.lastMonthEarnings) / stats.lastMonthEarnings * 100 || 0).toFixed(1)}%`}
               variant={stats.thisMonthEarnings >= stats.lastMonthEarnings ? 'success' : 'danger'}
-            />
-            
-            {/* Waste Collection Card */}
-            <StatCard
-              icon={Scale}
-              label="Total Waste Collected"
-              value={`${stats.totalWaste.toFixed(1)} kg`}
-              trend="vs last month"
-              trend_value={`${((stats.thisMonthWaste - stats.lastMonthWaste) / stats.lastMonthWaste * 100 || 0).toFixed(1)}%`}
-              variant={stats.thisMonthWaste >= stats.lastMonthWaste ? 'success' : 'danger'}
             />
 
             {/* Pickups Status Card */}
@@ -351,21 +381,21 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
               value={stats.totalCollectors}
               trend="Active collectors"
               trend_value={`${stats.activeCollectors} active`}
-              variant="success"
+              variant={stats.activeCollectors === stats.totalCollectors ? 'success' : 'danger'}
             />
           </div>
 
           {/* Charts Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-3">
             {/* Pickup Trends */}
-            <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-zinc-200">
+            <div className="p-6 bg-white border lg:col-span-2 rounded-xl border-zinc-200">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-lg font-semibold text-zinc-800">Collection Trends</h2>
                   <p className="text-sm text-zinc-500">Daily waste collection stats</p>
                 </div>
-                <div className="p-2 bg-emerald-50 rounded-lg">
-                  <Calendar className="h-5 w-5 text-emerald-500" />
+                <div className="p-2 rounded-lg bg-emerald-50">
+                  <Calendar className="w-5 h-5 text-emerald-500" />
                 </div>
               </div>
               <div className="h-80">
@@ -420,14 +450,14 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
             </div>
 
             {/* Waste Types Distribution */}
-            <div className="bg-white rounded-xl p-6 border border-zinc-200">
+            <div className="p-6 bg-white border rounded-xl border-zinc-200">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-lg font-semibold text-zinc-800">Waste Distribution</h2>
                   <p className="text-sm text-zinc-500">By weight collected</p>
                 </div>
-                <div className="p-2 bg-emerald-50 rounded-lg">
-                  <Recycle className="h-5 w-5 text-emerald-500" />
+                <div className="p-2 rounded-lg bg-emerald-50">
+                  <Recycle className="w-5 h-5 text-emerald-500" />
                 </div>
               </div>
 
@@ -459,8 +489,8 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
                   </ResponsiveContainer>
                 </div>
 
-                <div className="border-t border-zinc-100 pt-4 mt-4">
-                  <div className="grid grid-cols-1 gap-2">
+                <div className="pt-4 mt-4 border-t border-zinc-100">
+                  <div className="grid grid-cols-1 gap-2 max-h-[150px] overflow-y-auto">
                     {wasteTypes.map((type, index) => (
                       <div key={type.name} 
                         className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-50"
@@ -489,7 +519,7 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
           </div>
 
           {/* Recent Pickups */}
-          <div className="bg-white rounded-xl border border-zinc-200">
+          <div className="bg-white border rounded-xl border-zinc-200">
             <div className="p-6 border-b border-zinc-200">
               <div className="flex items-center justify-between">
                 <div>
@@ -505,17 +535,17 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
             <div className="divide-y divide-zinc-200">
               {recentPickups.length === 0 ? (
                 <div className="p-6 text-center">
-                  <Package className="h-12 w-12 text-zinc-300 mx-auto mb-3" />
+                  <Package className="w-12 h-12 mx-auto mb-3 text-zinc-300" />
                   <h3 className="text-sm font-medium text-zinc-800">No Recent Collections</h3>
-                  <p className="text-sm text-zinc-500 mt-1">Completed collections will appear here</p>
+                  <p className="mt-1 text-sm text-zinc-500">Completed collections will appear here</p>
                 </div>
               ) : (
                 recentPickups.map((pickup) => (
                   <div key={pickup.id} className="p-6 hover:bg-zinc-50/50">
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-4">
-                        <div className="p-2 bg-emerald-50 rounded-lg">
-                          <Scale className="h-5 w-5 text-emerald-500" />
+                        <div className="p-2 rounded-lg bg-emerald-50">
+                          <Scale className="w-5 h-5 text-emerald-500" />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
@@ -528,7 +558,7 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
                           </div>
                           
                           <div className="flex items-center gap-2 mt-1 text-sm text-zinc-600">
-                            <Clock className="h-4 w-4" />
+                            <Clock className="w-4 h-4" />
                             {new Date(pickup.completedAt.seconds * 1000).toLocaleString()}
                           </div>
                           
@@ -537,7 +567,7 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
                               {Object.entries(pickup.wastes || {}).map(([type, data]) => (
                                 <span 
                                   key={type}
-                                  className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-100 rounded-lg text-xs font-medium text-zinc-700"
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-zinc-100 text-zinc-700"
                                 >
                                   {type}: {data.weight}kg
                                   <span className="text-zinc-400">•</span>
@@ -553,7 +583,7 @@ const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "suc
                         <p className="text-sm font-medium text-emerald-600">
                           Rp {pickup.totalValue.toLocaleString()}
                         </p>
-                        <p className="text-xs text-zinc-500 mt-1">
+                        <p className="mt-1 text-xs text-zinc-500">
                           Total Value
                         </p>
                       </div>

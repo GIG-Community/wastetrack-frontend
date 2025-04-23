@@ -63,14 +63,14 @@ const SchedulePickup = () => {
     
     // Haversine formula
     const a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
-            Math.cos(lat1Rad) * Math.cos(lat2Rad) * 
+            Math.cos(lat1Rad) * Math.cos(lat2Rad) + 
             Math.sin(deltaLon/2) * Math.sin(deltaLon/2); 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
     const distance = R * c; // Distance in km
     return distance;
   };
 
-  // Fetch waste banks - Disederhanakan tanpa perhitungan jarak
+  // Fetch waste banks - Menggunakan perhitungan jarak
   useEffect(() => {
     const fetchWasteBanks = async () => {
       try {
@@ -79,10 +79,35 @@ const SchedulePickup = () => {
           where('role', '==', 'wastebank_admin')
         );
         const snapshot = await getDocs(q);
-        const wasteBankData = snapshot.docs.map(doc => ({
+        let wasteBankData = snapshot.docs.map(doc => ({
           id: doc.id,
-          ...doc.data()
+          ...doc.data(),
+          distance: null // Tambahkan properti distance
         }));
+        
+        // Jika ada koordinat pengguna, hitung jarak untuk setiap bank sampah
+        if (formData.coordinates) {
+          wasteBankData = wasteBankData.map(bank => {
+            const bankCoords = bank.profile?.location?.coordinates;
+            if (bankCoords) {
+              const distance = calculateDistance(
+                formData.coordinates.lat,
+                formData.coordinates.lng,
+                bankCoords.lat,
+                bankCoords.lng
+              );
+              return { ...bank, distance };
+            }
+            return bank;
+          });
+
+          // Urutkan bank sampah berdasarkan jarak
+          wasteBankData.sort((a, b) => {
+            if (a.distance === null) return 1;
+            if (b.distance === null) return -1;
+            return a.distance - b.distance;
+          });
+        }
         
         setWasteBanks(wasteBankData);
       } catch (error) {
@@ -93,7 +118,7 @@ const SchedulePickup = () => {
     };
 
     fetchWasteBanks();
-  }, []); // No dependencies needed since we're not using coordinates anymore
+  }, [formData.coordinates]); // Tambahkan coordinates sebagai dependency
 
   // Available waste types with detailed categories
   const wasteTypes = [
@@ -348,10 +373,10 @@ const SchedulePickup = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-3 sm:p-6">
-      <div className="bg-gradient-to-r from-emerald-500 to-emerald-700 rounded-2xl p-8 mb-8 text-white">
-        <h1 className="text-3xl font-bold mb-2">Schedule a Waste Collection</h1>
-        <p className="text-emerald-50">Let us help you manage your waste sustainably</p>
+    <div className="max-w-3xl p-3 mx-auto sm:p-6">
+      <div className="p-8 mb-8 text-white bg-gradient-to-r from-emerald-500 to-emerald-700 rounded-2xl">
+        <h1 className="mb-2 text-3xl font-bold">Jadwalkan Penjemputan Sampah</h1>
+        <p className="text-emerald-50">Mari kami bantu mengelola sampah Anda secara berkelanjutan</p>
       </div>
 
       {/* Steps indicator with progress bar */}
@@ -360,13 +385,13 @@ const SchedulePickup = () => {
         <div className="relative mb-4">
           <div className="w-full h-2 bg-gray-200 rounded-full">
             <div
-              className="h-2 bg-emerald-500 rounded-full transition-all duration-300"
+              className="h-2 transition-all duration-300 rounded-full bg-emerald-500"
               style={{
                 width: `${(step / (formData.deliveryType === 'pickup' ? 6 : 4)) * 100}%`
               }}
             />
           </div>
-          <div className="absolute -top-2 left-0 w-full flex justify-between">
+          <div className="absolute left-0 flex justify-between w-full -top-2">
             {['Delivery', 'WasteBank', 'Schedule', 'Details', 'Location', 'Confirm']
               .slice(0, formData.deliveryType === 'pickup' ? 6 : 4)
               .map((text, index) => (
@@ -389,18 +414,18 @@ const SchedulePickup = () => {
         </div>
 
         {/* Step labels */}
-        <div className="flex justify-between text-xs text-gray-600 px-1">
-          {['Delivery', 'WasteBank', 'Schedule', 'Details', 'Location', 'Confirm']
+        <div className="flex justify-between px-1 text-xs text-gray-600">
+          {['Pengiriman', 'Bank Sampah', 'Jadwal', 'Detail', 'Lokasi', 'Konfirmasi']
             .slice(0, formData.deliveryType === 'pickup' ? 6 : 4)
             .map((text) => (
-              <div key={text} className="text-center flex-1">{text}</div>
+              <div key={text} className="flex-1 text-center">{text}</div>
           ))}
         </div>
       </div>
 
       {/* Error display */}
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="p-4 mb-6 border border-red-200 rounded-lg bg-red-50">
           <div className="flex items-center gap-2 text-red-700">
             <AlertCircle className="w-5 h-5" />
             <p className="font-medium">{error}</p>
@@ -412,13 +437,13 @@ const SchedulePickup = () => {
         {/* Step 1: Delivery Type Selection */}
         {step === 1 && (
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="overflow-hidden bg-white shadow-lg rounded-xl">
               <div className="p-6 border-b border-gray-100">
-                <h2 className="text-xl font-semibold text-gray-800">Select Delivery Type</h2>
-                <p className="text-sm text-gray-500 mt-1">Choose how you want to handle your waste</p>
+                <h2 className="text-xl font-semibold text-gray-800">Pilih Tipe Pengiriman</h2>
+                <p className="mt-1 text-sm text-gray-500">Pilih cara Anda ingin menangani sampah Anda</p>
               </div>
               <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => setFormData({ ...formData, deliveryType: 'pickup' })}
@@ -428,19 +453,19 @@ const SchedulePickup = () => {
                         : 'border-gray-200 hover:border-emerald-200'
                       }`}
                   >
-                    <div className="flex justify-between items-start">
+                    <div className="flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2">
-                          <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
                             <Truck className="w-6 h-6 text-emerald-600" />
                           </div>
-                          <h3 className="font-medium text-gray-900">Pickup Service</h3>
+                          <h3 className="font-medium text-gray-900">Jasa Penjemputan</h3>
                         </div>
-                        <p className="text-sm text-gray-500 mt-2">We'll pick up your waste from your location</p>
-                        <p className="text-sm font-medium text-emerald-600 mt-2">Service fee applies</p>
+                        <p className="mt-2 text-sm text-gray-500">Kami akan menjemput sampah Anda dari lokasi Anda</p>
+                        <p className="mt-2 text-sm font-medium text-emerald-600">Biaya layanan berlaku</p>
                       </div>
                       {formData.deliveryType === 'pickup' && (
-                        <div className="bg-emerald-500 text-white rounded-full p-1">
+                        <div className="p-1 text-white rounded-full bg-emerald-500">
                           <Check className="w-4 h-4" />
                         </div>
                       )}
@@ -453,20 +478,20 @@ const SchedulePickup = () => {
                       : 'border-gray-200 hover:border-emerald-200'
                     }`}
                   >
-                    <div className="flex justify-between items-start">
+                    <div className="flex items-start justify-between">
                       <div className="w-full">
                         <div className="flex items-center gap-2 cursor-pointer"
                              onClick={() => setFormData({ ...formData, deliveryType: 'self-delivery' })}>
-                          <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
                             <Package className="w-6 h-6 text-emerald-600" />
                           </div>
-                          <h3 className="font-medium text-gray-900">Self Delivery</h3>
+                          <h3 className="font-medium text-gray-900">Antar Sendiri</h3>
                         </div>
-                        <p className="text-sm text-gray-500 mt-2">Deliver waste to the waste bank yourself</p>
-                        <p className="text-sm font-medium text-emerald-600 mt-2">No service fee</p>
+                        <p className="mt-2 text-sm text-gray-500">Antar sampah ke bank sampah sendiri</p>
+                        <p className="mt-2 text-sm font-medium text-emerald-600">Tanpa biaya layanan</p>
                       </div>
                       {formData.deliveryType === 'self-delivery' && (
-                        <div className="bg-emerald-500 text-white rounded-full p-1">
+                        <div className="p-1 text-white rounded-full bg-emerald-500">
                           <Check className="w-4 h-4" />
                         </div>
                       )}
@@ -481,21 +506,21 @@ const SchedulePickup = () => {
         {/* Step 2: WasteBank Selection */}
         {step === 2 && (
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="overflow-hidden bg-white shadow-lg rounded-xl">
               <div className="p-6 border-b border-gray-100">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 bg-emerald-100 rounded-lg">
+                  <div className="p-2 rounded-lg bg-emerald-100">
                     <Recycle className="w-5 h-5 text-emerald-600" />
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-gray-800">Pilih Bank Sampah</h2>
-                    <p className="text-sm text-gray-500 mt-1">Pilih bank sampah yang akan mengelola sampah Anda</p>
+                    <p className="mt-1 text-sm text-gray-500">Pilih bank sampah yang akan mengelola sampah Anda</p>
                   </div>
                 </div>
               </div>
 
               {loadingWasteBanks ? (
-                <div className="p-6 flex justify-center">
+                <div className="flex justify-center p-6">
                   <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
                 </div>
               ) : (
@@ -528,7 +553,7 @@ const SchedulePickup = () => {
                               />
                             </div>
                             <div>
-                              <h3 className="font-medium text-gray-900 group-hover:text-emerald-700 transition-colors duration-300">
+                              <h3 className="font-medium text-gray-900 transition-colors duration-300 group-hover:text-emerald-700">
                                 {bank.profile?.institution || 'Unnamed WasteBank'}
                               </h3>
                               <div className="flex items-center gap-2 mt-1">
@@ -538,13 +563,19 @@ const SchedulePickup = () => {
                                 </p>
                               </div>
                               <div className="flex items-center gap-4 mt-2">
+                                {bank.distance !== null && (
+                                  <div className="flex items-center text-sm text-gray-600">
+                                    <Navigation className="w-4 h-4 mr-1 text-blue-500" />
+                                    <span>{bank.distance.toFixed(1)} km</span>
+                                  </div>
+                                )}
                                 <div className="flex items-center text-sm text-gray-600">
                                   <Trees className="w-4 h-4 mr-1 text-emerald-500" />
-                                  <span>Eco-friendly</span>
+                                  <span>Ramah Lingkungan</span>
                                 </div>
                                 <div className="flex items-center text-sm text-gray-600">
                                   <Timer className="w-4 h-4 mr-1 text-blue-500" />
-                                  <span>Fast Service</span>
+                                  <span>Layanan Cepat</span>
                                 </div>
                                 {bank.profile?.phone && (
                                   <div className="flex items-center text-sm text-gray-600">
@@ -553,7 +584,7 @@ const SchedulePickup = () => {
                                   </div>
                                 )}
                               </div>
-                              <div className="mt-2 flex items-center gap-1">
+                              <div className="flex items-center gap-1 mt-2">
                                 <Trophy className="w-4 h-4 text-amber-500" />
                                 <span className="text-xs text-gray-500">Verified Waste Bank</span>
                               </div>
@@ -578,13 +609,13 @@ const SchedulePickup = () => {
         {step === 3 && (
           <div className="space-y-6">
             {/* Date selection */}
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="overflow-hidden bg-white shadow-lg rounded-xl">
               <div className="p-6 border-b border-gray-100">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-emerald-500" />
-                  <h2 className="text-xl font-semibold text-gray-800">Select Date</h2>
+                  <h2 className="text-xl font-semibold text-gray-800">Pilih Tanggal</h2>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">Choose your preferred pickup date</p>
+                <p className="mt-1 text-sm text-gray-500">Pilih tanggal penjemputan yang Anda inginkan</p>
               </div>
               <div className="p-6">
                 <input
@@ -599,16 +630,16 @@ const SchedulePickup = () => {
             </div>
 
             {/* Time selection */}
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="overflow-hidden bg-white shadow-lg rounded-xl">
               <div className="p-6 border-b border-gray-100">
                 <div className="flex items-center gap-2">
                   <Clock className="w-5 h-5 text-emerald-500" />
-                  <h2 className="text-xl font-semibold text-gray-800">Select Time</h2>
+                  <h2 className="text-xl font-semibold text-gray-800">Pilih Waktu</h2>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">Choose your preferred pickup time interval</p>
+                <p className="mt-1 text-sm text-gray-500">Pilih rentang waktu penjemputan yang Anda inginkan</p>
               </div>
               <div className="p-6">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {timeSlots.map(({ time, available }) => (
                     <button
                       key={time}
@@ -635,19 +666,19 @@ const SchedulePickup = () => {
         {/* Step 4: Waste Details */}
         {step === 4 && (
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="overflow-hidden bg-white shadow-lg rounded-xl">
               <div className="p-6 border-b border-gray-100">
                 <div className="flex items-center gap-2">
                   <Trash2 className="w-5 h-5 text-emerald-500" />
                   <h2 className="text-xl font-semibold text-gray-800">Pilih Jenis Sampah</h2>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">Pilih jenis sampah yang akan disetorkan</p>
+                <p className="mt-1 text-sm text-gray-500">Pilih jenis sampah yang akan disetorkan</p>
               </div>
               <div className="p-6">
                 <div className="space-y-6">
                   {wasteTypes.map(category => (
-                    <div key={category.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                      <div className="bg-gray-50 p-4 flex items-center justify-between">
+                    <div key={category.id} className="overflow-hidden border border-gray-200 rounded-lg">
+                      <div className="flex items-center justify-between p-4 bg-gray-50">
                         <h3 className="text-lg font-medium text-gray-900">{category.name}</h3>
                       </div>
                       <div className="p-4">
@@ -657,9 +688,9 @@ const SchedulePickup = () => {
                             {category.subcategories.map((subcat, idx) => (
                               <div key={idx} className="space-y-2">
                                 <h4 className="font-medium text-gray-700">{subcat.name}</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
                                   {subcat.types.map(type => (
-                                    <label key={type.id} className="flex items-center p-2 rounded-lg border border-gray-200 hover:bg-gray-50">
+                                    <label key={type.id} className="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
                                       <input
                                         type="checkbox"
                                         checked={formData.wasteTypes.includes(type.id)}
@@ -676,7 +707,7 @@ const SchedulePickup = () => {
                                             }
                                           }));
                                         }}
-                                        className="h-4 w-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500"
+                                        className="w-4 h-4 border-gray-300 rounded text-emerald-500 focus:ring-emerald-500"
                                       />
                                       <span className="ml-2 text-sm text-gray-700">{type.name}</span>
                                     </label>
@@ -687,9 +718,9 @@ const SchedulePickup = () => {
                           </div>
                         ) : (
                           // For categories without subcategories
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
                             {category.types.map(type => (
-                              <label key={type.id} className="flex items-center p-2 rounded-lg border border-gray-200 hover:bg-gray-50">
+                              <label key={type.id} className="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
                                 <input
                                   type="checkbox"
                                   checked={formData.wasteTypes.includes(type.id)}
@@ -706,7 +737,7 @@ const SchedulePickup = () => {
                                       }
                                     }));
                                   }}
-                                  className="h-4 w-4 text-emerald-500 rounded border-gray-300 focus:ring-emerald-500"
+                                  className="w-4 h-4 border-gray-300 rounded text-emerald-500 focus:ring-emerald-500"
                                 />
                                 <span className="ml-2 text-sm text-gray-700">{type.name}</span>
                               </label>
@@ -739,27 +770,48 @@ const SchedulePickup = () => {
                                 if (found) typeName = found.name;
                               }
 
+                              const quantity = formData.wasteQuantities[typeId] || 0;
+
                               return (
-                                <div key={typeId} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                                  <span className="text-sm text-gray-700">{typeName}</span>
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleQuantityChange(typeId, -1)}
-                                      className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
-                                    >
-                                      <Minus className="w-4 h-4" />
-                                    </button>
-                                    <span className="w-12 text-center font-medium">
-                                      {formData.wasteQuantities[typeId] || 1} kantong
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleQuantityChange(typeId, 1)}
-                                      className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
-                                    >
-                                      <Plus className="w-4 h-4" />
-                                    </button>
+                                <div key={typeId} className="flex items-center justify-between p-3 transition-shadow duration-200 bg-white rounded-lg shadow-sm hover:shadow-md">
+                                  <div className="flex-1">
+                                    <span className="text-sm font-medium text-gray-700">{typeName}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex items-center">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuantityChange(typeId, -1)}
+                                        disabled={quantity <= 0}
+                                        className={`relative inline-flex items-center justify-center p-2 rounded-l-md
+                                          ${quantity <= 0
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
+                                          }
+                                          transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2`}
+                                      >
+                                        <span className="sr-only">Kurangi jumlah</span>
+                                        <Minus className="w-5 h-5" strokeWidth={2.5} />
+                                      </button>
+                                      <div className="flex items-center justify-center w-12 h-[42px] border-y bg-white text-base font-semibold text-gray-800">
+                                        {quantity}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuantityChange(typeId, 1)}
+                                        disabled={quantity >= 10}
+                                        className={`relative inline-flex items-center justify-center p-2 rounded-r-md
+                                          ${quantity >= 10
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
+                                          }
+                                          transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2`}
+                                      >
+                                        <span className="sr-only">Tambah jumlah</span>
+                                        <Plus className="w-5 h-5" strokeWidth={2.5} />
+                                      </button>
+                                    </div>
+                                    <span className="text-sm font-medium text-gray-500 min-w-[60px]">kantong</span>
                                   </div>
                                 </div>
                               );
@@ -777,35 +829,35 @@ const SchedulePickup = () => {
         {/* Step 5: Location - Only show for pickup service */}
         {formData.deliveryType === 'pickup' && step === 5 && (
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="overflow-hidden bg-white shadow-lg rounded-xl">
               <div className="p-6 border-b border-gray-100">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-emerald-500" />
-                  <h2 className="text-xl font-semibold text-gray-800">Pickup Location</h2>
+                  <h2 className="text-xl font-semibold text-gray-800">Lokasi Penjemputan</h2>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">Where should we pick up your waste?</p>
+                <p className="mt-1 text-sm text-gray-500">Di mana kami harus menjemput sampah Anda?</p>
               </div>
               <div className="p-6 space-y-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
                   <textarea
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                     rows="3"
-                    placeholder="Enter your address"
+                    placeholder="Masukkan alamat lengkap Anda"
                     required
                   />
                   <button
                     type="button"
                     onClick={getCurrentLocation}
-                    className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200"
+                    className="flex items-center flex-shrink-0 gap-2 px-4 py-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200"
                   >
                     {gettingLocation ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <Navigation className="w-4 h-4" />
                     )}
-                    Use Current
+                    Gunakan Lokasi Saat Ini
                   </button>
                 </div>
                 
@@ -814,7 +866,7 @@ const SchedulePickup = () => {
                   value={formData.phone}
                   onChange={handlePhoneChange}
                   className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="Phone number (e.g., 0812-3456-7890)"
+                  placeholder="Nomor telepon (contoh: 0812-3456-7890)"
                   pattern="[0-9]{4}-[0-9]{4}-[0-9]{4}"
                   required
                 />
@@ -824,7 +876,7 @@ const SchedulePickup = () => {
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   rows="3"
-                  placeholder="Additional notes (e.g., 'Waste is in black bags near the garage')"
+                  placeholder="Catatan tambahan (contoh: 'Sampah berada dalam kantong hitam dekat garasi')"
                 />
               </div>
             </div>
@@ -833,37 +885,37 @@ const SchedulePickup = () => {
 
         {/* Step 5 (pickup) or Step 4 (self-delivery): Confirmation */}
         {((formData.deliveryType === 'pickup' && step === 6) || (formData.deliveryType === 'self-delivery' && step === 4)) && (
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div className="overflow-hidden bg-white shadow-lg rounded-xl">
             <div className="p-6 border-b border-gray-100">
-              <h2 className="text-xl font-semibold text-gray-800">Review Your {formData.deliveryType === 'pickup' ? 'Pickup' : 'Self-Delivery'}</h2>
-              <p className="text-sm text-gray-500 mt-1">Please confirm your details</p>
+              <h2 className="text-xl font-semibold text-gray-800">Tinjau {formData.deliveryType === 'pickup' ? 'Penjemputan' : 'Pengantaran'} Anda</h2>
+              <p className="mt-1 text-sm text-gray-500">Harap konfirmasi detail informasi Anda</p>
             </div>
             
             <div className="p-6 space-y-6">
               {/* WasteBank Info */}
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
                   <Building2 className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">Selected WasteBank</p>
-                  <p className="text-gray-900 font-medium">{formData.wasteBankName}</p>
+                  <p className="text-sm font-medium text-gray-500">Bank Sampah Terpilih</p>
+                  <p className="font-medium text-gray-900">{formData.wasteBankName}</p>
                   {formData.deliveryType === 'self-delivery' && (
                     <>
-                      <p className="text-sm text-gray-500 mt-2">
+                      <p className="mt-2 text-sm text-gray-500">
                         {wasteBanks.find(bank => bank.id === formData.wasteBankId)?.profile?.address}
                       </p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Contact: {wasteBanks.find(bank => bank.id === formData.wasteBankId)?.profile?.phone || 'No phone number provided'}
+                      <p className="mt-1 text-sm text-gray-500">
+                        Kontak: {wasteBanks.find(bank => bank.id === formData.wasteBankId)?.profile?.phone || 'Tidak ada nomor telepon'}
                       </p>
                       <div className="mt-4">
-                        <p className="text-sm font-medium text-gray-500">Your Contact Number</p>
+                        <p className="text-sm font-medium text-gray-500">Nomor Telepon Anda</p>
                         <input
                           type="tel"
                           value={formData.phone}
                           onChange={handlePhoneChange}
-                          className="mt-1 w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                          placeholder="Phone number (e.g., 0812-3456-7890)"
+                          className="w-full p-3 mt-1 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                          placeholder="Nomor telepon (contoh: 0812-3456-7890)"
                           pattern="[0-9]{4}-[0-9]{4}-[0-9]{4}"
                           required
                         />
@@ -875,19 +927,19 @@ const SchedulePickup = () => {
 
               {/* Schedule Info */}
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
                   <Calendar className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Schedule</p>
+                  <p className="text-sm font-medium text-gray-500">Jadwal</p>
                   <p className="text-gray-900">
-                    {new Date(formData.date).toLocaleDateString('en-US', {
+                    {new Date(formData.date).toLocaleDateString('id-ID', {
                       weekday: 'long',
                       year: 'numeric',
                       month: 'long',
                       day: 'numeric'
                     })}
-                    {' at '}
+                    {' pukul '}
                     {formData.time}
                   </p>
                 </div>
@@ -895,12 +947,12 @@ const SchedulePickup = () => {
 
               {/* Waste Info */}
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
                   <Package className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">Waste Details</p>
-                  <div className="space-y-2 mt-2">
+                  <p className="text-sm font-medium text-gray-500">Detail Sampah</p>
+                  <div className="mt-2 space-y-2">
                     {formData.wasteTypes.map(typeId => {
                       const waste = getWasteDetails(typeId);
                       const quantity = formData.wasteQuantities[typeId] || 0;
@@ -919,21 +971,21 @@ const SchedulePickup = () => {
               {/* Location Info with Notes - Only for pickup */}
               {formData.deliveryType === 'pickup' && (
                 <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
                     <MapPin className="w-5 h-5 text-emerald-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Pickup Location</p>
+                    <p className="text-sm font-medium text-gray-500">Lokasi Penjemputan</p>
                     <p className="text-gray-900">{formData.location}</p>
                     {formData.phone && (
                       <>
-                        <p className="text-sm font-medium text-gray-500 mt-2">Contact Number</p>
+                        <p className="mt-2 text-sm font-medium text-gray-500">Nomor Telepon</p>
                         <p className="text-gray-700">{formData.phone}</p>
                       </>
                     )}
                     {formData.notes && (
                       <>
-                        <p className="text-sm font-medium text-gray-500 mt-2">Additional Notes</p>
+                        <p className="mt-2 text-sm font-medium text-gray-500">Catatan Tambahan</p>
                         <p className="text-gray-700">{formData.notes}</p>
                       </>
                     )}
@@ -950,10 +1002,10 @@ const SchedulePickup = () => {
             <button
               type="button"
               onClick={() => setStep(step - 1)}
-              className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2"
+              className="flex items-center gap-2 px-6 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back
+              Kembali
             </button>
           )}
           
@@ -966,33 +1018,33 @@ const SchedulePickup = () => {
                 switch (step) {
                   case 1:
                     if (!formData.deliveryType) {
-                      validationError = 'Please select a delivery type to continue';
+                      validationError = 'Silahkan pilih tipe pengiriman untuk melanjutkan';
                     }
                     break;
                   case 2:
                     if (!formData.wasteBankId) {
-                      validationError = 'Please select a WasteBank to continue';
+                      validationError = 'Silahkan pilih Bank Sampah untuk melanjutkan';
                     }
                     break;
                   case 3:
                     if (!formData.date) {
-                      validationError = 'Please select a date to continue';
+                      validationError = 'Silahkan pilih tanggal untuk melanjutkan';
                     } else if (!formData.time) {
-                      validationError = 'Please select a time slot to continue';
+                      validationError = 'Silahkan pilih waktu untuk melanjutkan';
                     }
                     break;
                   case 4:
                     if (formData.wasteTypes.length === 0) {
-                      validationError = 'Please select at least one waste type to continue';
+                      validationError = 'Silahkan pilih minimal satu jenis sampah untuk melanjutkan';
                     } else if (formData.wasteTypes.some(typeId => !formData.wasteQuantities[typeId])) {
-                      validationError = 'Please specify quantities for all selected waste types';
+                      validationError = 'Silahkan tentukan jumlah untuk semua jenis sampah yang dipilih';
                     }
                     break;
                   case 5:
                     if (!formData.location.trim()) {
-                      validationError = 'Please provide a pickup location to continue';
+                      validationError = 'Silahkan masukkan lokasi penjemputan untuk melanjutkan';
                     } else if (!formData.phone) {
-                      validationError = 'Please provide a contact number to continue';
+                      validationError = 'Silahkan masukkan nomor telepon untuk melanjutkan';
                     }
                     break;
                 }
@@ -1005,9 +1057,9 @@ const SchedulePickup = () => {
                 setError('');
                 setStep(step + 1);
               }}
-              className="px-6 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 ml-auto flex items-center gap-2"
+              className="flex items-center gap-2 px-6 py-2 ml-auto text-white rounded-lg bg-emerald-500 hover:bg-emerald-600"
             >
-              Continue
+              Lanjut
               <ArrowRight className="w-4 h-4" />
             </button>
           )}
@@ -1022,10 +1074,10 @@ const SchedulePickup = () => {
               {loading ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
+                  Memproses...
                 </span>
               ) : (
-                'Confirm Schedule'
+                'Konfirmasi Jadwal'
               )}
             </button>
           )}
@@ -1034,15 +1086,15 @@ const SchedulePickup = () => {
 
       {/* Success message */}
       {success && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full">
+        <div className="fixed inset-0 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <div className="w-full max-w-md p-6 bg-white rounded-xl">
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-emerald-100">
                 <CheckCircle2 className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-800">Pickup Scheduled!</h3>
-                <p className="text-gray-500">Your waste pickup has been scheduled successfully.</p>
+                <h3 className="text-lg font-semibold text-gray-800">Jadwal Berhasil Dibuat!</h3>
+                <p className="text-gray-500">Penjemputan sampah Anda telah berhasil dijadwalkan.</p>
               </div>
             </div>
             <button
@@ -1053,18 +1105,18 @@ const SchedulePickup = () => {
                   date: '',
                   time: '',
                   wasteTypes: [],
-                  wasteQuantities: {}, // New: Store quantities per waste type
+                  wasteQuantities: {},
                   location: userData?.profile?.address || '',
                   phone: '',
                   coordinates: null,
                   wasteBankId: '',
                   wasteBankName: '',
-                  notes: '', // New: Additional notes for pickup location
+                  notes: '',
                 });
               }}
-              className="w-full px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600"
+              className="w-full px-4 py-2 text-white rounded-lg bg-emerald-500 hover:bg-emerald-600"
             >
-              Schedule Another Pickup
+              Jadwalkan Penjemputan Lainnya
             </button>
           </div>
         </div>

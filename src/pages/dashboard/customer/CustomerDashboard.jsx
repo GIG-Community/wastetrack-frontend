@@ -44,10 +44,10 @@ const CustomerDashboard = () => {
   // Navigation items configuration
   const navItems = [
     { id: 'home', icon: Home, label: 'Home' },
-    { id: 'detect', icon: Camera, label: 'Detect' },
-    { id: 'schedule', icon: Calendar, label: 'Schedule Pickup' },
+    { id: 'detect', icon: Camera, label: 'Cek Sampah' },
+    { id: 'schedule', icon: Calendar, label: 'Setor' },
     { id: 'marketplace', icon: Gift, label: 'Marketplace' },
-    { id: 'history', icon: Clock, label: 'History' },
+    { id: 'history', icon: Clock, label: 'Buku Tabungan' },
     
     // { id: 'history', icon: Clock, label: 'History' }
   ];
@@ -177,18 +177,18 @@ const CustomerDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top Header */}
-      <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-100 z-50">
-        <div className="flex items-center justify-between px-4 h-full">
+      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-white border-b border-gray-100">
+        <div className="flex items-center justify-between h-full px-4">
           {/* Left side - Brand/Logo */}
           <div className="flex items-center gap-3">
             {/* <button 
-              className="lg:hidden p-2 hover:bg-gray-100 rounded-lg"
+              className="p-2 rounded-lg lg:hidden hover:bg-gray-100"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
               {isMobileMenuOpen ? (
-                <X className="h-6 w-6 text-gray-600" />
+                <X className="w-6 h-6 text-gray-600" />
               ) : (
-                <Menu className="h-6 w-6 text-gray-600" />
+                <Menu className="w-6 h-6 text-gray-600" />
               )}
             </button> */}
             <h1 className="text-xl font-bold text-emerald-600">WasteTrack</h1>
@@ -199,12 +199,12 @@ const CustomerDashboard = () => {
             {/* Notifications */}
             <div className="relative notification-menu">
               <button 
-                className="p-2 hover:bg-gray-100 rounded-lg relative"
+                className="relative p-2 rounded-lg hover:bg-gray-100"
                 onClick={() => setIsNotificationOpen(!isNotificationOpen)}
               >
-                <Bell className="h-5 w-5 text-gray-600" />
+                <Bell className="w-5 h-5 text-gray-600" />
                 {notifications.length > 0 && (
-                  <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                  <span className="absolute flex items-center justify-center w-5 h-5 text-xs text-white bg-red-500 rounded-full -top-1 -right-1">
                     {notifications.length}
                   </span>
                 )}
@@ -212,14 +212,14 @@ const CustomerDashboard = () => {
 
               {/* Notifications Dropdown */}
               {isNotificationOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-100 py-2">
+                <div className="absolute right-0 py-2 mt-2 bg-white border border-gray-100 rounded-lg shadow-lg w-80">
                   <div className="px-4 py-2 border-b border-gray-100">
                     <h3 className="font-semibold text-gray-700">Notifications</h3>
                   </div>
                   {notifications.map((notification) => (
                     <div key={notification.id} className="px-4 py-3 hover:bg-gray-50">
-                      <p className="font-medium text-sm text-gray-800">{notification.title}</p>
-                      <p className="text-gray-500 text-xs mt-1">{notification.message}</p>
+                      <p className="text-sm font-medium text-gray-800">{notification.title}</p>
+                      <p className="mt-1 text-xs text-gray-500">{notification.message}</p>
                     </div>
                   ))}
                 </div>
@@ -229,37 +229,37 @@ const CustomerDashboard = () => {
             {/* User Menu */}
             <div className="relative profile-menu">
               <button 
-                className="flex items-center gap-2 hover:bg-gray-100 rounded-lg p-2"
+                className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100"
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
               >
-                <div className="h-8 w-8 bg-emerald-100 rounded-full flex items-center justify-center">
-                  <span className="text-emerald-600 font-medium">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-100">
+                  <span className="font-medium text-emerald-600">
                     {userData?.profile?.fullName?.charAt(0) || 'U'}
                   </span>
                 </div>
-                <ChevronDown className="h-4 w-4 text-gray-600" />
+                <ChevronDown className="w-4 h-4 text-gray-600" />
               </button>
 
               {/* Profile Dropdown */}
               {isProfileOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 py-2">
+                <div className="absolute right-0 w-48 py-2 mt-2 bg-white border border-gray-100 rounded-lg shadow-lg">
                   <div className="px-4 py-2 border-b border-gray-100">
                     <p className="font-semibold text-gray-700">My Account</p>
                   </div>
-                  <button className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2">
-                    <User className="h-4 w-4 text-gray-600" />
+                  <button className="flex items-center w-full gap-2 px-4 py-2 text-left hover:bg-gray-50">
+                    <User className="w-4 h-4 text-gray-600" />
                     <span className="text-sm text-gray-700">Profile</span>
                   </button>
-                  <button className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2">
-                    <Settings className="h-4 w-4 text-gray-600" />
+                  <button className="flex items-center w-full gap-2 px-4 py-2 text-left hover:bg-gray-50">
+                    <Settings className="w-4 h-4 text-gray-600" />
                     <span className="text-sm text-gray-700">Settings</span>
                   </button>
-                  <div className="border-t border-gray-100 mt-2">
+                  <div className="mt-2 border-t border-gray-100">
                     <button 
                       onClick={handleSignOut}
-                      className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 text-red-600"
+                      className="flex items-center w-full gap-2 px-4 py-2 text-left text-red-600 hover:bg-gray-50"
                     >
-                      <LogOut className="h-4 w-4" />
+                      <LogOut className="w-4 h-4" />
                       <span className="text-sm">Sign Out</span>
                     </button>
                   </div>
@@ -272,7 +272,7 @@ const CustomerDashboard = () => {
 
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+        <div className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
              onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
@@ -291,8 +291,8 @@ const CustomerDashboard = () => {
       {!location.pathname.includes('/product/') && 
        !location.pathname.includes('/checkout') && 
        !location.pathname.includes('/order-confirmation') && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50">
-          <div className="flex justify-around items-center h-16">
+        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100">
+          <div className="flex items-center justify-around h-16">
             {navItems.map((item) => (
               <button
                 key={item.id}
@@ -303,8 +303,8 @@ const CustomerDashboard = () => {
                     : 'text-gray-500 hover:text-emerald-400 hover:bg-gray-50'
                   }`}
               >
-                <item.icon className="h-5 w-5" />
-                <span className="text-xs mt-1 font-medium">{item.label}</span>
+                <item.icon className="w-5 h-5" />
+                <span className="mt-1 text-xs font-medium">{item.label}</span>
               </button>
             ))}
           </div>

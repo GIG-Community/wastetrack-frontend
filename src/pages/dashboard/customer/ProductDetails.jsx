@@ -93,7 +93,7 @@ const ProductDetails = () => {
           >
             <ArrowLeft className="h-6 w-6" />
           </button>
-          <h1 className="ml-4 text-lg font-semibold text-gray-900">Product Details</h1>
+          <h1 className="ml-4 text-lg font-semibold text-gray-900">Detail Produk</h1>
         </div>
       </header>
 
@@ -122,22 +122,22 @@ const ProductDetails = () => {
                 </span>
                 {product.stock > 0 ? (
                   <span className="text-sm text-gray-500">
-                    ({product.stock} available)
+                    (Stok: {product.stock})
                   </span>
                 ) : (
-                  <span className="text-sm text-red-500">Out of stock</span>
+                  <span className="text-sm text-red-500">Stok Habis</span>
                 )}
               </div>
             </div>
 
             <div className="mb-4">
-              <h2 className="text-lg font-semibold mb-2">Description</h2>
+              <h2 className="text-lg font-semibold mb-2">Deskripsi</h2>
               <p className="text-gray-600">{product.description}</p>
             </div>
 
             {product.features && (
               <div className="mb-4">
-                <h2 className="text-lg font-semibold mb-2">Features</h2>
+                <h2 className="text-lg font-semibold mb-2">Fitur</h2>
                 <ul className="list-disc list-inside text-gray-600 space-y-1">
                   {product.features.map((feature, index) => (
                     <li key={index}>{feature}</li>
@@ -148,7 +148,7 @@ const ProductDetails = () => {
 
             <div className="mt-6 flex items-center gap-2 text-sm text-gray-500">
               <Truck className="h-4 w-4" />
-              <span>Delivery available for selected areas</span>
+              <span>Pengiriman tersedia untuk area tertentu</span>
             </div>
           </div>
         </div>
@@ -157,7 +157,7 @@ const ProductDetails = () => {
       {/* Fixed Bottom Action */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4">
         <div className="flex items-center gap-4 mb-4">
-          <label className="font-medium">Quantity:</label>
+          <label className="font-medium">Jumlah:</label>
           <div className="flex items-center">
             <button
               onClick={() => handleQuantityChange(quantity - 1)}
@@ -190,7 +190,7 @@ const ProductDetails = () => {
           className="w-full py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           <ShoppingCart className="h-5 w-5" />
-          Proceed to Checkout
+          Lanjut ke Pembayaran
         </button>
       </div>
     </div>
