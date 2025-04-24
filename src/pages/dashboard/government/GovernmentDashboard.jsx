@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs } from 'firebase/firestore';
+import { collection, query, getDocs, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -17,6 +17,9 @@ import {
   PieChart,
   Pie,
   Cell,
+  LineChart,
+  Line,
+  ComposedChart,
 } from 'recharts';
 import {
   Loader2,
@@ -34,6 +37,14 @@ import {
   Calendar,
   Download,
   ChevronRight,
+  Warehouse,
+  Recycle,
+  Banknote,
+  BarChart2,
+  TrendingUp as TrendingUpIcon,
+  ArrowUpDown,
+  RotateCw,
+  Network,
 } from 'lucide-react';
 
 const COLORS = ['#10B981', '#6366F1', '#F59E0B', '#EF4444'];
@@ -47,17 +58,17 @@ const formatNumber = (num) => {
 
 // Base Components
 const StatCard = ({ icon: Icon, label, value, trend, subValue }) => (
-  <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+  <div className="p-6 bg-white border border-gray-200 shadow-sm rounded-xl">
     <div className="flex items-start justify-between">
       <div className="flex items-start gap-4">
-        <div className="p-2 bg-emerald-50 rounded-lg">
-          <Icon className="h-6 w-6 text-emerald-600" />
+        <div className="p-2 rounded-lg bg-emerald-50">
+          <Icon className="w-6 h-6 text-emerald-600" />
         </div>
         <div>
           <p className="text-sm font-medium text-gray-600">{label}</p>
-          <p className="text-2xl font-semibold text-gray-800 mt-1">{value}</p>
+          <p className="mt-1 text-2xl font-semibold text-gray-800">{value}</p>
           {subValue && (
-            <p className="text-sm text-gray-500 mt-1">{subValue}</p>
+            <p className="mt-1 text-sm text-gray-500">{subValue}</p>
           )}
         </div>
       </div>
@@ -72,11 +83,11 @@ const StatCard = ({ icon: Icon, label, value, trend, subValue }) => (
 );
 
 const ChartCard = ({ title, description, children }) => (
-  <div className="bg-white p-6 rounded-xl border border-gray-200">
+  <div className="p-6 bg-white border border-gray-200 rounded-xl">
     <div className="flex items-start justify-between mb-6">
       <div>
         <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-        <p className="text-sm text-gray-500 mt-1">{description}</p>
+        <p className="mt-1 text-sm text-gray-500">{description}</p>
       </div>
     </div>
     {children}
@@ -102,7 +113,7 @@ const AlertCard = ({ type, title, description, action }) => {
         </div>
         {action && (
           <button className={`${style.text} hover:opacity-80`}>
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight className="w-5 h-5" />
           </button>
         )}
       </div>
@@ -132,64 +143,261 @@ const GovernmentDashboard = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch waste banks and pickups
-        const [wasteBankSnapshot, pickupsSnapshot] = await Promise.all([
-          getDocs(query(collection(db, 'users'))),
+        // Fetch all data sources
+        const [
+          wasteBankSnapshot, 
+          masterBankSnapshot, 
+          pickupsSnapshot,
+          masterRequestsSnapshot
+        ] = await Promise.all([
+          getDocs(query(collection(db, 'users'), where('role', '==', 'wastebank_admin'))),
+          getDocs(query(collection(db, 'users'), where('role', '==', 'wastebank_master'))),
           getDocs(query(collection(db, 'pickups'))),
+          getDocs(query(collection(db, 'masterBankRequests')))
         ]);
 
-        const wasteBankData = wasteBankSnapshot.docs
-          .filter(doc => doc.data().role === 'wastebank_admin')
-          .map(doc => ({ id: doc.id, ...doc.data() }));
+        // Process wastebank data (small waste banks)
+        const wasteBankData = wasteBankSnapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data(),
+          type: 'small' 
+        }));
 
+        // Process master waste banks
+        const masterBankData = masterBankSnapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data(),
+          type: 'master' 
+        }));
+        
+        // All waste banks
+        const allWasteBanks = [...wasteBankData, ...masterBankData];
+
+        // Process pickup data (small waste bank collections)
         const pickupsData = pickupsSnapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .filter(pickup => pickup.status === 'completed');
 
-        // Process monthly trends
-        const monthlyData = {};
+        // Process master bank requests (transfers between small & master)
+        const masterRequestsData = masterRequestsSnapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(request => request.status === 'completed');
+
+        // Calculate total waste volume handled
+        let totalSmallBankVolume = 0;
+        let totalMasterBankVolume = 0;
+
         pickupsData.forEach(pickup => {
+          Object.values(pickup.wastes || {}).forEach(waste => {
+            totalSmallBankVolume += waste.weight || 0;
+          });
+        });
+
+        masterRequestsData.forEach(request => {
+          Object.values(request.wastes || {}).forEach(waste => {
+            totalMasterBankVolume += waste.weightToReduce || waste.weight || 0;
+          });
+        });
+
+        // Calculate financial metrics
+        const totalSmallBankBalance = wasteBankData.reduce((sum, bank) => sum + (bank.balance || 0), 0);
+        const totalMasterBankBalance = masterBankData.reduce((sum, bank) => sum + (bank.balance || 0), 0);
+
+        // Process monthly trends for both types of transactions
+        const monthlyData = {};
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth();
+
+        // Initialize 6 months of data
+        for (let i = 5; i >= 0; i--) {
+          const date = new Date(currentYear, currentMonth - i, 1);
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          monthlyData[monthKey] = {
+            month: date.toLocaleString('default', { month: 'short' }),
+            smallBankVolume: 0,
+            masterBankVolume: 0,
+            pickupCount: 0,
+            transferCount: 0,
+          };
+        }
+        
+        // Fill with pickup data
+        pickupsData.forEach(pickup => {
+          if (!pickup.completedAt) return;
+          
           const date = new Date(pickup.completedAt.seconds * 1000);
           const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
           
-          if (!monthlyData[monthKey]) {
-            monthlyData[monthKey] = {
-              month: date.toLocaleString('default', { month: 'short' }),
-              volume: 0,
-              pickups: 0,
-              wasteBanks: new Set(),
-            };
+          if (monthlyData[monthKey]) {
+            monthlyData[monthKey].pickupCount++;
+            
+            Object.values(pickup.wastes || {}).forEach(waste => {
+              monthlyData[monthKey].smallBankVolume += waste.weight || 0;
+            });
           }
-
-          monthlyData[monthKey].pickups++;
-          monthlyData[monthKey].wasteBanks.add(pickup.wasteBankId);
-          Object.values(pickup.wastes).forEach(waste => {
-            monthlyData[monthKey].volume += waste.weight || 0;
-          });
+        });
+        
+        // Fill with master bank request data
+        masterRequestsData.forEach(request => {
+          if (!request.completedAt) return;
+          
+          const date = new Date(request.completedAt.seconds * 1000);
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          
+          if (monthlyData[monthKey]) {
+            monthlyData[monthKey].transferCount++;
+            
+            Object.values(request.wastes || {}).forEach(waste => {
+              monthlyData[monthKey].masterBankVolume += waste.weightToReduce || waste.weight || 0;
+            });
+          }
         });
 
         // Calculate waste type distribution
-        const wasteTypes = {};
-        let totalVolume = 0;
-
+        const wasteTypeDistribution = {};
+        
+        // Add from pickups
         pickupsData.forEach(pickup => {
-          Object.entries(pickup.wastes).forEach(([type, data]) => {
-            if (!wasteTypes[type]) {
-              wasteTypes[type] = { type, volume: 0 };
+          Object.entries(pickup.wastes || {}).forEach(([type, data]) => {
+            if (!wasteTypeDistribution[type]) {
+              wasteTypeDistribution[type] = { 
+                type, 
+                smallBankVolume: 0,
+                masterBankVolume: 0,
+                totalVolume: 0
+              };
             }
-            wasteTypes[type].volume += data.weight || 0;
-            totalVolume += data.weight || 0;
+            wasteTypeDistribution[type].smallBankVolume += data.weight || 0;
+            wasteTypeDistribution[type].totalVolume += data.weight || 0;
           });
         });
+        
+        // Add from master requests
+        masterRequestsData.forEach(request => {
+          Object.entries(request.wastes || {}).forEach(([type, data]) => {
+            if (!wasteTypeDistribution[type]) {
+              wasteTypeDistribution[type] = { 
+                type, 
+                smallBankVolume: 0,
+                masterBankVolume: 0,
+                totalVolume: 0
+              };
+            }
+            wasteTypeDistribution[type].masterBankVolume += data.weightToReduce || data.weight || 0;
+            wasteTypeDistribution[type].totalVolume += data.weightToReduce || data.weight || 0;
+          });
+        });
+
+        // Generate flow data showing waste bank to master bank transfers
+        const wasteBankToMasterFlows = [];
+        const wasteBankFlowMap = {};
+        
+        masterRequestsData.forEach(request => {
+          const smallBankId = request.wasteBankId;
+          const masterBankId = request.masterBankId;
+          const smallBank = wasteBankData.find(b => b.id === smallBankId);
+          const masterBank = masterBankData.find(b => b.id === masterBankId);
+          
+          if (!smallBank || !masterBank) return;
+          
+          const key = `${smallBankId}-${masterBankId}`;
+          if (!wasteBankFlowMap[key]) {
+            wasteBankFlowMap[key] = {
+              source: smallBank.profile?.institutionName || 'Unknown Small Bank',
+              target: masterBank.profile?.institutionName || 'Unknown Master Bank',
+              volume: 0,
+              count: 0,
+              value: 0
+            };
+          }
+          
+          let requestVolume = 0;
+          let requestValue = 0;
+          
+          Object.values(request.wastes || {}).forEach(waste => {
+            requestVolume += waste.weightToReduce || waste.weight || 0;
+            requestValue += waste.value || 0;
+          });
+          
+          wasteBankFlowMap[key].volume += requestVolume;
+          wasteBankFlowMap[key].count += 1;
+          wasteBankFlowMap[key].value += requestValue || request.totalValue || 0;
+        });
+        
+        Object.values(wasteBankFlowMap).forEach(flow => {
+          wasteBankToMasterFlows.push(flow);
+        });
+
+        // Generate warehouse capacity data
+        const warehouseData = allWasteBanks
+          .filter(bank => bank.warehouseDimensions)
+          .map(bank => {
+            const dimensions = bank.warehouseDimensions || {};
+            const capacity = (dimensions.length || 0) * 
+                            (dimensions.width || 0) * 
+                            (dimensions.height || 0);
+            
+            // Calculate estimated usage based on recent transactions
+            let estimatedUsage = 0;
+            if (bank.type === 'small') {
+              // For small banks, look at pickups that haven't been transferred
+              const relevantPickups = pickupsData.filter(p => 
+                p.wasteBankId === bank.id && 
+                !masterRequestsData.some(mr => 
+                  mr.wasteBankId === bank.id && 
+                  mr.collectionIds?.some(c => c.id === p.id)
+                )
+              );
+              
+              relevantPickups.forEach(pickup => {
+                Object.values(pickup.wastes || {}).forEach(waste => {
+                  estimatedUsage += waste.weight || 0;
+                });
+              });
+            } else {
+              // For master banks, look at transfers received
+              const relevantTransfers = masterRequestsData.filter(mr => 
+                mr.masterBankId === bank.id
+              );
+              
+              relevantTransfers.forEach(transfer => {
+                Object.values(transfer.wastes || {}).forEach(waste => {
+                  estimatedUsage += waste.weightToReduce || waste.weight || 0;
+                });
+              });
+            }
+            
+            // Assume 1 kg = 0.01 cubic meter for visualization purposes
+            const usagePercent = capacity > 0 ? Math.min(100, (estimatedUsage * 0.01 / capacity) * 100) : 0;
+            
+            return {
+              id: bank.id,
+              name: bank.profile?.institutionName || bank.profile?.institution || 'Unnamed Facility',
+              type: bank.type,
+              capacity,
+              usedCapacity: estimatedUsage * 0.01,
+              usagePercent,
+              location: bank.location?.city || 'Unknown',
+              dimensions
+            };
+          });
+
+        // Calculate the number of active collectors in the system
+        const activeCollectors = new Set([
+          ...pickupsData.map(p => p.collectorId),
+          ...masterRequestsData.map(r => r.collectorId)
+        ]).size;
 
         // Check compliance and generate alerts
         const alerts = [];
         const now = new Date();
+        
+        // Check for inactive waste banks
         wasteBankData.forEach(bank => {
           const bankPickups = pickupsData.filter(p => p.wasteBankId === bank.id);
           const lastPickup = bankPickups[bankPickups.length - 1];
           
-          if (lastPickup) {
+          if (lastPickup && lastPickup.completedAt) {
             const lastPickupDate = new Date(lastPickup.completedAt.seconds * 1000);
             const daysSinceLastPickup = Math.floor((now - lastPickupDate) / (1000 * 60 * 60 * 24));
             
@@ -197,31 +405,52 @@ const GovernmentDashboard = () => {
               alerts.push({
                 type: 'warning',
                 title: 'Inactive Waste Bank',
-                description: `${bank.profile?.institution} hasn't processed waste in ${daysSinceLastPickup} days`,
+                description: `${bank.profile?.institutionName || 'A waste bank'} hasn't processed waste in ${daysSinceLastPickup} days`,
                 wasteBankId: bank.id,
               });
             }
           }
         });
+        
+        // Check for warehouse capacity issues
+        warehouseData.forEach(warehouse => {
+          if (warehouse.usagePercent > 80) {
+            alerts.push({
+              type: 'warning',
+              title: 'Warehouse Capacity Warning',
+              description: `${warehouse.name} is at ${Math.round(warehouse.usagePercent)}% capacity`,
+              wasteBankId: warehouse.id,
+            });
+          }
+        });
 
         // Calculate compliance rate
         const activeWasteBanks = new Set(pickupsData.map(p => p.wasteBankId)).size;
-        const complianceRate = (activeWasteBanks / wasteBankData.length) * 100;
+        const complianceRate = wasteBankData.length > 0 ? 
+          (activeWasteBanks / wasteBankData.length) * 100 : 0;
 
-        // Calculate unique collectors
-        const activeCollectors = new Set(pickupsData.map(p => p.collectorId)).size;
-
+        // Update state with all processed data
         setData({
           summary: {
             totalWasteBanks: wasteBankData.length,
-            totalVolume,
+            totalMasterBanks: masterBankData.length,
+            totalVolume: totalSmallBankVolume + totalMasterBankVolume,
+            smallBankVolume: totalSmallBankVolume,
+            masterBankVolume: totalMasterBankVolume,
+            totalBalance: totalSmallBankBalance + totalMasterBankBalance,
             complianceRate,
             activeCollectors,
           },
+          wasteBanks: wasteBankData,
+          masterBanks: masterBankData,
+          allBanks: allWasteBanks,
+          pickups: pickupsData,
+          masterRequests: masterRequestsData,
           alerts,
-          trends: Object.values(monthlyData),
-          distribution: Object.values(wasteTypes),
-          waste_banks: wasteBankData,
+          monthlyTrends: Object.values(monthlyData),
+          wasteTypeDistribution: Object.values(wasteTypeDistribution),
+          wasteBankFlows: wasteBankToMasterFlows,
+          warehouseData,
         });
 
       } catch (err) {
@@ -237,21 +466,21 @@ const GovernmentDashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center">
-          <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">{error}</h3>
+          <AlertCircle className="w-10 h-10 mx-auto mb-4 text-red-500" />
+          <h3 className="mb-2 text-lg font-medium text-gray-900">{error}</h3>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+            className="px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
           >
             Try Again
           </button>
@@ -274,7 +503,7 @@ const GovernmentDashboard = () => {
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              <div className="p-2 bg-white rounded-xl shadow-sm border border-gray-200">
+              <div className="p-2 bg-white border border-gray-200 shadow-sm rounded-xl">
                 <Building2 className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
@@ -283,46 +512,47 @@ const GovernmentDashboard = () => {
               </div>
             </div>
 
-            <button className="px-4 py-2 bg-emerald-500 text-white rounded-lg 
-              hover:bg-emerald-600 transition-colors flex items-center gap-2">
-              <Download className="h-4 w-4" />
+            <button className="flex items-center gap-2 px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600">
+              <Download className="w-4 h-4" />
               Download Report
             </button>
           </div>
 
           {/* Summary Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
               icon={Building2}
-              label="Waste Banks"
-              value={data.summary.totalWasteBanks}
-              subValue="Registered facilities"
+              label="Total Waste Banks"
+              value={data.summary.totalWasteBanks + data.summary.totalMasterBanks}
+              subValue={`${data.summary.totalWasteBanks} Small, ${data.summary.totalMasterBanks} Master`}
             />
             <StatCard
               icon={Scale}
               label="Total Volume"
               value={`${formatNumber(data.summary.totalVolume)} kg`}
-              trend={12.5}
+              trend={(data.summary.totalVolume > 0 && data.monthlyTrends && data.monthlyTrends.length >= 2) ? 
+                Math.round((data.monthlyTrends[data.monthlyTrends.length-1].smallBankVolume + data.monthlyTrends[data.monthlyTrends.length-1].masterBankVolume) / 
+                (data.monthlyTrends[data.monthlyTrends.length-2].smallBankVolume + data.monthlyTrends[data.monthlyTrends.length-2].masterBankVolume + 0.001) * 100 - 100) : 0}
             />
             <StatCard
-              icon={Target}
-              label="Compliance Rate"
-              value={`${Math.round(data.summary.complianceRate)}%`}
-              subValue="Active facilities"
+              icon={Banknote}
+              label="Total Balance"
+              value={`Rp ${formatNumber(data.summary.totalBalance)}`}
+              subValue="Across all waste banks"
             />
             <StatCard
               icon={Users}
               label="Active Collectors"
               value={data.summary.activeCollectors}
-              trend={8.3}
+              subValue="Last 30 days"
             />
           </div>
 
           {/* Alerts Section */}
-          {data.alerts.length > 0 && (
+          {data.alerts?.length > 0 && (
             <div className="mb-8">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Alerts & Notifications</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <h2 className="mb-4 text-lg font-semibold text-gray-800">Alerts & Notifications</h2>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {data.alerts.map((alert, index) => (
                   <AlertCard
                     key={index}
@@ -336,116 +566,315 @@ const GovernmentDashboard = () => {
             </div>
           )}
 
-          {/* Charts Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Volume Trends */}
+          {/* Waste Bank Hierarchy */}
+          <div className="mb-8">
+            <h2 className="mb-4 text-lg font-semibold text-gray-800">Waste Bank Structure</h2>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              {/* Master Bank Card */}
+              {data.masterBanks?.length > 0 && data.masterBanks.map((masterBank, idx) => (
+                <div key={masterBank.id} className="p-6 overflow-hidden bg-white border border-indigo-200 shadow-sm rounded-xl">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-indigo-50">
+                        <Warehouse className="w-5 h-5 text-indigo-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-gray-900">{masterBank.profile?.institutionName || 'Master Waste Bank'}</h3>
+                        <p className="text-sm text-gray-500">{masterBank.location?.city || 'Unknown Location'}</p>
+                      </div>
+                    </div>
+                    <div className="px-2 py-1 text-xs font-medium text-indigo-700 rounded-full bg-indigo-50">
+                      Master Bank
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="p-3 rounded-lg bg-gray-50">
+                      <p className="text-xs text-gray-500">Balance</p>
+                      <p className="text-lg font-medium text-gray-900">Rp {formatNumber(masterBank.balance || 0)}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-gray-50">
+                      <p className="text-xs text-gray-500">Warehouse</p>
+                      <p className="text-lg font-medium text-gray-900">
+                        {masterBank.warehouseDimensions ? 
+                          `${masterBank.warehouseDimensions.length}x${masterBank.warehouseDimensions.width}x${masterBank.warehouseDimensions.height}m` : 
+                          'Not set'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4">
+                    <h4 className="mb-2 text-sm font-medium text-gray-700">Connected Waste Banks</h4>
+                    <div className="pr-2 space-y-2 overflow-y-auto max-h-32">
+                      {data.wasteBankFlows
+                        .filter(flow => flow.target === masterBank.profile?.institutionName)
+                        .map((flow, idx) => (
+                          <div key={idx} className="flex items-center justify-between px-3 py-2 rounded-md bg-gray-50">
+                            <div className="flex items-center gap-2">
+                              <div className="p-1 rounded-md bg-emerald-50">
+                                <Building2 className="w-3 h-3 text-emerald-600" />
+                              </div>
+                              <span className="text-xs font-medium text-gray-700">{flow.source}</span>
+                            </div>
+                            <div className="text-xs text-gray-500">{formatNumber(flow.volume)} kg</div>
+                          </div>
+                        ))}
+                      {data.wasteBankFlows.filter(flow => flow.target === masterBank.profile?.institutionName).length === 0 && (
+                        <p className="text-sm italic text-gray-500">No connected waste banks</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {data.wasteBanks?.length > 0 && data.wasteBanks.slice(0, 2).map((bank, idx) => (
+                <div key={bank.id} className="p-6 bg-white border shadow-sm rounded-xl border-emerald-200">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-emerald-50">
+                        <Building2 className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-gray-900">{bank.profile?.institutionName || bank.profile?.institution || 'Small Waste Bank'}</h3>
+                        <p className="text-sm text-gray-500">{bank.location?.city || 'Unknown Location'}</p>
+                      </div>
+                    </div>
+                    <div className="px-2 py-1 text-xs font-medium rounded-full bg-emerald-50 text-emerald-700">
+                      Local Bank
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="p-3 rounded-lg bg-gray-50">
+                      <p className="text-xs text-gray-500">Balance</p>
+                      <p className="text-lg font-medium text-gray-900">Rp {formatNumber(bank.balance || 0)}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-gray-50">
+                      <p className="text-xs text-gray-500">Warehouse</p>
+                      <p className="text-lg font-medium text-gray-900">
+                        {bank.warehouseDimensions ? 
+                          `${bank.warehouseDimensions.length}x${bank.warehouseDimensions.width}x${bank.warehouseDimensions.height}m` : 
+                          'Not set'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <h4 className="mb-2 text-sm font-medium text-gray-700">Transfer Activity</h4>
+                    {data.wasteBankFlows
+                      .filter(flow => flow.source === bank.profile?.institutionName)
+                      .map((flow, idx) => (
+                        <div key={idx} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <ArrowUpDown className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm font-medium text-gray-700">{flow.target}</span>
+                          </div>
+                          <div className="text-sm text-gray-600">{formatNumber(flow.volume)} kg</div>
+                        </div>
+                      ))}
+                    {data.wasteBankFlows.filter(flow => flow.source === bank.profile?.institutionName).length === 0 && (
+                      <p className="text-sm italic text-gray-500">No transfer activity</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Charts Section */}
+          <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-2">
+            {/* Monthly Collection Trends */}
             <ChartCard
               title="Collection Trends"
-              description="Monthly waste collection volume and facility participation"
+              description="Monthly waste volume by bank type"
             >
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={data.trends}>
+                  <AreaChart data={data.monthlyTrends}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                     <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
                     <YAxis 
                       stroke="#6B7280"
                       fontSize={12}
-                      tickFormatter={(value) => `${(value / 1000).toFixed(1)}K kg`}
+                      tickFormatter={(value) => `${formatNumber(value)} kg`}
                     />
-                    <Tooltip />
+                    <Tooltip formatter={(value) => `${formatNumber(value)} kg`} />
+                    <Legend />
                     <Area
                       type="monotone"
-                      dataKey="volume"
+                      dataKey="smallBankVolume"
                       stroke="#10B981"
                       fill="#10B981"
                       fillOpacity={0.2}
-                      name="Volume"
+                      name="Small Waste Banks"
+                      stackId="1"
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="masterBankVolume"
+                      stroke="#6366F1"
+                      fill="#6366F1"
+                      fillOpacity={0.2}
+                      name="Master Waste Banks"
+                      stackId="1"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </ChartCard>
 
-            {/* Waste Distribution */}
+            {/* Waste Type Distribution */}
             <ChartCard
               title="Waste Type Distribution"
-              description="Volume distribution by waste category"
+              description="Volume by waste category and bank type"
             >
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={data.distribution}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      paddingAngle={5}
-                      dataKey="volume"
-                    >
-                      {data.distribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      formatter={(value) => `${formatNumber(value)} kg`}
-                    />
-                    <Legend
-                      layout="vertical"
-                      align="right"
-                      verticalAlign="middle"
-                    />
-                  </PieChart>
+                  <BarChart
+                    data={data.wasteTypeDistribution}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="type" />
+                    <YAxis tickFormatter={(value) => `${formatNumber(value)} kg`} />
+                    <Tooltip formatter={(value) => `${formatNumber(value)} kg`} />
+                    <Legend />
+                    <Bar dataKey="smallBankVolume" stackId="a" name="Small Banks" fill="#10B981" />
+                    <Bar dataKey="masterBankVolume" stackId="a" name="Master Banks" fill="#6366F1" />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </ChartCard>
           </div>
 
-          {/* Recent Activity */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Facility Overview</h2>
+          {/* Transaction Flow & Warehouse Capacity */}
+          <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-2">
+            {/* Transaction Activity */}
+            <ChartCard
+              title="Transaction Activity"
+              description="Monthly transaction count by type"
+            >
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={data.monthlyTrends}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                    <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
+                    <YAxis 
+                      yAxisId="left"
+                      stroke="#6B7280"
+                      fontSize={12}
+                    />
+                    <Tooltip />
+                    <Legend />
+                    <Bar
+                      yAxisId="left"
+                      dataKey="pickupCount"
+                      name="Customer Collections"
+                      fill="#10B981"
+                      barSize={20}
+                    />
+                    <Bar
+                      yAxisId="left"
+                      dataKey="transferCount"
+                      name="Master Transfers"
+                      fill="#6366F1"
+                      barSize={20}
+                    />
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="pickupCount"
+                      stroke="#10B981"
+                      dot={false}
+                      activeDot={false}
+                      style={{ opacity: 0 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </ChartCard>
+
+            {/* Warehouse Capacity */}
+            <ChartCard
+              title="Warehouse Utilization"
+              description="Current capacity utilization by facility"
+            >
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={data.warehouseData}
+                    layout="vertical"
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" domain={[0, 100]} tickFormatter={(val) => `${val}%`} />
+                    <YAxis type="category" dataKey="name" width={150} />
+                    <Tooltip formatter={(value) => `${Math.round(value)}%`} />
+                    <Legend />
+                    <Bar 
+                      dataKey="usagePercent" 
+                      name="Used Capacity"
+                      fill={(entry) => entry.type === 'master' ? '#6366F1' : '#10B981'}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </ChartCard>
+          </div>
+
+          {/* Facilities Table */}
+          <div className="p-6 bg-white border border-gray-200 rounded-xl">
+            <h2 className="mb-4 text-lg font-semibold text-gray-800">Facilities Overview</h2>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="py-3 px-4 text-left text-sm font-medium text-gray-500">Facility</th>
-                    <th className="py-3 px-4 text-left text-sm font-medium text-gray-500">Location</th>
-                    <th className="py-3 px-4 text-left text-sm font-medium text-gray-500">Status</th>
-                    <th className="py-3 px-4 text-left text-sm font-medium text-gray-500">Volume</th>
-                    <th className="py-3 px-4 text-left text-sm font-medium text-gray-500">Last Active</th>
+                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Facility</th>
+                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Type</th>
+                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Location</th>
+                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Balance</th>
+                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Warehouse Size</th>
+                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.waste_banks.slice(0, 5).map((bank) => (
+                  {data.allBanks?.slice(0, 5).map((bank) => (
                     <tr key={bank.id} className="border-b border-gray-200">
-                      <td className="py-3 px-4">
+                      <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 bg-emerald-50 rounded-lg">
-                            <Building2 className="h-4 w-4 text-emerald-600" />
+                          <div className={`p-2 ${bank.type === 'master' ? 'bg-indigo-50' : 'bg-emerald-50'} rounded-lg`}>
+                            {bank.type === 'master' ? 
+                              <Warehouse className={`h-4 w-4 ${bank.type === 'master' ? 'text-indigo-600' : 'text-emerald-600'}`} /> :
+                              <Building2 className={`h-4 w-4 ${bank.type === 'master' ? 'text-indigo-600' : 'text-emerald-600'}`} />
+                            }
                           </div>
                           <span className="font-medium text-gray-900">
-                            {bank.profile?.institution || 'Unnamed Facility'}
+                            {bank.profile?.institutionName || bank.profile?.institution || 'Unnamed Facility'}
                           </span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-gray-600">
-                        {bank.location?.city || 'Unknown Location'}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
-                          Active
+                      <td className="px-4 py-3">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium 
+                          ${bank.type === 'master' ? 'bg-indigo-50 text-indigo-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                          {bank.type === 'master' ? 'Master Bank' : 'Local Bank'}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-gray-600">
-                        {formatNumber(bank.stats?.totalWeight || 0)} kg
+                      <td className="px-4 py-3 text-gray-600">
+                        {bank.location?.city || 'Unknown Location'}
                       </td>
-                      <td className="py-3 px-4 text-gray-600">
-                        {bank.stats?.lastPickup ? 
-                          new Date(bank.stats.lastPickup.seconds * 1000).toLocaleDateString() : 
-                          'Never'
-                        }
+                      <td className="px-4 py-3 text-gray-600">
+                        Rp {formatNumber(bank.balance || 0)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {bank.warehouseDimensions ? 
+                          `${bank.warehouseDimensions.length}x${bank.warehouseDimensions.width}x${bank.warehouseDimensions.height}m` : 
+                          'Not set'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${bank.status === 'active' ? 
+                          'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                          {bank.status || 'Active'}
+                        </span>
                       </td>
                     </tr>
                   ))}

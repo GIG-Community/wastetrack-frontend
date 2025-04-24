@@ -15,7 +15,7 @@ import {
   Scale,
   HelpCircle
 } from 'lucide-react';
-import { collection, query, getDocs } from 'firebase/firestore';
+import { collection, query, getDocs, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -33,29 +33,45 @@ import {
   Cell
 } from 'recharts';
 
-// Environmental Impact Constants
+// Enhanced Environmental Impact Constants
 const IMPACT_FACTORS = {
   organic: { 
-    carbon: 0.5,    // kg CO2 saved per kg
+    carbon: 2.5,    // kg CO2 saved per kg (composting vs landfill)
     water: 1000,    // liters saved per kg
-    landfill: 0.2   // m³ saved per kg
+    landfill: 0.2,  // m³ saved per kg
+    carbonOffset: 0.8 // carbon credit potential (tons CO2e)
   },
   plastic: { 
-    carbon: 2.5,    // kg CO2 saved per kg
+    carbon: 6.0,    // kg CO2 saved per kg (recycling vs new production)
     water: 2000,    // liters saved per kg
     landfill: 0.1,  // m³ saved per kg
-    trees: 0.1      // trees saved per kg
+    trees: 0.1,     // trees saved per kg
+    carbonOffset: 2.0 // carbon credit potential (tons CO2e)
   },
   paper: { 
-    carbon: 1.5,    // kg CO2 saved per kg
+    carbon: 3.3,    // kg CO2 saved per kg (recycling vs new production)
     water: 1500,    // liters saved per kg
     landfill: 0.15, // m³ saved per kg
-    trees: 0.2      // trees saved per kg
+    trees: 0.2,     // trees saved per kg
+    carbonOffset: 1.2 // carbon credit potential (tons CO2e)
   },
   metal: { 
-    carbon: 5.0,    // kg CO2 saved per kg
+    carbon: 9.0,    // kg CO2 saved per kg (recycling vs new production)
     water: 3000,    // liters saved per kg
-    landfill: 0.05  // m³ saved per kg
+    landfill: 0.05,  // m³ saved per kg
+    carbonOffset: 3.5 // carbon credit potential (tons CO2e)
+  },
+  glass: {
+    carbon: 0.8,    // kg CO2 saved per kg
+    water: 500,     // liters saved per kg
+    landfill: 0.08, // m³ saved per kg
+    carbonOffset: 0.3 // carbon credit potential (tons CO2e)
+  },
+  electronics: {
+    carbon: 20.0,   // kg CO2 saved per kg
+    water: 4000,    // liters saved per kg
+    landfill: 0.1,  // m³ saved per kg
+    carbonOffset: 8.0 // carbon credit potential (tons CO2e)
   }
 };
 
@@ -74,16 +90,16 @@ const Select = ({ className = "", ...props }) => (
 );
 
 const StatCard = ({ icon: Icon, label, value, subValue }) => (
-  <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+  <div className="p-6 bg-white border border-gray-200 shadow-sm rounded-xl">
     <div className="flex items-start gap-4">
-      <div className="p-2 bg-emerald-50 rounded-lg">
-        <Icon className="h-6 w-6 text-emerald-600" />
+      <div className="p-2 rounded-lg bg-emerald-50">
+        <Icon className="w-6 h-6 text-emerald-600" />
       </div>
       <div>
         <p className="text-sm font-medium text-gray-600">{label}</p>
-        <p className="text-2xl font-semibold text-gray-800 mt-1">{value}</p>
+        <p className="mt-1 text-2xl font-semibold text-gray-800">{value}</p>
         {subValue && (
-          <p className="text-sm text-gray-500 mt-1">{subValue}</p>
+          <p className="mt-1 text-sm text-gray-500">{subValue}</p>
         )}
       </div>
     </div>
@@ -91,14 +107,14 @@ const StatCard = ({ icon: Icon, label, value, subValue }) => (
 );
 
 const ChartCard = ({ title, description, children }) => (
-  <div className="bg-white p-6 rounded-xl border border-gray-200">
+  <div className="p-6 bg-white border border-gray-200 rounded-xl">
     <div className="flex items-start justify-between mb-6">
       <div>
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold text-gray-800">{title}</h2>
           <InfoTooltip>{description}</InfoTooltip>
         </div>
-        <p className="text-sm text-gray-500 mt-1">{description}</p>
+        <p className="mt-1 text-sm text-gray-500">{description}</p>
       </div>
     </div>
     {children}
@@ -106,12 +122,11 @@ const ChartCard = ({ title, description, children }) => (
 );
 
 const InfoTooltip = ({ children }) => (
-  <div className="group relative inline-block">
-    <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-600 transition-colors" />
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg w-48 
-      opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+  <div className="relative inline-block group">
+    <HelpCircle className="w-4 h-4 text-gray-400 transition-colors hover:text-gray-600" />
+    <div className="absolute invisible w-48 px-3 py-2 mb-2 text-xs text-white transition-all -translate-x-1/2 bg-gray-800 rounded-lg opacity-0 bottom-full left-1/2 group-hover:opacity-100 group-hover:visible">
       {children}
-      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-800" />
+      <div className="absolute -mt-1 -translate-x-1/2 border-4 border-transparent top-full left-1/2 border-t-gray-800" />
     </div>
   </div>
 );
@@ -122,7 +137,9 @@ const WastebankReports = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pickupData, setPickupData] = useState([]);
+  const [masterRequests, setMasterRequests] = useState([]);
   const [wasteBanks, setWasteBanks] = useState([]);
+  const [masterBanks, setMasterBanks] = useState([]);
   const [mapCenter] = useState([-7.2575, 112.7521]); // Default: Surabaya
   const [dateRange, setDateRange] = useState('month');
   const [stats, setStats] = useState({
@@ -134,16 +151,41 @@ const WastebankReports = () => {
     },
     wasteTypes: [],
     locations: [],
-    monthlyTrends: []
+    monthlyTrends: [],
+    bankPerformance: {
+      small: {
+        totalTransactions: 0,
+        totalValue: 0,
+        avgTransactionValue: 0,
+        topPerformers: []
+      },
+      master: {
+        totalTransactions: 0,
+        totalValue: 0,
+        avgTransactionValue: 0,
+        topPerformers: []
+      }
+    }
   });
 
-  // Calculate environmental impact
+  const [carbonStats, setCarbonStats] = useState({
+    totalOffset: 0,
+    potentialCredits: 0,
+    monthlyOffset: [],
+    wasteTypeOffset: [],
+    projectedSavings: 0,
+    carbonEfficiency: 0
+  });
+
+  // Enhanced impact calculation
   const calculateImpact = (wastes = {}) => {
     let impact = {
       carbon: 0,
       water: 0,
       trees: 0,
-      landfill: 0
+      landfill: 0,
+      carbonOffset: 0,
+      potentialCredits: 0
     };
 
     Object.entries(wastes).forEach(([type, data]) => {
@@ -152,6 +194,8 @@ const WastebankReports = () => {
         impact.carbon += factors.carbon * data.weight;
         impact.water += factors.water * data.weight;
         impact.landfill += factors.landfill * data.weight;
+        impact.carbonOffset += factors.carbonOffset * data.weight;
+        impact.potentialCredits += (factors.carbonOffset * data.weight * 0.001); // Convert to tons
         if (factors.trees) {
           impact.trees += factors.trees * data.weight;
         }
@@ -166,18 +210,31 @@ const WastebankReports = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch waste banks
-        const wasteBankQuery = query(collection(db, 'users'));
+        // Fetch waste banks (small banks)
+        const wasteBankQuery = query(
+          collection(db, 'users'),
+          where('role', '==', 'wastebank_admin')
+        );
         const wasteBankSnapshot = await getDocs(wasteBankQuery);
-        const wasteBankData = wasteBankSnapshot.docs
-          .filter(doc => doc.data().role === 'wastebank_admin')
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
+        const wasteBankData = wasteBankSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
         setWasteBanks(wasteBankData);
 
-        // Fetch pickups
+        // Fetch master waste banks
+        const masterBankQuery = query(
+          collection(db, 'users'),
+          where('role', '==', 'wastebank_master')
+        );
+        const masterBankSnapshot = await getDocs(masterBankQuery);
+        const masterBankData = masterBankSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setMasterBanks(masterBankData);
+
+        // Fetch pickups for small waste banks
         const pickupsQuery = query(collection(db, 'pickups'));
         const pickupsSnapshot = await getDocs(pickupsQuery);
         const pickupsData = pickupsSnapshot.docs
@@ -188,8 +245,19 @@ const WastebankReports = () => {
           .filter(pickup => pickup.status === 'completed');
         setPickupData(pickupsData);
 
-        // Calculate statistics
-        calculateStatistics(wasteBankData, pickupsData);
+        // Fetch master bank requests
+        const masterRequestsQuery = query(collection(db, 'masterBankRequests'));
+        const masterRequestsSnapshot = await getDocs(masterRequestsQuery);
+        const masterRequestsData = masterRequestsSnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }))
+          .filter(request => request.status === 'completed');
+        setMasterRequests(masterRequestsData);
+
+        // Calculate statistics with all data
+        calculateStatistics(wasteBankData, masterBankData, pickupsData, masterRequestsData);
 
       } catch (err) {
         console.error('Error fetching data:', err);
@@ -202,108 +270,326 @@ const WastebankReports = () => {
     fetchData();
   }, [dateRange]);
 
-  // Calculate statistics
-  const calculateStatistics = (wasteBanks, pickups) => {
-    // Calculate total impact
-    const totalImpact = pickups.reduce((acc, pickup) => {
-      const impact = calculateImpact(pickup.wastes);
-      return {
-        carbon: acc.carbon + impact.carbon,
-        water: acc.water + impact.water,
-        trees: acc.trees + impact.trees,
-        landfill: acc.landfill + impact.landfill
-      };
-    }, { carbon: 0, water: 0, trees: 0, landfill: 0 });
+  // Calculate statistics with enhanced analytics
+  const calculateStatistics = (wasteBanks, masterBanks, pickups, masterRequests) => {
+    // Calculate waste bank performance
+    const bankPerformance = {
+      small: {
+        totalTransactions: pickups.length,
+        totalValue: pickups.reduce((acc, pickup) => acc + (pickup.totalValue || 0), 0),
+        avgTransactionValue: 0,
+        topPerformers: []
+      },
+      master: {
+        totalTransactions: masterRequests.length,
+        totalValue: masterRequests.reduce((acc, request) => acc + (request.totalValue || 0), 0),
+        avgTransactionValue: 0,
+        topPerformers: []
+      }
+    };
 
-    // Calculate waste type distribution
-    const wasteTypes = {};
+    // Calculate averages
+    bankPerformance.small.avgTransactionValue = 
+      bankPerformance.small.totalValue / (bankPerformance.small.totalTransactions || 1);
+    bankPerformance.master.avgTransactionValue = 
+      bankPerformance.master.totalValue / (bankPerformance.master.totalTransactions || 1);
+
+    // Calculate top performing waste banks
+    const smallBankStats = {};
     pickups.forEach(pickup => {
-      Object.entries(pickup.wastes || {}).forEach(([type, data]) => {
-        if (!wasteTypes[type]) {
-          wasteTypes[type] = { weight: 0, impact: 0 };
-        }
-        wasteTypes[type].weight += data.weight || 0;
-        wasteTypes[type].impact += calculateImpact({ [type]: data }).carbon;
-      });
-    });
-
-    // Calculate location statistics
-    const locationStats = {};
-    pickups.forEach(pickup => {
-      if (!pickup.wasteBankId || !pickup.coordinates) return;
-
-      if (!locationStats[pickup.wasteBankId]) {
-        const bank = wasteBanks.find(wb => wb.id === pickup.wasteBankId);
-        locationStats[pickup.wasteBankId] = {
+      if (!smallBankStats[pickup.wasteBankId]) {
+        smallBankStats[pickup.wasteBankId] = {
           id: pickup.wasteBankId,
-          name: bank?.profile?.institution || 'Unknown Bank',
-          location: pickup.location || 'Unknown Location',
-          coordinates: pickup.coordinates,
-          totalWeight: 0,
-          totalImpact: 0,
-          pickupCount: 0
+          name: pickup.wasteBankName,
+          transactions: 0,
+          totalValue: 0,
+          totalWeight: 0
         };
       }
 
-      const impact = calculateImpact(pickup.wastes);
-      locationStats[pickup.wasteBankId].totalWeight += 
-        Object.values(pickup.wastes || {}).reduce((sum, waste) => sum + (waste.weight || 0), 0);
-      locationStats[pickup.wasteBankId].totalImpact += impact.carbon;
-      locationStats[pickup.wasteBankId].pickupCount += 1;
+      smallBankStats[pickup.wasteBankId].transactions += 1;
+      smallBankStats[pickup.wasteBankId].totalValue += pickup.totalValue || 0;
+      
+      Object.values(pickup.wastes || {}).forEach(waste => {
+        smallBankStats[pickup.wasteBankId].totalWeight += waste.weight || 0;
+      });
     });
 
-    // Monthly trends
-    const monthlyData = {};
-    pickups.forEach(pickup => {
-      if (!pickup.completedAt) return;
+    // Calculate top performing master banks
+    const masterBankStats = {};
+    masterRequests.forEach(request => {
+      if (!masterBankStats[request.masterBankId]) {
+        masterBankStats[request.masterBankId] = {
+          id: request.masterBankId,
+          name: request.masterBankName,
+          transactions: 0,
+          totalValue: 0,
+          totalWeight: 0
+        };
+      }
+
+      masterBankStats[request.masterBankId].transactions += 1;
+      masterBankStats[request.masterBankId].totalValue += request.totalValue || 0;
       
-      const date = new Date(pickup.completedAt.seconds * 1000);
+      Object.values(request.wastes || {}).forEach(waste => {
+        masterBankStats[request.masterBankId].totalWeight += waste.weight || 0;
+      });
+    });
+
+    // Sort and set top performers
+    bankPerformance.small.topPerformers = Object.values(smallBankStats)
+      .sort((a, b) => b.totalValue - a.totalValue)
+      .slice(0, 5);
+    bankPerformance.master.topPerformers = Object.values(masterBankStats)
+      .sort((a, b) => b.totalValue - a.totalValue)
+      .slice(0, 5);
+
+    // Calculate total environmental impact from all transactions
+    const totalImpact = {
+      carbon: 0,
+      water: 0,
+      trees: 0,
+      landfill: 0
+    };
+
+    // Process small bank pickups
+    pickups.forEach(pickup => {
+      const impact = calculateImpact(pickup.wastes);
+      totalImpact.carbon += impact.carbon;
+      totalImpact.water += impact.water;
+      totalImpact.trees += impact.trees;
+      totalImpact.landfill += impact.landfill;
+    });
+
+    // Process master bank requests
+    masterRequests.forEach(request => {
+      const impact = calculateImpact(request.wastes);
+      totalImpact.carbon += impact.carbon;
+      totalImpact.water += impact.water;
+      totalImpact.trees += impact.trees;
+      totalImpact.landfill += impact.landfill;
+    });
+
+    // Calculate waste type distribution combining both pickups and master requests
+    const wasteTypes = {};
+    const processWastes = (wastes, source) => {
+      Object.entries(wastes || {}).forEach(([type, data]) => {
+        if (!wasteTypes[type]) {
+          wasteTypes[type] = { weight: 0, impact: 0, sources: { small: 0, master: 0 } };
+        }
+        wasteTypes[type].weight += data.weight || 0;
+        wasteTypes[type].impact += calculateImpact({ [type]: data }).carbon;
+        wasteTypes[type].sources[source] += data.weight || 0;
+      });
+    };
+
+    pickups.forEach(pickup => processWastes(pickup.wastes, 'small'));
+    masterRequests.forEach(request => processWastes(request.wastes, 'master'));
+
+    // Update all locations data combining both types of facilities
+    const locations = [
+      ...wasteBanks.map(bank => {
+        const coordinates = bank.profile?.location?.coordinates;
+        return {
+          id: bank.id,
+          name: bank.profile?.institution || 'Unknown Bank',
+          type: 'small',
+          coordinates: coordinates ? {
+            lat: coordinates._lat || coordinates[0],
+            lng: coordinates._long || coordinates[1]
+          } : null,
+          address: bank.profile?.location?.address,
+          city: bank.profile?.location?.city,
+          stats: smallBankStats[bank.id] || {
+            transactions: 0,
+            totalValue: 0,
+            totalWeight: 0
+          }
+        };
+      }),
+      ...masterBanks.map(bank => {
+        const coordinates = bank.profile?.location?.coordinates;
+        return {
+          id: bank.id,
+          name: bank.profile?.institution || 'Unknown Master Bank',
+          type: 'master',
+          coordinates: coordinates ? {
+            lat: coordinates._lat || coordinates[0],
+            lng: coordinates._long || coordinates[1]
+          } : null,
+          address: bank.profile?.location?.address,
+          city: bank.profile?.location?.city,
+          stats: masterBankStats[bank.id] || {
+            transactions: 0,
+            totalValue: 0,
+            totalWeight: 0
+          }
+        };
+      })
+    ].filter(location => location.coordinates && location.coordinates.lat && location.coordinates.lng);
+
+    // Calculate monthly trends combining both types
+    const monthlyData = {};
+    const processTransaction = (transaction, type) => {
+      if (!transaction.completedAt) return;
+      
+      const date = new Date(transaction.completedAt.seconds * 1000);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       
       if (!monthlyData[monthKey]) {
         monthlyData[monthKey] = {
           month: date.toLocaleString('default', { month: 'short' }),
           weight: 0,
-          impact: 0
+          impact: 0,
+          smallBankValue: 0,
+          masterBankValue: 0,
+          transactions: {
+            small: 0,
+            master: 0
+          }
         };
       }
 
-      const impact = calculateImpact(pickup.wastes);
+      const impact = calculateImpact(transaction.wastes);
       monthlyData[monthKey].impact += impact.carbon;
-      Object.values(pickup.wastes || {}).forEach(waste => {
+
+      if (type === 'small') {
+        monthlyData[monthKey].smallBankValue += transaction.totalValue || 0;
+        monthlyData[monthKey].transactions.small += 1;
+      } else {
+        monthlyData[monthKey].masterBankValue += transaction.totalValue || 0;
+        monthlyData[monthKey].transactions.master += 1;
+      }
+
+      Object.values(transaction.wastes || {}).forEach(waste => {
         monthlyData[monthKey].weight += waste.weight || 0;
+      });
+    };
+
+    pickups.forEach(pickup => processTransaction(pickup, 'small'));
+    masterRequests.forEach(request => processTransaction(request, 'master'));
+
+    // Enhanced carbon offset calculations
+    let totalCarbonOffset = 0;
+    let totalPotentialCredits = 0;
+    const monthlyOffset = {};
+    const wasteTypeOffset = {};
+
+    // Process carbon offset from small bank pickups
+    pickups.forEach(pickup => {
+      const impact = calculateImpact(pickup.wastes);
+      totalCarbonOffset += impact.carbonOffset;
+      totalPotentialCredits += impact.potentialCredits;
+
+      // Calculate monthly offset
+      const date = new Date(pickup.completedAt.seconds * 1000);
+      const monthKey = date.toISOString().slice(0, 7);
+      monthlyOffset[monthKey] = (monthlyOffset[monthKey] || 0) + impact.carbonOffset;
+
+      // Calculate offset by waste type
+      Object.entries(pickup.wastes || {}).forEach(([type, data]) => {
+        if (!wasteTypeOffset[type]) {
+          wasteTypeOffset[type] = {
+            offset: 0,
+            credits: 0,
+            weight: 0
+          };
+        }
+        const typeImpact = calculateImpact({ [type]: data });
+        wasteTypeOffset[type].offset += typeImpact.carbonOffset;
+        wasteTypeOffset[type].credits += typeImpact.potentialCredits;
+        wasteTypeOffset[type].weight += data.weight || 0;
       });
     });
 
+    // Process carbon offset from master requests
+    masterRequests.forEach(request => {
+      const impact = calculateImpact(request.wastes);
+      totalCarbonOffset += impact.carbonOffset;
+      totalPotentialCredits += impact.potentialCredits;
+
+      // Add to monthly offset
+      const date = new Date(request.completedAt.seconds * 1000);
+      const monthKey = date.toISOString().slice(0, 7);
+      monthlyOffset[monthKey] = (monthlyOffset[monthKey] || 0) + impact.carbonOffset;
+
+      // Add to waste type offset
+      Object.entries(request.wastes || {}).forEach(([type, data]) => {
+        if (!wasteTypeOffset[type]) {
+          wasteTypeOffset[type] = {
+            offset: 0,
+            credits: 0,
+            weight: 0
+          };
+        }
+        const typeImpact = calculateImpact({ [type]: data });
+        wasteTypeOffset[type].offset += typeImpact.carbonOffset;
+        wasteTypeOffset[type].credits += typeImpact.potentialCredits;
+        wasteTypeOffset[type].weight += data.weight || 0;
+      });
+    });
+
+    // Calculate projected savings (simple linear projection)
+    const monthlyOffsetArray = Object.entries(monthlyOffset)
+      .map(([month, offset]) => ({
+        month,
+        offset
+      }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    let projectedSavings = 0;
+    if (monthlyOffsetArray.length > 0) {
+      const avgMonthlyOffset = monthlyOffsetArray.reduce((sum, item) => sum + item.offset, 0) / monthlyOffsetArray.length;
+      projectedSavings = avgMonthlyOffset * 12; // Annual projection
+    }
+
+    // Calculate carbon efficiency (offset per kg of waste)
+    const totalWeight = Object.values(wasteTypeOffset).reduce((sum, type) => sum + type.weight, 0);
+    const carbonEfficiency = totalWeight > 0 ? totalCarbonOffset / totalWeight : 0;
+
+    // Update carbon stats
+    setCarbonStats({
+      totalOffset: totalCarbonOffset,
+      potentialCredits: totalPotentialCredits,
+      monthlyOffset: monthlyOffsetArray,
+      wasteTypeOffset: Object.entries(wasteTypeOffset).map(([type, data]) => ({
+        type,
+        ...data
+      })),
+      projectedSavings,
+      carbonEfficiency
+    });
+
+    // Update stats state with all calculated data
     setStats({
       totalImpact,
       wasteTypes: Object.entries(wasteTypes).map(([type, data]) => ({
         name: type.charAt(0).toUpperCase() + type.slice(1),
-        weight: data.weight,
-        impact: data.impact
+        ...data
       })),
-      locations: Object.values(locationStats),
-      monthlyTrends: Object.values(monthlyData)
+      locations,
+      monthlyTrends: Object.values(monthlyData),
+      bankPerformance
     });
   };
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center">
-          <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">{error}</h3>
+          <AlertCircle className="w-10 h-10 mx-auto mb-4 text-red-500" />
+          <h3 className="mb-2 text-lg font-medium text-gray-900">{error}</h3>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+            className="px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
           >
             Try Again
           </button>
@@ -319,19 +605,19 @@ const WastebankReports = () => {
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
 
-      <main className={`flex-1 transition-all duration-300 ease-in-out
-        ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
-      >
+      <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         <div className="p-8">
-          {/* Header */}
+          {/* Enhanced Header with Carbon Offset Focus */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              <div className="p-2 bg-white rounded-xl shadow-sm border border-gray-200">
+              <div className="p-2 bg-white border border-gray-200 shadow-sm rounded-xl">
                 <LeafyGreen className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-800">Carbon Offset Planner</h1>
-                <p className="text-sm text-gray-500">Analyze and optimize carbon offset potential</p>
+                <h1 className="text-2xl font-semibold text-gray-800">Carbon Offset & Environmental Impact</h1>
+                <p className="text-sm text-gray-500">
+                  Comprehensive analysis of waste management and carbon reduction
+                </p>
               </div>
             </div>
 
@@ -344,12 +630,68 @@ const WastebankReports = () => {
                 <option value="month">Last Month</option>
                 <option value="quarter">Last Quarter</option>
                 <option value="year">Last Year</option>
+                <option value="all">All Time</option>
               </Select>
             </div>
           </div>
 
+          {/* Carbon Offset Overview */}
+          <div className="grid grid-cols-1 gap-4 mb-8 lg:grid-cols-4">
+            <div className="p-6 text-white bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <Recycle className="w-6 h-6" />
+                <h3 className="text-lg font-semibold">Total Carbon Offset</h3>
+              </div>
+              <p className="mb-2 text-3xl font-bold">
+                {Math.round(carbonStats.totalOffset)} tons CO₂e
+              </p>
+              <p className="text-emerald-100">
+                Equivalent to {Math.round(carbonStats.totalOffset * 0.2)} cars off the road
+              </p>
+            </div>
+
+            <div className="p-6 bg-white border border-gray-200 rounded-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <Package className="w-6 h-6 text-emerald-600" />
+                <h3 className="text-lg font-semibold text-gray-800">Carbon Credits</h3>
+              </div>
+              <p className="mb-2 text-3xl font-bold text-gray-900">
+                {carbonStats.potentialCredits.toFixed(1)} credits
+              </p>
+              <p className="text-sm text-gray-500">
+                Potential carbon credit value
+              </p>
+            </div>
+
+            <div className="p-6 bg-white border border-gray-200 rounded-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <Scale className="w-6 h-6 text-emerald-600" />
+                <h3 className="text-lg font-semibold text-gray-800">Carbon Efficiency</h3>
+              </div>
+              <p className="mb-2 text-3xl font-bold text-gray-900">
+                {carbonStats.carbonEfficiency.toFixed(2)}
+              </p>
+              <p className="text-sm text-gray-500">
+                Tons CO₂e offset per ton of waste
+              </p>
+            </div>
+
+            <div className="p-6 bg-white border border-gray-200 rounded-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <Calendar className="w-6 h-6 text-emerald-600" />
+                <h3 className="text-lg font-semibold text-gray-800">Projected Annual</h3>
+              </div>
+              <p className="mb-2 text-3xl font-bold text-gray-900">
+                {Math.round(carbonStats.projectedSavings)} tons
+              </p>
+              <p className="text-sm text-gray-500">
+                Estimated annual carbon offset
+              </p>
+            </div>
+          </div>
+
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
               icon={Recycle}
               label="Carbon Impact"
@@ -377,14 +719,14 @@ const WastebankReports = () => {
           </div>
 
           {/* Map and Charts Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-3">
             {/* Map Container */}
-            <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="overflow-hidden bg-white border border-gray-200 shadow-sm lg:col-span-2 rounded-xl">
               <div className="relative h-[500px]">
                 <MapContainer 
                   center={mapCenter} 
                   zoom={13} 
-                  className="h-full w-full"
+                  className="w-full h-full"
                 >
                   <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -392,9 +734,9 @@ const WastebankReports = () => {
                   />
 
                   {stats.locations.map((location) => {
-                    if (!location.coordinates) return null;
+                    if (!location.coordinates?.lat || !location.coordinates?.lng) return null;
                     
-                    const radius = Math.min(Math.max(location.totalImpact * 500, 500), 2000);
+                    const radius = Math.min(Math.max(location.stats.totalWeight * 500, 500), 2000);
                     
                     return (
                       <React.Fragment key={location.id}>
@@ -423,18 +765,18 @@ const WastebankReports = () => {
                               <h3 className="font-medium text-gray-900">
                                 {location.name}
                               </h3>
-                              <p className="text-sm text-gray-500 mt-1">
-                                {location.location}
+                              <p className="mt-1 text-sm text-gray-500">
+                                {location.address}, {location.city}
                               </p>
-                              <div className="mt-2 pt-2 border-t border-gray-200">
-                                <p className="text-sm text-emerald-600 font-medium">
-                                  {Math.round(location.totalImpact)} kg CO₂e offset
+                              <div className="pt-2 mt-2 border-t border-gray-200">
+                                <p className="text-sm font-medium text-emerald-600">
+                                  {Math.round(location.stats.totalValue)} currency value
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {location.totalWeight.toFixed(1)} kg waste collected
+                                  {location.stats.totalWeight.toFixed(1)} kg waste collected
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {location.pickupCount} pickups completed
+                                  {location.stats.transactions} transactions completed
                                 </p>
                               </div>
                             </div>
@@ -448,20 +790,21 @@ const WastebankReports = () => {
             </div>
 
             {/* Top Performers List */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
+            <div className="p-6 bg-white border border-gray-200 rounded-xl">
+              <h2 className="mb-4 text-lg font-semibold text-gray-800">
                 Top Performing Locations
               </h2>
               <div className="space-y-4">
-                {stats.locations
-                  .sort((a, b) => b.totalImpact - a.totalImpact)
+                {stats.bankPerformance.small.topPerformers
+                  .concat(stats.bankPerformance.master.topPerformers)
+                  .sort((a, b) => b.totalValue - a.totalValue)
                   .slice(0, 5)
                   .map((location, index) => (
                     <div 
                       key={location.id}
-                      className="p-4 bg-gray-50 rounded-lg flex items-center gap-4"
+                      className="flex items-center gap-4 p-4 rounded-lg bg-gray-50"
                     >
-                      <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                      <div className="flex items-center justify-center flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100">
                         <span className="text-sm font-medium text-emerald-700">
                           {index + 1}
                         </span>
@@ -471,15 +814,15 @@ const WastebankReports = () => {
                           {location.name}
                         </p>
                         <p className="text-sm text-gray-500 truncate">
-                          {location.location}
+                          {location.city}
                         </p>
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-medium text-emerald-600">
-                          {Math.round(location.totalImpact)} kg CO₂e
+                          {Math.round(location.totalValue)} currency value
                         </p>
                         <p className="text-xs text-gray-500">
-                          {location.pickupCount} pickups
+                          {location.transactions} transactions
                         </p>
                       </div>
                     </div>
@@ -489,7 +832,7 @@ const WastebankReports = () => {
           </div>
 
           {/* Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-2">
             {/* Monthly Trends */}
             <ChartCard 
               title="Monthly Impact Trends" 
@@ -584,59 +927,59 @@ const WastebankReports = () => {
           </div>
 
           {/* Environmental Impact Summary */}
-          <div className="bg-emerald-50 rounded-xl p-6 border border-emerald-200">
+          <div className="p-6 border bg-emerald-50 rounded-xl border-emerald-200">
             <div className="flex items-start gap-4">
-              <div className="p-2 bg-emerald-100 rounded-lg">
-                <TreesIcon className="h-5 w-5 text-emerald-600" />
+              <div className="p-2 rounded-lg bg-emerald-100">
+                <TreesIcon className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-emerald-800">Environmental Impact Summary</h3>
-                <p className="text-sm text-emerald-700 mt-1">
+                <p className="mt-1 text-sm text-emerald-700">
                   Total environmental impact from waste management activities:
                 </p>
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="bg-white/50 rounded-lg p-4">
+                <div className="grid grid-cols-1 gap-4 mt-4 md:grid-cols-4">
+                  <div className="p-4 rounded-lg bg-white/50">
                     <div className="flex items-center gap-2 mb-2">
-                      <Recycle className="h-5 w-5 text-emerald-600" />
+                      <Recycle className="w-5 h-5 text-emerald-600" />
                       <span className="text-sm font-medium text-emerald-800">Carbon Offset</span>
                     </div>
                     <p className="text-lg font-semibold text-emerald-900">
                       {Math.round(stats.totalImpact.carbon)} kg CO₂e
                     </p>
-                    <p className="text-xs text-emerald-700 mt-1">emissions prevented</p>
+                    <p className="mt-1 text-xs text-emerald-700">emissions prevented</p>
                   </div>
                   
-                  <div className="bg-white/50 rounded-lg p-4">
+                  <div className="p-4 rounded-lg bg-white/50">
                     <div className="flex items-center gap-2 mb-2">
-                      <TreesIcon className="h-5 w-5 text-emerald-600" />
+                      <TreesIcon className="w-5 h-5 text-emerald-600" />
                       <span className="text-sm font-medium text-emerald-800">Trees Preserved</span>
                     </div>
                     <p className="text-lg font-semibold text-emerald-900">
                       {Math.round(stats.totalImpact.trees)} trees
                     </p>
-                    <p className="text-xs text-emerald-700 mt-1">equivalent preserved</p>
+                    <p className="mt-1 text-xs text-emerald-700">equivalent preserved</p>
                   </div>
 
-                  <div className="bg-white/50 rounded-lg p-4">
+                  <div className="p-4 rounded-lg bg-white/50">
                     <div className="flex items-center gap-2 mb-2">
-                      <DropletIcon className="h-5 w-5 text-emerald-600" />
+                      <DropletIcon className="w-5 h-5 text-emerald-600" />
                       <span className="text-sm font-medium text-emerald-800">Water Saved</span>
                     </div>
                     <p className="text-lg font-semibold text-emerald-900">
                       {Math.round(stats.totalImpact.water / 1000)} m³
                     </p>
-                    <p className="text-xs text-emerald-700 mt-1">water preserved</p>
+                    <p className="mt-1 text-xs text-emerald-700">water preserved</p>
                   </div>
 
-                  <div className="bg-white/50 rounded-lg p-4">
+                  <div className="p-4 rounded-lg bg-white/50">
                     <div className="flex items-center gap-2 mb-2">
-                      <Package className="h-5 w-5 text-emerald-600" />
+                      <Package className="w-5 h-5 text-emerald-600" />
                       <span className="text-sm font-medium text-emerald-800">Landfill Reduced</span>
                     </div>
                     <p className="text-lg font-semibold text-emerald-900">
                       {stats.totalImpact.landfill.toFixed(1)} m³
                     </p>
-                    <p className="text-xs text-emerald-700 mt-1">landfill space saved</p>
+                    <p className="mt-1 text-xs text-emerald-700">landfill space saved</p>
                   </div>
                 </div>
               </div>

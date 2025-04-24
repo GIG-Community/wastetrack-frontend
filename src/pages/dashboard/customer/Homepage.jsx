@@ -15,7 +15,7 @@ import {
   Package,
   TreesIcon
 } from 'lucide-react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { 
   calculatePoints, 
@@ -61,55 +61,77 @@ const HomePage = () => {
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!currentUser) return;
+    if (!currentUser) return;
 
+    let userUnsubscribe = () => {};
+    let pickupsUnsubscribe = () => {};
+    
+    const setupListeners = async () => {
       try {
         setLoading(true);
-        const pickupsRef = collection(db, 'pickups');
+        
+        // Real-time listener untuk user data untuk mendapatkan point terbaru
+        userUnsubscribe = onSnapshot(doc(db, 'users', currentUser.uid), (userDoc) => {
+          if (userDoc.exists()) {
+            const userDocData = userDoc.data();
+            setStats(prevStats => ({
+              ...prevStats,
+              points: userDocData?.rewards?.points || 0
+            }));
+          }
+        });
+        
+        // Real-time listener untuk pickups
         const pickupsQuery = query(
-          pickupsRef,
+          collection(db, 'pickups'),
           where('userId', '==', currentUser.uid)
         );
+        
+        pickupsUnsubscribe = onSnapshot(pickupsQuery, (snapshot) => {
+          const pickupData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              totalValue: data.wastes ? calculateTotalValue(data.wastes) : 0,
+              pointsAmount: calculatePoints(data.wastes ? calculateTotalValue(data.wastes) : 0),
+              wasteTypes: Array.isArray(data.wasteTypes) ? data.wasteTypes : [],
+              status: data.status || 'pending',
+              date: data.date || { seconds: Date.now() / 1000 }
+            };
+          });
+          
+          // Sort by date for recent pickups
+          const sortedPickups = pickupData.sort((a, b) => 
+            (b.date?.seconds || 0) - (a.date?.seconds || 0)
+          );
 
-        const snapshot = await getDocs(pickupsQuery);
-        const pickupData = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            totalValue: data.wastes ? calculateTotalValue(data.wastes) : 0,
-            pointsAmount: calculatePoints(data.wastes ? calculateTotalValue(data.wastes) : 0),
-            wasteTypes: Array.isArray(data.wasteTypes) ? data.wasteTypes : [],
-            status: data.status || 'pending',
-            date: data.date || { seconds: Date.now() / 1000 }
-          };
+          // Calculate impact using centralized function
+          const impact = calculateEnvironmentalImpact(pickupData);
+
+          // Update state with calculated values
+          setStats(prevStats => ({
+            ...impact,
+            points: prevStats.points // Keep the points value from user document
+          }));
+
+          setRecentPickups(sortedPickups.slice(0, 5));
+          setLoading(false);
         });
-
-        // Sort by date for recent pickups
-        const sortedPickups = pickupData.sort((a, b) => 
-          (b.date?.seconds || 0) - (a.date?.seconds || 0)
-        );
-
-        // Calculate impact using centralized function
-        const impact = calculateEnvironmentalImpact(pickupData);
-
-        // Update state with calculated values
-        setStats(prevStats => ({
-          ...impact,
-          points: userData?.rewards?.points || 0
-        }));
-
-        setRecentPickups(sortedPickups.slice(0, 5));
       } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
+        console.error('Error setting up real-time listeners:', error);
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, [currentUser, userData?.rewards?.points]);
+    setupListeners();
+
+    // Return cleanup function
+    return () => {
+      userUnsubscribe();
+      pickupsUnsubscribe();
+    };
+  }, [currentUser]);
 
   const formatNumber = (num, decimals = 1) => {
     if (typeof num !== 'number' || isNaN(num)) return '0';
