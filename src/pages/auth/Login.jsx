@@ -70,12 +70,12 @@ export default function Login() {
   if (currentUser) return <Navigate to="/dashboard" replace />;
 
   return (
-    <main className="min-h-screen grid lg:grid-cols-2 font-poppins">
+    <main className="grid min-h-screen lg:grid-cols-2 font-poppins">
       {/* Left Panel – Form Login */}
       <section className="flex items-center justify-center p-6 sm:p-8 bg-gray-50">
-        <div className="w-full max-w-xl space-y-6 bg-white p-8 rounded-lg shadow-md">
+        <div className="w-full max-w-xl p-8 space-y-6 bg-white rounded-lg shadow-md">
           <div className="flex flex-col items-center">
-            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mb-4 shadow-sm">
+            <div className="flex items-center justify-center w-12 h-12 mb-4 rounded-full shadow-sm bg-emerald-100">
               <LogIn size={24} className="text-emerald-600" />
             </div>
             <h1 className="text-2xl font-bold text-gray-800">Selamat Datang Kembali!</h1>
@@ -83,12 +83,12 @@ export default function Login() {
           </div>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="email" className="block mb-1 text-sm font-medium text-gray-700">
                 Alamat Email
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-600" />
+                  <Mail className="w-5 h-5 text-gray-600" />
                 </div>
                 <input
                   id="email"
@@ -98,17 +98,17 @@ export default function Login() {
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="Masukkan email Anda"
-                  className="w-full p-3 pl-10 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800 placeholder:text-gray-400"
+                  className="w-full p-3 pl-10 text-gray-800 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-gray-400"
                 />
               </div>
             </div>
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="password" className="block mb-1 text-sm font-medium text-gray-700">
                 Kata Sandi
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-600" />
+                  <Lock className="w-5 h-5 text-gray-600" />
                 </div>
                 <input
                   id="password"
@@ -118,28 +118,28 @@ export default function Login() {
                   value={formData.password}
                   onChange={handleChange}
                   placeholder="Masukkan kata sandi Anda"
-                  className="w-full p-3 pl-10 pr-12 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800 placeholder:text-gray-400"
+                  className="w-full p-3 pl-10 pr-12 text-gray-800 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-gray-400"
                 />
                 {/* Toggle show/hide password menggunakan elemen span */}
                 <span
                   onClick={() => setShowPassword(prev => !prev)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 cursor-pointer select-none"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 cursor-pointer select-none"
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => { if (e.key === 'Enter') setShowPassword(prev => !prev); }}
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </span>
               </div>
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full p-3 text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-colors shadow-sm disabled:opacity-70"
+              className="w-full p-3 text-white transition-colors rounded-lg shadow-sm bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-70"
             >
               {loading ? 'Masuk...' : 'Masuk'}
             </button>
-            <p className="text-center text-sm text-gray-700">
+            <p className="text-sm text-center text-gray-700">
               Belum punya akun?{' '}
               <Link to="/register" className="font-semibold text-emerald-600 hover:text-emerald-700">
                 Daftar Sekarang
@@ -150,29 +150,29 @@ export default function Login() {
       </section>
 
       {/* Right Panel – Informasi */}
-      <section className="hidden lg:flex flex-col items-center justify-center bg-gradient-to-br from-emerald-600 to-emerald-800 p-8 xl:p-16">
+      <section className="flex-col items-center justify-center hidden p-8 lg:flex bg-gradient-to-br from-emerald-600 to-emerald-800 xl:p-16">
         <div className="w-full max-w-lg px-4">
-          <h2 className="text-3xl xl:text-4xl font-bold text-white mb-6 text-center">
+          <h2 className="mb-6 text-3xl font-bold text-center text-white xl:text-4xl">
             Selamat Datang di WasteTrack
           </h2>
-          <p className="text-lg text-white/90 mb-12 text-center">
+          <p className="mb-12 text-lg text-center text-white/90">
             Bergabunglah dengan kami untuk mewujudkan masa depan yang berkelanjutan melalui pengelolaan sampah yang efisien.
           </p>
           <div className="space-y-8">
-            <div className="flex items-center gap-4 text-white backdrop-blur-sm bg-white/10 p-4 rounded-lg">
-              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm">
+            <div className="flex items-center gap-4 p-4 text-white rounded-lg backdrop-blur-sm bg-white/10">
+              <div className="flex items-center justify-center w-12 h-12 bg-white rounded-full shadow-sm">
                 <Check className="w-6 h-6 text-emerald-600" />
               </div>
               <p className="text-lg">Pantau progres pengelolaan sampah Anda</p>
             </div>
-            <div className="flex items-center gap-4 text-white backdrop-blur-sm bg-white/10 p-4 rounded-lg">
-              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm">
+            <div className="flex items-center gap-4 p-4 text-white rounded-lg backdrop-blur-sm bg-white/10">
+              <div className="flex items-center justify-center w-12 h-12 bg-white rounded-full shadow-sm">
                 <Bell className="w-6 h-6 text-emerald-600" />
               </div>
               <p className="text-lg">Update dan notifikasi real-time</p>
             </div>
-            <div className="flex items-center gap-4 text-white backdrop-blur-sm bg-white/10 p-4 rounded-lg">
-              <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm">
+            <div className="flex items-center gap-4 p-4 text-white rounded-lg backdrop-blur-sm bg-white/10">
+              <div className="flex items-center justify-center w-12 h-12 bg-white rounded-full shadow-sm">
                 <Zap className="w-6 h-6 text-emerald-600" />
               </div>
               <p className="text-lg">Solusi efisien dan berkelanjutan</p>

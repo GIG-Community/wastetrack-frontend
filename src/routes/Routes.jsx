@@ -15,6 +15,8 @@ import BankSettings from '../pages/dashboard/wastebank/BankSettings';
 import Employees from '../pages/dashboard/wastebank/Collector';
 import Reports from '../pages/dashboard/wastebank/Reports';
 import Transactions from '../pages/dashboard/wastebank/Transaction';
+import SalaryManagement from '../pages/dashboard/wastebank/SalaryManagement';
+import RequestCollection from '../pages/dashboard/wastebank/RequestCollection';
 import CollectorDashboard from '../pages/dashboard/collector/CollectorDashboard';
 import Assignments from '../pages/dashboard/collector/Assignments';
 import CollectorRoutes from '../pages/dashboard/collector/CollectorRoutes';
@@ -26,23 +28,17 @@ import DetectWaste from '../pages/dashboard/customer/DetectWaste';
 import History from '../pages/dashboard/customer/History';
 import Rewards from '../pages/dashboard/customer/Rewards';
 import TrackPickup from '../pages/dashboard/customer/TrackPickup';
-import GovernmentDashboard from '../pages/dashboard/government/GovernmentDashboard';
-import WastebankReports from '../pages/dashboard/government/GovernmentReports';
-import IndustryDashboard from '../pages/dashboard/industry/IndustryDashboard';
-import OffsetPlannerIndustry from '../pages/dashboard/industry/OffsetPlannerIndustry';
-import RecycledHubIndustry from '../pages/dashboard/industry/RecycledHubIndustry';
-import GovernmentMonitoring from '../pages/dashboard/government/GovernmentMonitoring';
-import GovernmentAnalytics from '../pages/dashboard/government/GovernmentAnalytics';
-import MarketplaceDashboard from '../pages/dashboard/marketplace/MarketplaceDashboard';
-import Products from '../pages/dashboard/marketplace/Products';
-import Orders from '../pages/dashboard/marketplace/Orders';
-import Marketplace from '../pages/dashboard/customer/Rewards';
 import CustomerMarketplace from '../pages/dashboard/customer/CustomerMarketplace';
 import ProductDetails from '../pages/dashboard/customer/ProductDetails';
 import Checkout from '../pages/dashboard/customer/Checkout';
 import OrderConfirmation from '../pages/dashboard/customer/OrderConfirmation';
-import SalaryManagement from '../pages/dashboard/wastebank/SalaryManagement';
-import RequestCollection from '../pages/dashboard/wastebank/RequestCollection';
+import GovernmentDashboard from '../pages/dashboard/government/GovernmentDashboard';
+import WastebankReports from '../pages/dashboard/government/GovernmentReports';
+import GovernmentMonitoring from '../pages/dashboard/government/GovernmentMonitoring';
+import GovernmentAnalytics from '../pages/dashboard/government/GovernmentAnalytics';
+import IndustryDashboard from '../pages/dashboard/industry/IndustryDashboard';
+import OffsetPlannerIndustry from '../pages/dashboard/industry/OffsetPlannerIndustry';
+import RecycledHubIndustry from '../pages/dashboard/industry/RecycledHubIndustry';
 import WastebankMasterDashboard from '../pages/dashboard/wastebank-master/WastebankMasterDashboard';
 import MasterTransaction from '../pages/dashboard/wastebank-master/MasterTransaction';
 import MasterCollector from '../pages/dashboard/wastebank-master/MasterCollector';
@@ -55,284 +51,141 @@ import MasterCollections from '../pages/dashboard/collector-master/MasterCollect
 import MasterCollectorDashboard from '../pages/dashboard/collector-master/MasterCollectorDashboard';
 import MasterRoutes from '../pages/dashboard/collector-master/MasterRoutes';
 import MasterUpdateCollection from '../pages/dashboard/collector-master/MasterUpdateCollection';
+import MarketplaceDashboard from '../pages/dashboard/marketplace/MarketplaceDashboard';
+import Products from '../pages/dashboard/marketplace/Products';
+import Orders from '../pages/dashboard/marketplace/Orders';
 
 const AppRoutes = () => (
   <Routes>
     <Route path="/login" element={<Login />} />
     <Route path="/register" element={<Register />} />
     
-    {/* Protected routes */}
+    {/* General Protected route - redirects based on user role */}
     <Route path="/dashboard" element={
-      <ProtectedRoute>
+      <ProtectedRoute allowedRoles={['customer', 'collector', 'wastebank_admin', 'wastebank_master', 'wastebank_master_collector', 'industry', 'marketplace', 'government', 'super_admin']}>
         <Dashboard />
       </ProtectedRoute>
     } />
     
     {/* Super Admin Routes */}
-    <Route path="/dashboard/super-admin" element={
-      <ProtectedRoute>
-        <SuperAdminDashboard />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/super-admin/users" element={
-      <ProtectedRoute>
-        <Users />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/super-admin/wastebanks" element={
-      <ProtectedRoute>
-        <WasteBanks />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/super-admin/settings" element={
-      <ProtectedRoute>
-        <SystemSettings />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/super-admin/reports" element={
-      <ProtectedRoute>
-        <Reports />
+    <Route path="/dashboard/super-admin/*" element={
+      <ProtectedRoute allowedRoles={['super_admin']}>
+        <Routes>
+          <Route path="/" element={<SuperAdminDashboard />} />
+          <Route path="users" element={<Users />} />
+          <Route path="wastebanks" element={<WasteBanks />} />
+          <Route path="settings" element={<SystemSettings />} />
+          <Route path="reports" element={<Reports />} />
+        </Routes>
       </ProtectedRoute>
     } />
 
     {/* Wastebank Routes */}
-    <Route path="/dashboard/wastebank/" element={
-      <ProtectedRoute>
-        <WastebankAdminDashboard />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/wastebank/warehouse-storage" element={
-      <ProtectedRoute>
-        <BankSettings />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/wastebank/employees" element={
-      <ProtectedRoute>
-        <Employees />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/wastebank/reports" element={
-      <ProtectedRoute>
-        <Reports />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/wastebank/transactions" element={
-      <ProtectedRoute>
-        <Transactions />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/wastebank/salary" element={
-      <ProtectedRoute>
-        <SalaryManagement />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/wastebank/request-induk" element={
-      <ProtectedRoute>
-        <RequestCollection />
+    <Route path="/dashboard/wastebank/*" element={
+      <ProtectedRoute allowedRoles={['wastebank_admin']}>
+        <Routes>
+          <Route path="/" element={<WastebankAdminDashboard />} />
+          <Route path="warehouse-storage" element={<BankSettings />} />
+          <Route path="employees" element={<Employees />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="transactions" element={<Transactions />} />
+          <Route path="salary" element={<SalaryManagement />} />
+          <Route path="request-induk" element={<RequestCollection />} />
+        </Routes>
       </ProtectedRoute>
     } />
 
     {/* Collector Routes */}
-    <Route path="/dashboard/collector" element={
-      <ProtectedRoute>
-        <CollectorCollections />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/collector/dashboard" element={
-      <ProtectedRoute>
-        <CollectorDashboard />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/collector/assignments" element={
-      <ProtectedRoute>
-        <Assignments />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/collector/routes" element={
-      <ProtectedRoute>
-        <CollectorRoutes />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/collector/collections" element={
-      <ProtectedRoute>
-        <CollectorCollections />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/collector/update-collection/:pickupId" element={
-      <ProtectedRoute>
-        <UpdateCollection />
+    <Route path="/dashboard/collector/*" element={
+      <ProtectedRoute allowedRoles={['collector']}>
+        <Routes>
+          <Route path="/" element={<CollectorCollections />} />
+          <Route path="dashboard" element={<CollectorDashboard />} />
+          <Route path="assignments" element={<Assignments />} />
+          <Route path="routes" element={<CollectorRoutes />} />
+          <Route path="collections" element={<CollectorCollections />} />
+          <Route path="update-collection/:pickupId" element={<UpdateCollection />} />
+        </Routes>
       </ProtectedRoute>
     } />
 
     {/* Customer Routes */}
-    <Route path="/dashboard/customer" element={
-      <ProtectedRoute>
-        <CustomerDashboard />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/customer/schedule-pickup" element={
-      <ProtectedRoute>
-        <SchedulePickup />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/customer/detect-waste" element={
-      <ProtectedRoute>
-        <DetectWaste />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/customer/history" element={
-      <ProtectedRoute>
-        <History />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/customer/rewards" element={
-      <ProtectedRoute>
-        <Rewards />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/customer/track-pickup" element={
-      <ProtectedRoute>
-        <TrackPickup />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/customer/marketplace" element={
-      <ProtectedRoute>
-        <CustomerMarketplace />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/customer/marketplace/product/:id" element={
-      <ProtectedRoute>
-        <ProductDetails />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/customer/marketplace/checkout" element={
-      <ProtectedRoute>
-        <Checkout />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/customer/marketplace/order-confirmation/:id" element={
-      <ProtectedRoute>
-        <OrderConfirmation />
+    <Route path="/dashboard/customer/*" element={
+      <ProtectedRoute allowedRoles={['customer']}>
+        <Routes>
+          <Route path="/" element={<CustomerDashboard />} />
+          <Route path="schedule-pickup" element={<SchedulePickup />} />
+          <Route path="detect-waste" element={<DetectWaste />} />
+          <Route path="history" element={<History />} />
+          <Route path="rewards" element={<Rewards />} />
+          <Route path="track-pickup" element={<TrackPickup />} />
+          <Route path="marketplace" element={<CustomerMarketplace />} />
+          <Route path="marketplace/product/:id" element={<ProductDetails />} />
+          <Route path="marketplace/checkout" element={<Checkout />} />
+          <Route path="marketplace/order-confirmation/:id" element={<OrderConfirmation />} />
+        </Routes>
       </ProtectedRoute>
     } />
 
     {/* Government Routes */}
-    <Route path="/dashboard/government/" element={
-      <ProtectedRoute>
-        <GovernmentDashboard />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/government/wastebank-reports" element={
-      <ProtectedRoute>
-        <WastebankReports />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/government/monitoring" element={
-      <ProtectedRoute>
-        <GovernmentMonitoring />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/government/analytics" element={
-      <ProtectedRoute>
-        <GovernmentAnalytics />
+    <Route path="/dashboard/government/*" element={
+      <ProtectedRoute allowedRoles={['government']}>
+        <Routes>
+          <Route path="/" element={<GovernmentDashboard />} />
+          <Route path="wastebank-reports" element={<WastebankReports />} />
+          <Route path="monitoring" element={<GovernmentMonitoring />} />
+          <Route path="analytics" element={<GovernmentAnalytics />} />
+        </Routes>
       </ProtectedRoute>
     } />
 
     {/* Industry Routes */}
-    <Route path="/dashboard/industry/" element={
-      <ProtectedRoute>
-        <IndustryDashboard />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/industry/offset-planner" element={
-      <ProtectedRoute>
-        <OffsetPlannerIndustry />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/industry/recycledhub" element={
-      <ProtectedRoute>
-        <RecycledHubIndustry />
+    <Route path="/dashboard/industry/*" element={
+      <ProtectedRoute allowedRoles={['industry']}>
+        <Routes>
+          <Route path="/" element={<IndustryDashboard />} />
+          <Route path="offset-planner" element={<OffsetPlannerIndustry />} />
+          <Route path="recycledhub" element={<RecycledHubIndustry />} />
+        </Routes>
       </ProtectedRoute>
     } />
 
     {/* Wastebank Master Routes */}
-    <Route path="/dashboard/wastebank-master" element={
-      <ProtectedRoute>
-        <WastebankMasterDashboard />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/wastebank-master/transactions" element={
-      <ProtectedRoute>
-        <MasterTransaction />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/wastebank-master/collectors" element={
-      <ProtectedRoute>
-        <MasterCollector />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/wastebank-master/warehouse" element={
-      <ProtectedRoute>
-        <MasterWarehouse />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/wastebank-master/salary" element={
-      <ProtectedRoute>
-        <MasterSalaryManagement />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/wastebank-master/reports" element={
-      <ProtectedRoute>
-        <MasterReports />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/wastebank-master/requests" element={
-      <ProtectedRoute>
-        <MasterRequestCollection />
+    <Route path="/dashboard/wastebank-master/*" element={
+      <ProtectedRoute allowedRoles={['wastebank_master']}>
+        <Routes>
+          <Route path="/" element={<WastebankMasterDashboard />} />
+          <Route path="transactions" element={<MasterTransaction />} />
+          <Route path="collectors" element={<MasterCollector />} />
+          <Route path="warehouse" element={<MasterWarehouse />} />
+          <Route path="salary" element={<MasterSalaryManagement />} />
+          <Route path="reports" element={<MasterReports />} />
+          <Route path="requests" element={<MasterRequestCollection />} />
+        </Routes>
       </ProtectedRoute>
     } />
 
     {/* Collector Master Routes */}
-    <Route path="/dashboard/collector-master" element={
-      <ProtectedRoute>
-        <MasterCollectorDashboard />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/collector-master/assignments" element={
-      <ProtectedRoute>
-        <MasterAssignment />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/collector-master/routes" element={
-      <ProtectedRoute>
-        <MasterRoutes />
-      </ProtectedRoute>
-    } />
-     <Route path="/dashboard/collector-master/collections" element={
-      <ProtectedRoute>
-        <MasterCollections />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/collector-master/update-collection/:pickupId" element={
-      <ProtectedRoute>
-        <MasterUpdateCollection />
+    <Route path="/dashboard/collector-master/*" element={
+      <ProtectedRoute allowedRoles={['wastebank_master_collector']}>
+        <Routes>
+          <Route path="/" element={<MasterCollectorDashboard />} />
+          <Route path="assignments" element={<MasterAssignment />} />
+          <Route path="routes" element={<MasterRoutes />} />
+          <Route path="collections" element={<MasterCollections />} />
+          <Route path="update-collection/:pickupId" element={<MasterUpdateCollection />} />
+        </Routes>
       </ProtectedRoute>
     } />
 
     {/* Marketplace Routes */}
-    <Route path="/dashboard/marketplace" element={
-      <ProtectedRoute>
-        <MarketplaceDashboard />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/marketplace/products" element={
-      <ProtectedRoute>
-        <Products />
-      </ProtectedRoute>
-    } />
-    <Route path="/dashboard/marketplace/orders" element={
-      <ProtectedRoute>
-        <Orders />
+    <Route path="/dashboard/marketplace/*" element={
+      <ProtectedRoute allowedRoles={['marketplace']}>
+        <Routes>
+          <Route path="/" element={<MarketplaceDashboard />} />
+          <Route path="products" element={<Products />} />
+          <Route path="orders" element={<Orders />} />
+        </Routes>
       </ProtectedRoute>
     } />
 
