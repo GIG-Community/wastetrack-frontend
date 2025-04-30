@@ -11,7 +11,8 @@ import {
   Building2,
   MapPin,
   Eye,
-  EyeOff
+  EyeOff,
+  MapPinIcon
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { GeoPoint, collection, query, where, getDocs } from 'firebase/firestore';
@@ -31,16 +32,17 @@ const ROLES = {
 };
 
 const ROLE_DESCRIPTIONS = {
-  super_admin: "Manage all aspects of the system and oversee all users.",
-  customer: "Manage your household waste and earn rewards",
-  collector: "Collect and transport waste efficiently from small wastebank",
-  wastebank_master: "Bank sampah induk",
-  wastebank_admin: "Oversee waste bank operations",
-  industry: "Access recycling materials and manage sustainability",
-  government: "Monitor and analyze environmental impact",
-  marketplace: "Marketplace for buying and selling waste products",
-  wastebank_master_collector: "Collector for waste bank induk",
+  super_admin: "Mengelola semua aspek sistem dan mengawasi seluruh pengguna.",
+  customer: "Kelola sampah rumah tangga Anda dan dapatkan hadiah.",
+  collector: "Mengumpulkan dan mengangkut sampah secara efisien dari bank sampah kecil.",
+  wastebank_master: "Bank sampah induk.",
+  wastebank_admin: "Mengawasi operasional bank sampah.",
+  industry: "Akses bahan daur ulang dan kelola keberlanjutan.",
+  government: "Memantau dan menganalisis dampak lingkungan.",
+  marketplace: "Marketplace untuk jual beli produk sampah.",
+  wastebank_master_collector: "Pengumpul untuk bank sampah induk.",
 };
+
 
 export default function Register() {
   // State untuk multi-step form, tampilan password, data form, loading, dan error
@@ -101,7 +103,12 @@ export default function Register() {
               color: '#333',
               iconColor: '#d33',
               confirmButtonColor: '#d33',
-              customClass: { popup: 'rounded-lg shadow-lg' }
+              customClass: { 
+                popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+                title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+                htmlContainer: 'text-sm sm:text-base text-gray-600',
+                confirmButton: 'text-sm sm:text-base'
+              }
             });
           }
         },
@@ -115,7 +122,12 @@ export default function Register() {
             color: '#333',
             iconColor: '#d33',
             confirmButtonColor: '#d33',
-            customClass: { popup: 'rounded-lg shadow-lg' }
+            customClass: { 
+              popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+              title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+              htmlContainer: 'text-sm sm:text-base text-gray-600',
+              confirmButton: 'text-sm sm:text-base'
+            }
           });
         }
       );
@@ -128,7 +140,12 @@ export default function Register() {
         color: '#333',
         iconColor: '#d33',
         confirmButtonColor: '#d33',
-        customClass: { popup: 'rounded-lg shadow-lg' }
+        customClass: { 
+          popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+          title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+          htmlContainer: 'text-sm sm:text-base text-gray-600',
+          confirmButton: 'text-sm sm:text-base'
+        }
       });
     }
   };
@@ -195,7 +212,12 @@ export default function Register() {
         color: '#333',
         iconColor: '#d33',
         confirmButtonColor: '#d33',
-        customClass: { popup: 'rounded-lg shadow-lg' }
+        customClass: {
+          popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+          title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+          htmlContainer: 'text-sm sm:text-base text-gray-600',
+          confirmButton: 'text-sm sm:text-base'
+        }
       });
     }
 
@@ -212,7 +234,7 @@ export default function Register() {
           : formData.institution,
         institutionName: formData.role === 'collector' || formData.role === 'wastebank_master_collector'
           ? (wasteBanks.find(bank => bank.id === formData.institution)?.profile?.institution || 
-             wasteBankMasters.find(bank => bank.id === formData.institution)?.profile?.institution)
+            wasteBankMasters.find(bank => bank.id === formData.institution)?.profile?.institution)
           : formData.institution,
         location: {
           address: formData.address,
@@ -265,7 +287,11 @@ export default function Register() {
         iconColor: '#28a745',
         timer: 1500,
         showConfirmButton: false,
-        customClass: { popup: 'rounded-lg shadow-lg' }
+        customClass: {
+          popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg shadow-lg',
+          title: 'text-base sm:text-xl font-semibold text-gray-800',
+          htmlContainer: 'text-sm sm:text-base text-gray-600'
+        }
       });
       navigate('/login'); // Redirect ke halaman login
     } catch (err) {
@@ -283,7 +309,12 @@ export default function Register() {
         color: '#333',
         iconColor: '#d33',
         confirmButtonColor: '#d33',
-        customClass: { popup: 'rounded-lg shadow-lg' }
+        customClass: {
+          popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+          title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+          htmlContainer: 'text-sm sm:text-base text-gray-600',
+          confirmButton: 'text-sm sm:text-base'
+        }
       });
     } finally {
       setLoading(false);
@@ -293,17 +324,17 @@ export default function Register() {
   const handleNextStep = () => {
     // Validate passwords before allowing to proceed
     if (!formData.password || !formData.confirmPassword) {
-      setError('Please fill in both password fields');
+      setError('Harap isi kedua kolom kata sandi');
       return;
     }
     
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+      setError('Kata sandi tidak sesuai');
       return;
     }
 
     if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
+      setError('Kata sandi minimal harus terdiri dari 6 karakter');
       return;
     }
 
@@ -312,36 +343,45 @@ export default function Register() {
   };
 
   return (
-    <main className="flex items-center justify-center min-h-screen p-4 bg-blue-50 font-poppins">
-      <div className="w-full max-w-2xl p-8 bg-white shadow-lg rounded-xl">
+    <main className="flex min-h-screen w-full items-center justify-center font-poppins">
+      <div className="w-full max-w-2xl rounded-xl">
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center mb-4 rounded-full h-14 w-14 bg-emerald-100">
-            <UserPlus className="h-7 w-7 text-emerald-600" />
+          <div className="inline-flex items-center justify-center mb-4 rounded-full h-12 w-12 bg-emerald-100">
+            <UserPlus size={24} className="text-emerald-600" />
           </div>
-          <h2 className="mb-2 text-2xl font-bold text-gray-800 sm:text-3xl">Create Account</h2>
-          <p className="mt-2 text-sm text-blue-600">
-            {step === 1 ? 'Choose your role and create credentials' : 'Complete your profile information'}
+          <h2 className="mb-2 text-lg font-bold text-gray-800 sm:text-3xl">Buat Akun</h2>
+          <p className="mt-2 text-sm text-gray-600 sm:text-base">
+            {step === 1 ? 'Pilih role Anda' : 'Lengkapi informasi Anda'}
           </p>
         </div>
 
         {/* Progress Bar */}
-        <div className="mb-8">
+        <div className="mb-8 max-w-[240px] sm:max-w-sm mx-auto">
           <div className="flex items-center mb-2">
-            <div className={`flex-1 h-1 rounded-full ${step >= 1 ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
-            <div className="flex items-center justify-center w-6 h-6 mx-2 text-xs font-medium bg-white border-2 rounded-full border-emerald-500 text-emerald-500">
-              1
+            {/* Step 1 */}
+            <div className="flex items-center">
+              <div className="flex items-center justify-center w-6 h-6 text-xs font-medium bg-white border-2 rounded-full border-emerald-500 text-emerald-500">
+                1
+              </div>
             </div>
-            <div className={`flex-1 h-1 rounded-full ${step >= 2 ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
-            <div className="flex items-center justify-center w-6 h-6 mx-2 text-xs font-medium bg-white border-2 rounded-full border-emerald-500 text-emerald-500">
-              2
+
+            {/* Line */}
+            <div className={`flex-1 h-1 mx-2 rounded-full ${step >= 2 ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
+
+            {/* Step 2 */}
+            <div className="flex items-center">
+              <div className={`flex items-center justify-center w-6 h-6 text-xs font-medium border-2 rounded-full ${step >= 2 ? 'bg-white border-emerald-500 text-emerald-500' : 'bg-white border-gray-300 text-gray-400'}`}>
+                2
+              </div>
             </div>
-            <div className={`flex-1 h-1 rounded-full ${step >= 2 ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
           </div>
+
           <div className="flex justify-between text-sm text-gray-600">
-            <span>Account</span>
-            <span>Profile</span>
+            <span className={`${step >= 1 ? 'text-emerald-600 font-medium' : ''}`}>Akun</span>
+            <span className={`${step >= 2 ? 'text-emerald-600 font-medium' : ''}`}>Profil</span>
           </div>
         </div>
+
 
         {/* Error Message - Moved outside the form to be always visible */}
         {error && (
@@ -356,14 +396,14 @@ export default function Register() {
             <>
               {/* Role Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1.5">
-                  Select Role
+                <label className="block text-xs text-left font-medium text-gray-500 mb-1.5 sm:text-sm">
+                  Pilih Role Anda
                 </label>
                 <select
                   name="role"
                   value={formData.role}
                   onChange={handleChange}
-                  className="w-full p-2.5 bg-white border border-blue-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800"
+                  className="w-full p-3 bg-white text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800 sm:text-base"
                 >
                   {Object.entries(ROLES).map(([key, value]) => (
                     <option key={key} value={key}>
@@ -378,20 +418,20 @@ export default function Register() {
 
               {/* Email */}
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1.5">
-                  Email Address
+                <label className="block text-xs text-left font-medium text-gray-500 mb-1.5 sm:text-sm">
+                  Alamat Email
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Mail className="w-5 h-5 text-blue-400" />
+                    <Mail className="w-4 h-4 text-gray-400 sm:w-5 sm:h-5" />
                   </div>
                   <input
                     type="email"
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-3 py-2.5 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800 placeholder:text-gray-400"
-                    placeholder="Enter your email"
+                    placeholder="Masukkan email Anda"
+                    className="text-sm w-full p-3 pl-10 text-gray-800 bg-white border border-gray-200 rounded-lg shadow-sm sm:text-base focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-gray-400 placeholder:text-xs sm:placeholder:text-sm"
                     required
                   />
                 </div>
@@ -399,20 +439,20 @@ export default function Register() {
 
               {/* Password */}
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1.5">
-                  Password
+                <label className="block text-xs text-left font-medium text-gray-500 mb-1.5 sm:text-sm">
+                  Kata Sandi
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Lock className="w-5 h-5 text-blue-400" />
+                    <Lock className="w-4 h-4 text-gray-400 sm:w-5 sm:h-5" />
                   </div>
                   <input
                     type={showPassword ? "text" : "password"}
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-12 py-2.5 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800 placeholder:text-gray-400"
-                    placeholder="Create a password"
+                    placeholder="Buat kata sandi Anda"
+                    className="text-sm w-full p-3 pl-10 text-gray-800 bg-white border border-gray-200 rounded-lg shadow-sm sm:text-base focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-gray-400 placeholder:text-xs sm:placeholder:text-sm"
                     required
                   />
                   <span
@@ -422,27 +462,27 @@ export default function Register() {
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === 'Enter') setShowPassword(prev => !prev); }}
                   >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showPassword ? <EyeOff className="w-5 h-5 text-gray-400" /> : <Eye className="w-5 h-5 text-gray-400" />}
                   </span>
                 </div>
               </div>
 
               {/* Confirm Password */}
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1.5">
-                  Confirm Password
+                <label className="block text-xs text-left font-medium text-gray-500 mb-1.5 sm:text-sm">
+                  Konfirmasi Kata Sandi
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Lock className="w-5 h-5 text-blue-400" />
+                    <Lock className="w-4 h-4 text-gray-400 sm:w-5 sm:h-5" />
                   </div>
                   <input
                     type={showConfirmPassword ? "text" : "password"}
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-12 py-2.5 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800 placeholder:text-gray-400"
-                    placeholder="Confirm your password"
+                    placeholder="Konfirmasi kata sandi Anda"
+                    className="text-sm w-full p-3 pl-10 text-gray-800 bg-white border border-gray-200 rounded-lg shadow-sm sm:text-base focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-gray-400 placeholder:text-xs sm:placeholder:text-sm"
                     required
                   />
                   <span
@@ -452,7 +492,7 @@ export default function Register() {
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === 'Enter') setShowConfirmPassword(prev => !prev); }}
                   >
-                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showConfirmPassword ? <EyeOff className="w-5 h-5 text-gray-400" /> : <Eye className="w-5 h-5 text-gray-400" />}
                   </span>
                 </div>
               </div>
@@ -461,20 +501,20 @@ export default function Register() {
             <>
               {/* Full Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1.5">
-                  Full Name
+                <label className="block text-xs text-left font-medium text-gray-500 mb-1.5 sm:text-sm">
+                  Nama Lengkap
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <User className="w-5 h-5 text-blue-400" />
+                    <User className="w-4 h-4 text-gray-400 sm:w-5 sm:h-5" />
                   </div>
                   <input
                     type="text"
                     name="fullName"
                     value={formData.fullName}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-3 py-2.5 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800 placeholder:text-gray-400"
-                    placeholder="Enter your full name"
+                    placeholder="Masukkan nama lengkap Anda"
+                    className="text-sm w-full p-3 pl-10 text-gray-800 bg-white border border-gray-200 rounded-lg shadow-sm sm:text-base focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-gray-400 placeholder:text-xs sm:placeholder:text-sm"
                     required
                   />
                 </div>
@@ -482,20 +522,20 @@ export default function Register() {
 
               {/* Phone Number */}
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1.5">
-                  Phone Number
+                <label className="block text-xs text-left font-medium text-gray-500 mb-1.5 sm:text-sm">
+                  Nomor Telepon
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Phone className="w-5 h-5 text-blue-400" />
+                    <Phone className="w-4 h-4 text-gray-400 sm:w-5 sm:h-5" />
                   </div>
                   <input
                     type="tel"
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-3 py-2.5 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800 placeholder:text-gray-400"
-                    placeholder="Enter your phone number"
+                    placeholder="Masukkan nomor telepon Anda"
+                    className="text-sm w-full p-3 pl-10 text-gray-800 bg-white border border-gray-200 rounded-lg shadow-sm sm:text-base focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-gray-400 placeholder:text-xs sm:placeholder:text-sm"
                     required
                   />
                 </div>
@@ -504,22 +544,22 @@ export default function Register() {
               {/* Institution */}
               {formData.role !== 'customer' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1.5">
-                    Institution
+                  <label className="block text-xs text-left font-medium text-gray-500 mb-1.5 sm:text-sm">
+                    Institusi
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                      <Building2 className="w-5 h-5 text-blue-400" />
+                      <Building2 className="w-4 h-4 text-gray-400 sm:w-5 sm:h-5" />
                     </div>
                     {(formData.role === 'collector' || formData.role === 'wastebank_master_collector') ? (
                       <select
                         name="institution"
                         value={formData.institution}
                         onChange={handleChange}
-                        className="w-full pl-10 pr-3 py-2.5 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800"
+                        className="text-sm w-full p-3 pl-10 text-gray-800 bg-white border border-gray-200 rounded-lg shadow-sm sm:text-base focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-gray-400 placeholder:text-xs sm:placeholder:text-sm"
                         required
                       >
-                        <option value="">Select a waste bank</option>
+                        <option value="">Pilih Bank Sampah</option>
                         {formData.role === 'collector' && wasteBanks.map(bank => (
                           <option key={bank.id} value={bank.id}>
                             {bank.profile?.institution || 'Unnamed Bank'}
@@ -537,8 +577,8 @@ export default function Register() {
                         name="institution"
                         value={formData.institution}
                         onChange={handleChange}
-                        className="w-full pl-10 pr-3 py-2.5 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800 placeholder:text-gray-400"
-                        placeholder="Enter your institution name"
+                        placeholder="Masukkan nama institusi Anda"
+                        className="text-sm w-full p-3 pl-10 text-gray-800 bg-white border border-gray-200 rounded-lg shadow-sm sm:text-base focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-gray-400 placeholder:text-xs sm:placeholder:text-sm"
                         required
                       />
                     )}
@@ -548,20 +588,20 @@ export default function Register() {
 
               {/* Address */}
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1.5">
-                  Address
+                <label className="block text-xs text-left font-medium text-gray-500 mb-1.5 sm:text-sm">
+                  Alamat
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <MapPin className="w-5 h-5 text-blue-400" />
+                    <MapPin className="w-4 h-4 text-gray-400 sm:w-5 sm:h-5" />
                   </div>
                   <input
                     type="text"
                     name="address"
                     value={formData.address}
                     onChange={handleChange}
-                    className="w-full pl-10 pr-3 py-2.5 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800 placeholder:text-gray-400"
-                    placeholder="Enter your address"
+                    placeholder="Masukkan alamat Anda"
+                    className="text-sm w-full p-3 pl-10 text-gray-800 bg-white border border-gray-200 rounded-lg shadow-sm sm:text-base focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-gray-400 placeholder:text-xs sm:placeholder:text-sm"
                     required
                   />
                 </div>
@@ -570,45 +610,46 @@ export default function Register() {
               {/* City & Province */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1.5">
-                    City
+                  <label className="block text-xs text-left font-medium text-gray-500 mb-1.5 sm:text-sm">
+                    Kota
                   </label>
                   <input
                     type="text"
                     name="city"
                     value={formData.city}
                     onChange={handleChange}
-                    className="w-full p-2.5 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800 placeholder:text-gray-400"
-                    placeholder="Enter your city"
+                    placeholder="Masukkan kota Anda"
+                    className="text-sm w-full p-3 text-gray-800 bg-white border border-gray-200 rounded-lg shadow-sm sm:text-base focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-gray-400 placeholder:text-xs sm:placeholder:text-sm"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1.5">
-                    Province
+                  <label className="block text-xs text-left font-medium text-gray-500 mb-1.5 sm:text-sm">
+                    Provinsi
                   </label>
                   <input
                     type="text"
                     name="province"
                     value={formData.province}
                     onChange={handleChange}
-                    className="w-full p-2.5 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-800 placeholder:text-gray-400"
-                    placeholder="Enter your province"
+                    placeholder="Masukkan provinsi Anda"
+                    className="text-sm w-full p-3 text-gray-800 bg-white border border-gray-200 rounded-lg shadow-sm sm:text-base focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-gray-400 placeholder:text-xs sm:placeholder:text-sm"
                     required
                   />
                 </div>
               </div>
 
               {/* Get Location */}
-              <div className="flex items-center gap-4">
+              <div className="flex">
                 <button
                   type="button"
                   onClick={handleGetLocation}
-                  className="flex-1 p-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                  className="flex p-0 text-sm text-emerald-600 hover:text-emerald-500 focus:outline-none focus:ring-0"
                 >
-                  Get Current Location
+                  <MapPinIcon className="w-4 h-4 mr-2 sm:w-5 sm:h-5" />
+                  Dapatkan Lokasi Saat Ini
                 </button>
-                <div className="flex-1 text-center">
+                <div className="hidden flex-1 text-center">
                   {formData.coordinates && (
                     <span className="text-sm text-gray-800">
                       {`Lat: ${formData.coordinates.latitude.toFixed(2)}, Lng: ${formData.coordinates.longitude.toFixed(2)}`}
@@ -621,37 +662,37 @@ export default function Register() {
           <div className="flex justify-between">
             {step > 1 && (
               <button
-                type="button"
-                onClick={() => setStep(step - 1)}
-                className="px-4 py-2 text-sm font-medium text-white transition-colors bg-blue-600 rounded-lg hover:bg-blue-700"
+              type="button"
+              onClick={() => setStep(step - 1)}
+              className="text-sm font-semibold mr-auto px-10 py-3 text-gray-400 transition-colors rounded-lg shadow-sm border border-gray-200 hover:border-gray-400 hover:text-gray-500 focus:outline-none sm:text-base"
               >
-                Back
+              Kembali
               </button>
             )}
             {step < 2 && (
               <button
                 type="button"
                 onClick={handleNextStep}
-                className="px-4 py-2 text-sm font-medium text-white transition-colors rounded-lg bg-emerald-600 hover:bg-emerald-700"
+                className="text-sm font-semibold ml-auto px-10 py-3 text-white transition-colors rounded-lg shadow-sm bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-70 sm:text-base"
               >
-                Next
+                Lanjut
               </button>
             )}
             {step === 2 && (
               <button
                 type="submit"
                 disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-white transition-colors rounded-lg bg-emerald-600 hover:bg-emerald-700"
+                className="px-10 py-3 text-sm font-medium text-white transition-colors rounded-lg bg-emerald-600 hover:bg-emerald-700"
               >
-                {loading ? 'Creating Account...' : 'Create Account'}
+                {loading ? 'Membuat Akun...' : 'Buat Akun'}
               </button>
             )}
           </div>
         </form>
-        <p className="mt-4 text-sm text-center text-blue-600">
-          Already have an account?{' '}
-          <Link to="/login" className="font-medium text-emerald-600 hover:text-emerald-700">
-            Sign in
+        <p className="mt-6 text-xs text-center text-gray-700 sm:text-sm">
+          Sudah punya akun?{' '}
+          <Link to="/login" className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 sm:text-sm">
+            Masuk
           </Link>
         </p>
       </div>
