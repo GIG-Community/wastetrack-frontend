@@ -160,9 +160,12 @@ const HomePage = () => {
       {/* Hero Section */}
       <div className="relative p-4 sm:p-6 overflow-hidden text-white rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-700">
         <div className="relative z-10">
-        <h1 className="mb-2 text-left sm:text-center text-lg sm:text-2xl font-thin">
-          Selamat datang kembali, <span className="font-semibold">{userData?.profile?.fullName || 'Pengguna'}</span>!
+        <h1 className="text-left sm:text-center text-sm sm:text-2xl font-thin">
+          Selamat datang kembali,
         </h1>
+        <p className="mb-4 text-left sm:text-center text-lg sm:text-2xl font-semibold">
+          {userData?.profile?.fullName || 'Pengguna'}
+        </p>
           {/* <p className="mb-4 text-xs text-left sm:text-sm sm:text-center text-emerald-200">
             Perjalanan ramah lingkungan Anda berlanjut di sini
           </p> */}
@@ -274,10 +277,10 @@ const HomePage = () => {
                   </div>
                   <div>
                     <p className="text-sm text-left font-medium text-gray-800">
-                      {pickup.wastes ? 
-                        Object.values(pickup.wastes).reduce((total, waste) => 
-                          total + Math.ceil((waste.weight || 0) / 5), 0)
-                        : pickup.quantity || 0} kantong 
+                      {pickup.wasteQuantities ? 
+                        Object.values(pickup.wasteQuantities).reduce((total, qty) => total + qty, 0)
+                        : pickup.quantity || 0} kantong
+
                         {/* • {
                         pickup.wastes ? 
                           Object.keys(pickup.wastes).join(', ') :
@@ -322,7 +325,7 @@ const HomePage = () => {
               onClick={handleViewAllPickups}
               className="bg-transparent text-xs text-emerald-600 hover:text-emerald-700 inline-flex items-center"
             >
-              Lihat selengkapnya ({recentPickups.length - 3})
+              Lihat selengkapnya ({recentPickups.length})
             </button>
           </div>
         )}
