@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { collection, addDoc, Timestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
+import Swal from 'sweetalert2';
 
 const SchedulePickup = () => {
   const { userData, currentUser } = useAuth();
@@ -281,14 +282,31 @@ const SchedulePickup = () => {
 
   // Handle waste quantity change
   const handleQuantityChange = (typeId, change) => {
-    setFormData(prev => ({
-      ...prev,
-      wasteQuantities: {
-        ...prev.wasteQuantities,
-        [typeId]: Math.max(0, Math.min(10, (prev.wasteQuantities[typeId] || 0) + change))
+    setFormData(prev => {
+      const currentQuantity = prev.wasteQuantities[typeId] || 0;
+      const newQuantity = Math.max(0, Math.min(10, currentQuantity + change));
+  
+      // Copy existing waste types and quantities
+      const updatedWasteTypes = [...prev.wasteTypes];
+      const updatedWasteQuantities = { ...prev.wasteQuantities };
+  
+      if (newQuantity === 0) {
+        // Delete waste type if quantity is 0
+        const index = updatedWasteTypes.indexOf(typeId);
+        if (index > -1) updatedWasteTypes.splice(index, 1);
+        delete updatedWasteQuantities[typeId];
+      } else {
+        // Still keep the waste type in the list
+        updatedWasteQuantities[typeId] = newQuantity;
       }
-    }));
-  };
+  
+      return {
+        ...prev,
+        wasteTypes: updatedWasteTypes,
+        wasteQuantities: updatedWasteQuantities
+      };
+    });
+  };  
 
   // Calculate total amount
   const calculateTotal = () => {
@@ -372,23 +390,62 @@ const SchedulePickup = () => {
     return null;
   };
 
+  // Handle success message
+  useEffect(() => {
+    if (success) {
+      Swal.fire({
+        icon: 'success',
+        title: 'Jadwal Berhasil Dibuat!',
+        text: 'Penjemputan sampah Anda telah berhasil dijadwalkan.',
+        confirmButtonColor: '#10B981',
+        confirmButtonText: 'Yeay!',
+        customClass: {
+          popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+          title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+          htmlContainer: 'text-sm sm:text-base text-gray-600',
+          confirmButton: 'text-sm sm:text-base'
+        },
+        // Mencegah perubahan padding pada body
+        padding: '1em',
+        heightAuto: false,
+        scrollbarPadding: false
+      }).then(() => {
+        setSuccess(false);
+        setFormData({
+          deliveryType: '',
+          date: '',
+          time: '',
+          wasteTypes: [],
+          wasteQuantities: {},
+          location: userData?.profile?.address || '',
+          phone: '',
+          coordinates: null,
+          wasteBankId: '',
+          wasteBankName: '',
+          notes: '',
+        });
+      });
+    }
+  }, [success]);
+  
+
   return (
-    <div className="max-w-3xl p-3 mx-auto sm:p-6">
-      <div className="p-8 mb-8 text-white bg-gradient-to-r from-emerald-500 to-emerald-700 rounded-2xl">
-        <h1 className="mb-2 text-3xl font-bold">Jadwalkan Penjemputan Sampah</h1>
-        <p className="text-emerald-50">Mari kami bantu mengelola sampah Anda secara berkelanjutan</p>
+    <div className="max-w-3xl mx-auto">
+      <div className="p-4 mb-8 text-white bg-gradient-to-r from-emerald-500 to-emerald-700 rounded-2xl">
+        <h1 className="mb-2 text-lg sm:text-2xl font-bold">Setor Sampah</h1>
+        <p className="text-sm sm:text-md text-emerald-50">Mari kami bantu mengelola sampah Anda secara berkelanjutan</p>
       </div>
 
       {/* Steps indicator with progress bar */}
-      <div className="mb-8">
+      <div>
         {/* Progress bar */}
-        <div className="relative mb-4">
-          <div className="w-full h-2 bg-gray-200 rounded-full">
+        <div className="relative mb-8">
+          <div className="w-full h-1 sm:h-2 bg-gray-200 rounded-full">
             <div
-              className="h-2 transition-all duration-300 rounded-full bg-emerald-500"
+              className="h-1 sm:h-2 transition-all duration-300 rounded-full bg-emerald-500"
               style={{
-                width: `${(step / (formData.deliveryType === 'pickup' ? 6 : 4)) * 100}%`
-              }}
+                width: `${((step - 1) / ((formData.deliveryType === 'pickup' ? 6 : 4) - 1)) * 100}%`
+              }}              
             />
           </div>
           <div className="absolute left-0 flex justify-between w-full -top-2">
@@ -397,11 +454,14 @@ const SchedulePickup = () => {
               .map((text, index) => (
                 <div
                   key={text}
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-sm
+                  className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-sm
                     transition-all duration-300 -ml-3 first:ml-0 last:ml-0
                     ${step > index + 1 ? 'bg-emerald-500 text-white' :
                     step === index + 1 ? 'bg-emerald-500 text-white' :
                     'bg-gray-200 text-gray-500'}`}
+                    style={{
+                      left: `${(index / ((formData.deliveryType === 'pickup' ? 6 : 4) - 1)) * 100}%`
+                    }}                    
                 >
                   {step > index + 1 ? (
                     <Check className="w-4 h-4" />
@@ -414,7 +474,7 @@ const SchedulePickup = () => {
         </div>
 
         {/* Step labels */}
-        <div className="flex justify-between px-1 text-xs text-gray-600">
+        <div className="hidden flex justify-between px-1 text-[10px] text-gray-600">
           {['Pengiriman', 'Bank Sampah', 'Jadwal', 'Detail', 'Lokasi', 'Konfirmasi']
             .slice(0, formData.deliveryType === 'pickup' ? 6 : 4)
             .map((text) => (
@@ -425,9 +485,9 @@ const SchedulePickup = () => {
 
       {/* Error display */}
       {error && (
-        <div className="p-4 mb-6 border border-red-200 rounded-lg bg-red-50">
-          <div className="flex items-center gap-2 text-red-700">
-            <AlertCircle className="w-5 h-5" />
+        <div className="p-3 text-xs sm:text-xs text-left sm:p-4 sm:mb-6 border border-red-200 rounded-lg bg-red-50">
+          <div className="flex sm:items-center gap-2 text-red-700">
+            <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5" />
             <p className="font-medium">{error}</p>
           </div>
         </div>
@@ -437,17 +497,17 @@ const SchedulePickup = () => {
         {/* Step 1: Delivery Type Selection */}
         {step === 1 && (
           <div className="space-y-6">
-            <div className="overflow-hidden bg-white shadow-lg rounded-xl">
-              <div className="p-6 border-b border-gray-100">
-                <h2 className="text-xl font-semibold text-gray-800">Pilih Tipe Pengiriman</h2>
+            <div className="overflow-hidden sm:bg-white shadow-xs sm:shadow-lg rounded-xl">
+              <div className="py-4 sm:p-6 border-b border-gray-100">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Pilih Tipe Pengiriman</h2>
                 <p className="mt-1 text-sm text-gray-500">Pilih cara Anda ingin menangani sampah Anda</p>
               </div>
-              <div className="p-6">
+              <div className="sm:p-6">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => setFormData({ ...formData, deliveryType: 'pickup' })}
-                    className={`p-6 rounded-lg border-2 transition-all text-left
+                    className={`p-4 rounded-lg border-2 transition-all
                       ${formData.deliveryType === 'pickup'
                         ? 'border-emerald-500 bg-emerald-50'
                         : 'border-gray-200 hover:border-emerald-200'
@@ -456,47 +516,50 @@ const SchedulePickup = () => {
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2">
-                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
-                            <Truck className="w-6 h-6 text-emerald-600" />
+                          <div className="flex items-center rounded-md justify-center w-8 h-8 sm:rounded-lg bg-emerald-100">
+                            <Truck className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
                           </div>
-                          <h3 className="font-medium text-gray-900">Jasa Penjemputan</h3>
+                          <h3 className="text-sm sm:text-lg text-gray-900">Jasa Penjemputan</h3>
                         </div>
-                        <p className="mt-2 text-sm text-gray-500">Kami akan menjemput sampah Anda dari lokasi Anda</p>
-                        <p className="mt-2 text-sm font-medium text-emerald-600">Biaya layanan berlaku</p>
+                        <p className="mt-2 text-xs sm:text-sm text-left text-gray-500">Penjemputan sampah ke lokasi Anda</p>
+                        <p className="text-xs sm:text-sm text-left font-semibold text-emerald-600">Biaya layanan berlaku</p>
                       </div>
                       {formData.deliveryType === 'pickup' && (
-                        <div className="p-1 text-white rounded-full bg-emerald-500">
-                          <Check className="w-4 h-4" />
+                        <div className="hidden p-1 text-white rounded-full bg-emerald-500">
+                          <Check className="w-3 h-3 sm:w-4 sm:h-4" />
                         </div>
                       )}
                     </div>
                   </button>
-
-                  <div className={`p-6 rounded-lg border-2 transition-all
-                    ${formData.deliveryType === 'self-delivery'
-                      ? 'border-emerald-500 bg-emerald-50'
-                      : 'border-gray-200 hover:border-emerald-200'
-                    }`}
-                  >
+                  
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, deliveryType: 'self-delivery' })}
+                    className={`p-4 rounded-lg border-2 transition-all
+                      ${formData.deliveryType === 'self-delivery'
+                        ? 'border-emerald-500 bg-emerald-50'
+                        : 'border-gray-200 hover:border-emerald-200'
+                      }`}
+                  > 
                     <div className="flex items-start justify-between">
                       <div className="w-full">
                         <div className="flex items-center gap-2 cursor-pointer"
-                             onClick={() => setFormData({ ...formData, deliveryType: 'self-delivery' })}>
-                          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
-                            <Package className="w-6 h-6 text-emerald-600" />
+                            onClick={() => setFormData({ ...formData, deliveryType: 'self-delivery' })}>
+                          <div className="flex items-center rounded-md justify-center w-8 h-8 sm:rounded-lg bg-emerald-100">
+                            <Package className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
                           </div>
-                          <h3 className="font-medium text-gray-900">Antar Sendiri</h3>
+                          <h3 className="text-sm sm:text-lg font-medium text-gray-900">Antar Mandiri</h3>
                         </div>
-                        <p className="mt-2 text-sm text-gray-500">Antar sampah ke bank sampah sendiri</p>
-                        <p className="mt-2 text-sm font-medium text-emerald-600">Tanpa biaya layanan</p>
+                        <p className="mt-2 text-xs sm:text-sm text-left text-gray-500">Antar sampah ke bank sampah</p>
+                        <p className="text-xs sm:text-sm text-left font-semibold text-emerald-600">Tanpa biaya layanan</p>
                       </div>
                       {formData.deliveryType === 'self-delivery' && (
-                        <div className="p-1 text-white rounded-full bg-emerald-500">
-                          <Check className="w-4 h-4" />
+                        <div className="hidden p-1 text-white rounded-full bg-emerald-500">
+                          <Check className="w-3 h-3 sm:w-4 sm:h-4" />
                         </div>
                       )}
                     </div>
-                  </div>
+                  </button>
                 </div>
               </div>
             </div>
@@ -506,14 +569,14 @@ const SchedulePickup = () => {
         {/* Step 2: WasteBank Selection */}
         {step === 2 && (
           <div className="space-y-6">
-            <div className="overflow-hidden bg-white shadow-lg rounded-xl">
-              <div className="p-6 border-b border-gray-100">
+            <div className="overflow-hidden sm:bg-white sm:shadow-lg rounded-xl">
+              <div className="py-4 sm:p-6 border-b border-gray-100">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-emerald-100">
+                  <div className="hidden sm:p-2 sm:rounded-lg sm:bg-emerald-100">
                     <Recycle className="w-5 h-5 text-emerald-600" />
                   </div>
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-800">Pilih Bank Sampah</h2>
+                  <div className="">
+                    <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Pilih Bank Sampah</h2>
                     <p className="mt-1 text-sm text-gray-500">Pilih bank sampah yang akan mengelola sampah Anda</p>
                   </div>
                 </div>
@@ -524,12 +587,12 @@ const SchedulePickup = () => {
                   <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
                 </div>
               ) : (
-                <div className="divide-y divide-gray-100">
+                <div className="divide-y pt-4 border-b border-gray-300 divide-gray-300">
                   {wasteBanks.map((bank) => (
                     <label
                       key={bank.id}
-                      className={`group flex items-start p-6 cursor-pointer hover:bg-emerald-50/50 transition-all duration-300
-                        ${formData.wasteBankId === bank.id ? 'bg-emerald-50/80' : ''}`}
+                      className={`group flex items-start sm:p-6 cursor-pointer hover:bg-emerald-100/60 transition-all duration-300
+                        ${formData.wasteBankId === bank.id ? 'sm:bg-emerald-200' : ''}`}
                     >
                       <input
                         type="radio"
@@ -542,57 +605,61 @@ const SchedulePickup = () => {
                           wasteBankName: bank.profile?.institution || 'Unnamed WasteBank'
                         })}
                       />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
+                      <div className="flex-1 p-2">
+                        <div className="items-center text-left justify-between">
                           <div className="flex items-start gap-4">
-                            <div className={`p-3 rounded-xl transition-colors duration-300
+                            <div className={`hidden p-3 rounded-xl transition-colors duration-300
                               ${formData.wasteBankId === bank.id ? 'bg-emerald-100' : 'bg-gray-100 group-hover:bg-emerald-100'}`}
                             >
-                              <Building2 className={`w-6 h-6 transition-colors duration-300
+                              <Building2 className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors duration-300
                                 ${formData.wasteBankId === bank.id ? 'text-emerald-600' : 'text-gray-600 group-hover:text-emerald-600'}`} 
                               />
                             </div>
                             <div>
-                              <h3 className="font-medium text-gray-900 transition-colors duration-300 group-hover:text-emerald-700">
+                              <h3 className="text-sm font-medium text-gray-900 transition-colors duration-300 group-hover:text-emerald-700">
                                 {bank.profile?.institution || 'Unnamed WasteBank'}
                               </h3>
                               <div className="flex items-center gap-2 mt-1">
-                                <MapPin className="w-4 h-4 text-gray-400" />
-                                <p className="text-sm text-gray-500">
+                                <MapPin className="hidden w-4 h-4 text-gray-400" />
+                                <p className="text-xs text-gray-500">
                                   {bank.profile?.location?.address || 'No address provided'}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-4 mt-2">
+                              <div className="items-center gap-4 mt-2">
                                 {bank.distance !== null && (
                                   <div className="flex items-center text-sm text-gray-600">
                                     <Navigation className="w-4 h-4 mr-1 text-blue-500" />
                                     <span>{bank.distance.toFixed(1)} km</span>
                                   </div>
                                 )}
-                                <div className="flex items-center text-sm text-gray-600">
-                                  <Trees className="w-4 h-4 mr-1 text-emerald-500" />
-                                  <span>Ramah Lingkungan</span>
-                                </div>
-                                <div className="flex items-center text-sm text-gray-600">
-                                  <Timer className="w-4 h-4 mr-1 text-blue-500" />
-                                  <span>Layanan Cepat</span>
-                                </div>
-                                {bank.profile?.phone && (
-                                  <div className="flex items-center text-sm text-gray-600">
-                                    <Phone className="w-4 h-4 mr-1 text-gray-400" />
-                                    {bank.profile.phone}
+                                <div className="flex gap-2">
+                                  <div className="flex items-center px-3 text-[8px] sm:text-sm text-emerald-700 bg-emerald-100 rounded-full">
+                                    <Trees className="w-3 h-3 sm:w-4 sm:h-4 mr-1 text-emerald-500" />
+                                    <span>Ramah Lingkungan</span>
                                   </div>
-                                )}
+                                  <div className="flex items-center px-3 text-[8px] sm:text-sm text-blue-700 bg-blue-100 rounded-full">
+                                    <Timer className="w-3 h-3 sm:w-4 sm:h-4 mr-1 text-blue-500" />
+                                    <span>Layanan Cepat</span>
+                                  </div>
+                                </div>
+                                <div> 
+                                  {bank.profile?.phone && (
+                                    <div className="mt-4 flex items-center text-sm text-gray-600">
+                                      <Phone className="w-4 h-4 mr-1 text-gray-400" />
+                                      {bank.profile.phone}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex items-center gap-1 mt-2">
+                              <div className="hidden flex items-center gap-1 mt-2">
                                 <Trophy className="w-4 h-4 text-amber-500" />
                                 <span className="text-xs text-gray-500">Verified Waste Bank</span>
                               </div>
                             </div>
                           </div>
                           {formData.wasteBankId === bank.id && (
-                            <div className="bg-emerald-500 text-white rounded-full p-1.5 shadow-lg shadow-emerald-100">
-                              <Check className="w-5 h-5" />
+                            <div className="hidden mt-4 bg-emerald-500 text-white rounded-full p-[2px] sm:shadow-lg sm:shadow-emerald-100">
+                              <Check className="hidden w-3 h-3 sm:w-5 sm:h-5" />
                             </div>
                           )}
                         </div>
@@ -609,36 +676,40 @@ const SchedulePickup = () => {
         {step === 3 && (
           <div className="space-y-6">
             {/* Date selection */}
-            <div className="overflow-hidden bg-white shadow-lg rounded-xl">
-              <div className="p-6 border-b border-gray-100">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-emerald-500" />
-                  <h2 className="text-xl font-semibold text-gray-800">Pilih Tanggal</h2>
+            <div className="overflow-hidden sm:bg-white sm:shadow-lg rounded-xl">
+              <div className="py-4 sm:p-6 border-b border-gray-100">
+                <div className="flex sm:items-center gap-2">
+                  <Calendar className="w-7 h-7 text-emerald-500" />
+                  <div className="text-left">
+                    <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Pilih Tanggal</h2>
+                    <p className="mt-1 text-sm text-gray-500">Pilih tanggal penjemputan yang Anda inginkan</p>
+                  </div>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">Pilih tanggal penjemputan yang Anda inginkan</p>
               </div>
-              <div className="p-6">
-                <input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  required
-                />
+              <div className="pb-6 sm:p-6">
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                min={new Date().toISOString().split('T')[0]}
+                className="w-full p-3 border border-gray-200 bg-white rounded-lg text-sm"
+                required
+              />
               </div>
             </div>
 
             {/* Time selection */}
-            <div className="overflow-hidden bg-white shadow-lg rounded-xl">
-              <div className="p-6 border-b border-gray-100">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-emerald-500" />
-                  <h2 className="text-xl font-semibold text-gray-800">Pilih Waktu</h2>
+            <div className="overflow-hidden sm:bg-white sm:shadow-lg rounded-xl">
+              <div className="pb-4 sm:p-6 border-b border-gray-100">
+                <div className="flex sm:items-center gap-2">
+                  <Clock className="w-7 h-7 text-emerald-500" />
+                  <div className="text-left">
+                    <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Pilih Waktu</h2>
+                    <p className="mt-1 text-sm text-gray-500">Pilih waktu penjemputan yang Anda inginkan</p>
+                  </div>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">Pilih rentang waktu penjemputan yang Anda inginkan</p>
               </div>
-              <div className="p-6">
+              <div className="sm:p-6">
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {timeSlots.map(({ time, available }) => (
                     <button
@@ -646,12 +717,12 @@ const SchedulePickup = () => {
                       type="button"
                       disabled={!available}
                       onClick={() => setFormData({ ...formData, time })}
-                      className={`p-3 rounded-lg text-sm font-medium transition-colors
+                      className={`p-3 text-xs rounded-md sm:text-sm font-medium transition-colors 
                         ${formData.time === time
                           ? 'bg-emerald-500 text-white'
                           : available
-                            ? 'bg-gray-100 hover:bg-emerald-100 text-gray-700'
-                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            ? 'bg-white hover:bg-emerald-100 text-gray-700'
+                            : 'bg-white text-gray-400 cursor-not-allowed'
                         }`}
                     >
                       {time}
@@ -666,36 +737,118 @@ const SchedulePickup = () => {
         {/* Step 4: Waste Details */}
         {step === 4 && (
           <div className="space-y-6">
-            <div className="overflow-hidden bg-white shadow-lg rounded-xl">
-              <div className="p-6 border-b border-gray-100">
-                <div className="flex items-center gap-2">
-                  <Trash2 className="w-5 h-5 text-emerald-500" />
-                  <h2 className="text-xl font-semibold text-gray-800">Pilih Jenis Sampah</h2>
+            <div className="overflow-hidden sm:bg-white sm:shadow-lg rounded-xl">
+              <div className="py-4 sm:p-6 border-b border-gray-100">
+                <div className="text-center">
+                  {/* <Trash2 className="w-5 h-5 text-emerald-500" /> */}
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Pilih Jenis Sampah</h2>
                 </div>
                 <p className="mt-1 text-sm text-gray-500">Pilih jenis sampah yang akan disetorkan</p>
               </div>
-              <div className="p-6">
+              <div className="sm:p-6">
                 <div className="space-y-6">
                   {wasteTypes.map(category => (
-                    <div key={category.id} className="overflow-hidden border border-gray-200 rounded-lg">
+                    <div key={category.id} className="overflow-hidden border bg-gray-50 border-gray-200 rounded-lg">
                       <div className="flex items-center justify-between p-4 bg-gray-50">
-                        <h3 className="text-lg font-medium text-gray-900">{category.name}</h3>
+                        <h3 className="text-md sm:text-lg font-medium text-gray-900">{category.name}</h3>
                       </div>
-                      <div className="p-4">
+                      <div className="p-2">
                         {category.subcategories ? (
                           // For categories with subcategories (like plastic)
                           <div className="space-y-4">
                             {category.subcategories.map((subcat, idx) => (
                               <div key={idx} className="space-y-2">
-                                <h4 className="font-medium text-gray-700">{subcat.name}</h4>
+                                <h4 className="text-md font-medium text-gray-700">{subcat.name}</h4>
                                 <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
-                                  {subcat.types.map(type => (
-                                    <label key={type.id} className="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+                                {subcat.types.map(type => {
+                                  const isChecked = formData.wasteTypes.includes(type.id);
+                                  const quantity = formData.wasteQuantities[type.id] || 0;
+
+                                  return (
+                                    <div key={type.id} className="space-y-1">
+                                      <label className="flex items-center justify-between p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+                                        <div className="flex items-center">
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={() => {
+                                              const newTypes = isChecked
+                                                ? formData.wasteTypes.filter(t => t !== type.id)
+                                                : [...formData.wasteTypes, type.id];
+                                              setFormData(prev => ({
+                                                ...prev,
+                                                wasteTypes: newTypes,
+                                                wasteQuantities: {
+                                                  ...prev.wasteQuantities,
+                                                  [type.id]: newTypes.includes(type.id) ? 1 : 0
+                                                }
+                                              }));
+                                            }}
+                                            className="w-3 h-3 sm:w-4 sm:h-4 border-gray-300 rounded text-emerald-500 focus:ring-emerald-500"
+                                          />
+                                          <span className="ml-2 text-sm text-gray-700">{type.name}</span>
+                                        </div>
+                                      </label>
+
+                                      {isChecked && (
+                                        <div className="flex items-center justify-between px-3 py-2 bg-white rounded-md sm:shadow-sm border">
+                                          <div className="flex items-center gap-3">
+                                            <div className="flex items-center">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleQuantityChange(type.id, -1)}
+                                                disabled={quantity <= 0}
+                                                className={`p-2 rounded-l-md ${
+                                                  quantity <= 0
+                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
+                                                }`}
+                                              >
+                                                <Minus className="w-3 h-3 sm:w-5 sm:h-5" strokeWidth={2.5} />
+                                              </button>
+                                              <div className="w-12 h-[32px] border-y bg-white flex items-center justify-center text-sm sm:text-base font-semibold text-gray-800">
+                                                {quantity}
+                                              </div>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleQuantityChange(type.id, 1)}
+                                                disabled={quantity >= 10}
+                                                className={`p-2 rounded-r-md ${
+                                                  quantity >= 10
+                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
+                                                }`}
+                                              >
+                                                <Plus className="w-3 h-3 sm:w-5 sm:h-5" strokeWidth={2.5} />
+                                              </button>
+                                            </div>
+                                            <span className="text-xs sm:text-sm font-medium text-gray-500 min-w-[60px]">kantong</span>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          // For categories without subcategories
+                          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
+                            {category.types.map(type => {
+                              const isChecked = formData.wasteTypes.includes(type.id);
+                              const quantity = formData.wasteQuantities[type.id] || 0;
+
+                              return (
+                                <div key={type.id} className="space-y-1">
+                                  <label className="flex items-center justify-between p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+                                    <div className="flex items-center">
                                       <input
                                         type="checkbox"
-                                        checked={formData.wasteTypes.includes(type.id)}
+                                        checked={isChecked}
                                         onChange={() => {
-                                          const newTypes = formData.wasteTypes.includes(type.id)
+                                          const newTypes = isChecked
                                             ? formData.wasteTypes.filter(t => t !== type.id)
                                             : [...formData.wasteTypes, type.id];
                                           setFormData(prev => ({
@@ -707,116 +860,53 @@ const SchedulePickup = () => {
                                             }
                                           }));
                                         }}
-                                        className="w-4 h-4 border-gray-300 rounded text-emerald-500 focus:ring-emerald-500"
+                                        className="w-3 h-3 sm:w-4 sm:h-4 border-gray-300 rounded text-emerald-500 focus:ring-emerald-500"
                                       />
                                       <span className="ml-2 text-sm text-gray-700">{type.name}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          // For categories without subcategories
-                          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
-                            {category.types.map(type => (
-                              <label key={type.id} className="flex items-center p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-                                <input
-                                  type="checkbox"
-                                  checked={formData.wasteTypes.includes(type.id)}
-                                  onChange={() => {
-                                    const newTypes = formData.wasteTypes.includes(type.id)
-                                      ? formData.wasteTypes.filter(t => t !== type.id)
-                                      : [...formData.wasteTypes, type.id];
-                                    setFormData(prev => ({
-                                      ...prev,
-                                      wasteTypes: newTypes,
-                                      wasteQuantities: {
-                                        ...prev.wasteQuantities,
-                                        [type.id]: newTypes.includes(type.id) ? 1 : 0
-                                      }
-                                    }));
-                                  }}
-                                  className="w-4 h-4 border-gray-300 rounded text-emerald-500 focus:ring-emerald-500"
-                                />
-                                <span className="ml-2 text-sm text-gray-700">{type.name}</span>
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                        
-                        {/* Quantity inputs for selected types */}
-                        <div className="mt-4 space-y-2">
-                          {formData.wasteTypes
-                            .filter(typeId => {
-                              // Find the type in the current category
-                              const found = category.subcategories
-                                ? category.subcategories.some(subcat =>
-                                    subcat.types.some(type => type.id === typeId)
-                                  )
-                                : category.types.some(type => type.id === typeId);
-                              return found;
-                            })
-                            .map(typeId => {
-                              // Find the type details
-                              let typeName = '';
-                              if (category.subcategories) {
-                                category.subcategories.forEach(subcat => {
-                                  const found = subcat.types.find(t => t.id === typeId);
-                                  if (found) typeName = found.name;
-                                });
-                              } else {
-                                const found = category.types.find(t => t.id === typeId);
-                                if (found) typeName = found.name;
-                              }
-
-                              const quantity = formData.wasteQuantities[typeId] || 0;
-
-                              return (
-                                <div key={typeId} className="flex items-center justify-between p-3 transition-shadow duration-200 bg-white rounded-lg shadow-sm hover:shadow-md">
-                                  <div className="flex-1">
-                                    <span className="text-sm font-medium text-gray-700">{typeName}</span>
-                                  </div>
-                                  <div className="flex items-center gap-3">
-                                    <div className="flex items-center">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleQuantityChange(typeId, -1)}
-                                        disabled={quantity <= 0}
-                                        className={`relative inline-flex items-center justify-center p-2 rounded-l-md
-                                          ${quantity <= 0
-                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                            : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
-                                          }
-                                          transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2`}
-                                      >
-                                        <span className="sr-only">Kurangi jumlah</span>
-                                        <Minus className="w-5 h-5" strokeWidth={2.5} />
-                                      </button>
-                                      <div className="flex items-center justify-center w-12 h-[42px] border-y bg-white text-base font-semibold text-gray-800">
-                                        {quantity}
-                                      </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleQuantityChange(typeId, 1)}
-                                        disabled={quantity >= 10}
-                                        className={`relative inline-flex items-center justify-center p-2 rounded-r-md
-                                          ${quantity >= 10
-                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                            : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
-                                          }
-                                          transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2`}
-                                      >
-                                        <span className="sr-only">Tambah jumlah</span>
-                                        <Plus className="w-5 h-5" strokeWidth={2.5} />
-                                      </button>
                                     </div>
-                                    <span className="text-sm font-medium text-gray-500 min-w-[60px]">kantong</span>
-                                  </div>
+                                  </label>
+
+                                  {isChecked && (
+                                    <div className="flex items-center justify-between px-3 py-2 bg-white rounded-md sm:shadow-sm border">
+                                      <div className="flex items-center gap-3">
+                                        <div className="flex items-center">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleQuantityChange(type.id, -1)}
+                                            disabled={quantity <= 0}
+                                            className={`p-2 rounded-l-md ${
+                                              quantity <= 0
+                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
+                                            }`}
+                                          >
+                                            <Minus className="w-3 h-3 sm:w-5 sm:h-5" strokeWidth={2.5} />
+                                          </button>
+                                          <div className="w-12 h-[32px] border-y bg-white flex items-center justify-center text-sm sm:text-base font-semibold text-gray-800">
+                                            {quantity}
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleQuantityChange(type.id, 1)}
+                                            disabled={quantity >= 10}
+                                            className={`p-2 rounded-r-md ${
+                                              quantity >= 10
+                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
+                                            }`}
+                                          >
+                                            <Plus className="w-3 h-3 sm:w-5 sm:h-5" strokeWidth={2.5} />
+                                          </button>
+                                        </div>
+                                        <span className="text-xs sm:text-sm font-medium text-gray-500 min-w-[60px]">kantong</span>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -829,28 +919,28 @@ const SchedulePickup = () => {
         {/* Step 5: Location - Only show for pickup service */}
         {formData.deliveryType === 'pickup' && step === 5 && (
           <div className="space-y-6">
-            <div className="overflow-hidden bg-white shadow-lg rounded-xl">
-              <div className="p-6 border-b border-gray-100">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-emerald-500" />
-                  <h2 className="text-xl font-semibold text-gray-800">Lokasi Penjemputan</h2>
+            <div className="overflow-hidden sm:bg-white sm:shadow-lg rounded-xl">
+              <div className="py-4 sm:p-6 border-b border-gray-100">
+                <div className="text-center">
+                  {/* <MapPin className="w-5 h-5 text-emerald-500" /> */}
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Lokasi Penjemputan</h2>
                 </div>
                 <p className="mt-1 text-sm text-gray-500">Di mana kami harus menjemput sampah Anda?</p>
               </div>
-              <div className="p-6 space-y-4">
+              <div className="sm:p-6 space-y-4">
                 <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
                   <textarea
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    rows="3"
+                    className="w-full p-3 border border-gray-200 rounded-lg placeholder:text-xs text-sm"
+                    rows="5"
                     placeholder="Masukkan alamat lengkap Anda"
                     required
                   />
                   <button
                     type="button"
                     onClick={getCurrentLocation}
-                    className="flex items-center flex-shrink-0 gap-2 px-4 py-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200"
+                    className="flex items-center flex-shrink-0 gap-2 px-4 py-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 text-sm"
                   >
                     {gettingLocation ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -865,8 +955,8 @@ const SchedulePickup = () => {
                   type="tel"
                   value={formData.phone}
                   onChange={handlePhoneChange}
-                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="Nomor telepon (contoh: 0812-3456-7890)"
+                  className="w-full p-3 border border-gray-200 rounded-lg placeholder:text-xs text-sm"
+                  placeholder="No. Telp. (contoh: 0812-3456-7890)"
                   pattern="[0-9]{4}-[0-9]{4}-[0-9]{4}"
                   required
                 />
@@ -874,7 +964,7 @@ const SchedulePickup = () => {
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full p-3 border border-gray-200 rounded-lg text-sm placeholder:text-xs"
                   rows="3"
                   placeholder="Catatan tambahan (contoh: 'Sampah berada dalam kantong hitam dekat garasi')"
                 />
@@ -885,21 +975,21 @@ const SchedulePickup = () => {
 
         {/* Step 5 (pickup) or Step 4 (self-delivery): Confirmation */}
         {((formData.deliveryType === 'pickup' && step === 6) || (formData.deliveryType === 'self-delivery' && step === 4)) && (
-          <div className="overflow-hidden bg-white shadow-lg rounded-xl">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-xl font-semibold text-gray-800">Tinjau {formData.deliveryType === 'pickup' ? 'Penjemputan' : 'Pengantaran'} Anda</h2>
+          <div className="overflow-hidden sm:bg-white sm:shadow-lg rounded-xl">
+            <div className="py-4 sm:p-6 border-b border-gray-100">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Tinjau {formData.deliveryType === 'pickup' ? 'Penjemputan' : 'Pengantaran'} Anda</h2>
               <p className="mt-1 text-sm text-gray-500">Harap konfirmasi detail informasi Anda</p>
             </div>
             
-            <div className="p-6 space-y-6">
+            <div className="sm:p-6 text-left space-y-6">
               {/* WasteBank Info */}
               <div className="flex items-start gap-4">
-                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
-                  <Building2 className="w-5 h-5 text-emerald-600" />
+                <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-emerald-100">
+                  <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">Bank Sampah Terpilih</p>
-                  <p className="font-medium text-gray-900">{formData.wasteBankName}</p>
+                  <p className="text-sm font-medium text-gray-500">Bank Sampah</p>
+                  <p className="text-sm font-semibold text-gray-900">{formData.wasteBankName}</p>
                   {formData.deliveryType === 'self-delivery' && (
                     <>
                       <p className="mt-2 text-sm text-gray-500">
@@ -914,8 +1004,8 @@ const SchedulePickup = () => {
                           type="tel"
                           value={formData.phone}
                           onChange={handlePhoneChange}
-                          className="w-full p-3 mt-1 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                          placeholder="Nomor telepon (contoh: 0812-3456-7890)"
+                          className="w-full p-3 mt-1 border border-gray-200 rounded-lg placeholder:text-xs text-sm"
+                          placeholder="No. Telp. (contoh: 0812-3456-7890)"
                           pattern="[0-9]{4}-[0-9]{4}-[0-9]{4}"
                           required
                         />
@@ -927,32 +1017,36 @@ const SchedulePickup = () => {
 
               {/* Schedule Info */}
               <div className="flex items-start gap-4">
-                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
-                  <Calendar className="w-5 h-5 text-emerald-600" />
+                <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-emerald-100">
+                  <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Jadwal</p>
-                  <p className="text-gray-900">
+                  <p className="text-gray-900 text-sm font-semibold">
+                  <span>
                     {new Date(formData.date).toLocaleDateString('id-ID', {
                       weekday: 'long',
                       year: 'numeric',
                       month: 'long',
                       day: 'numeric'
                     })}
-                    {' pukul '}
+                  </span>
+                  <br />
+                  <span>
                     {formData.time}
-                  </p>
+                  </span>
+                </p>
                 </div>
               </div>
 
               {/* Waste Info */}
               <div className="flex items-start gap-4">
-                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
-                  <Package className="w-5 h-5 text-emerald-600" />
+                <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-emerald-100">
+                  <Package className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-500">Detail Sampah</p>
-                  <div className="mt-2 space-y-2">
+                  <div className="text-sm font-semibold sm:mt-2 sm:space-y-2">
                     {formData.wasteTypes.map(typeId => {
                       const waste = getWasteDetails(typeId);
                       const quantity = formData.wasteQuantities[typeId] || 0;
@@ -971,22 +1065,22 @@ const SchedulePickup = () => {
               {/* Location Info with Notes - Only for pickup */}
               {formData.deliveryType === 'pickup' && (
                 <div className="flex items-start gap-4">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
-                    <MapPin className="w-5 h-5 text-emerald-600" />
+                  <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-emerald-100">
+                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-medium text-gray-500">Lokasi Penjemputan</p>
-                    <p className="text-gray-900">{formData.location}</p>
+                    <p className="text-gray-900 text-sm font-semibold">{formData.location}</p>
                     {formData.phone && (
                       <>
                         <p className="mt-2 text-sm font-medium text-gray-500">Nomor Telepon</p>
-                        <p className="text-gray-700">{formData.phone}</p>
+                        <p className="text-gray-700 text-sm font-semibold">{formData.phone}</p>
                       </>
                     )}
                     {formData.notes && (
                       <>
                         <p className="mt-2 text-sm font-medium text-gray-500">Catatan Tambahan</p>
-                        <p className="text-gray-700">{formData.notes}</p>
+                        <p className="text-gray-700 text-sm font-semibold">{formData.notes}</p>
                       </>
                     )}
                   </div>
@@ -1002,7 +1096,7 @@ const SchedulePickup = () => {
             <button
               type="button"
               onClick={() => setStep(step - 1)}
-              className="flex items-center gap-2 px-6 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              className="text-sm sm:text-base font-semibold flex items-center gap-2 px-6 py-3 shadow-sm text-gray-700 bg-gray-00 rounded-lg hover:bg-gray-200 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               Kembali
@@ -1057,10 +1151,10 @@ const SchedulePickup = () => {
                 setError('');
                 setStep(step + 1);
               }}
-              className="flex items-center gap-2 px-6 py-2 ml-auto text-white rounded-lg bg-emerald-500 hover:bg-emerald-600"
+              className="flex text-sm sm:text-base font-semibold items-center gap-2 px-6 py-3 shadow-sm ml-auto text-white rounded-lg bg-emerald-500 hover:bg-emerald-600"
             >
               Lanjut
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           )}
           
@@ -1068,7 +1162,7 @@ const SchedulePickup = () => {
             <button
               type="submit"
               disabled={loading}
-              className={`px-6 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 ml-auto
+              className={`text-sm sm:text-base px-6 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 ml-auto
                 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {loading ? (
@@ -1077,7 +1171,7 @@ const SchedulePickup = () => {
                   Memproses...
                 </span>
               ) : (
-                'Konfirmasi Jadwal'
+                'Konfirmasi'
               )}
             </button>
           )}
@@ -1085,7 +1179,7 @@ const SchedulePickup = () => {
       </form>
 
       {/* Success message */}
-      {success && (
+      {/* {success && (
         <div className="fixed inset-0 flex items-center justify-center p-4 bg-black bg-opacity-50">
           <div className="w-full max-w-md p-6 bg-white rounded-xl">
             <div className="flex items-center gap-4 mb-4">
@@ -1120,7 +1214,7 @@ const SchedulePickup = () => {
             </button>
           </div>
         </div>
-      )}
+      )} */}
     </div>
   );
 };
