@@ -40,8 +40,8 @@ const DetectWaste = () => {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: 'environment', // Always use back camera by default
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { ideal: 990 }, // Aslinya 1280
+          height: { ideal: 740 } // Aslinya 720
         },
         audio: false
       });
@@ -348,33 +348,34 @@ const DetectWaste = () => {
   };
 
   return (
-    <div className="max-w-xl p-4 pb-20 mx-auto">
+    <div className="max-w-xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Deteksi Sampah</h1>
-        <p className="mt-1 text-gray-600">
+        <h1 className="text-lg sm:text-2xl font-semibold sm:font-bold text-gray-800">Deteksi Sampah</h1>
+        <p className="mt-1 text-sm sm:text-lg text-gray-600">
           Arahkan kamera pada sampah untuk mengidentifikasi jenisnya menggunakan AI.
         </p>
       </div>
 
       {flashMessage && (
-        <div className={`fixed top-4 right-4 left-4 z-50 p-4 rounded-lg shadow-lg
+        <div className={`fixed top-20 right-4 left-4 z-50 p-3 text-left rounded-lg shadow-lg
           ${flashMessage.type === 'success' ? 'bg-emerald-500' : flashMessage.type === 'warning' ? 'bg-yellow-500' : 'bg-red-500'} 
           text-white flex items-center justify-between transition-opacity duration-300 ${flashMessage ? 'opacity-100' : 'opacity-0'}`}
         >
-          <span>{flashMessage.message}</span>
-          <button onClick={() => setFlashMessage(null)}>
+          <span className="text-xs sm:text-base">{flashMessage.message}</span>
+          {/* <button onClick={() => setFlashMessage(null)}
+            className="ml-3 flex-shrink-0">
             {flashMessage.type === 'success' ? (
               <Check className="w-5 h-5" />
             ) : (
               <X className="w-5 h-5" />
             )}
-          </button>
+          </button> */}
         </div>
       )}
 
-      <div className="relative bg-black rounded-2xl overflow-hidden mb-6 aspect-[4/3] border-4 border-emerald-500">
+      <div className="relative bg-black rounded-2xl overflow-hidden mb-6 aspect-[3/4] border-2 border-emerald-500">
         {capturedImage ? (
-           <img src={capturedImage} alt="Sampah terdeteksi" className="object-contain w-full h-full" />
+          <img src={capturedImage} alt="Sampah terdeteksi" className="object-contain w-full h-full" />
         ) : (
           <video
             ref={videoRef}
@@ -420,7 +421,7 @@ const DetectWaste = () => {
           <button
             onClick={detecting ? undefined : detectWaste}
             disabled={detecting || !isCameraActive || !stream}
-            className={`w-full py-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors text-lg shadow-md
+            className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 transition-colors text-sm sm:text-lg shadow-xs sm:shadow-md
               ${detecting || !isCameraActive || !stream
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
                 : 'bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700'
@@ -428,28 +429,28 @@ const DetectWaste = () => {
           >
             {detecting ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
                 Mendeteksi...
               </>
             ) : (
               <>
-                <Camera className="w-6 h-6" />
+                <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
                 Deteksi Sampah
               </>
             )}
           </button>
         ) : (
-           <button
+          <button
             onClick={resetDetection}
-            className="flex items-center justify-center w-full gap-2 py-4 text-lg font-medium transition-colors border-2 shadow-md text-emerald-700 border-emerald-300 rounded-xl hover:bg-emerald-50"
+            className="flex items-center justify-center w-full gap-2 py-3 font-medium transition-colors border-2 text-sm sm:text-lg shadow-xs sm:shadow-md text-emerald-700 border-emerald-300 sm:rounded-xl hover:bg-emerald-50"
           >
-             <RefreshCw className="w-5 h-5 text-emerald-600" />
+            <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
             Deteksi Sampah Lain
           </button>
         )}
       </div>
 
-      <div className="mb-6">
+      <div className="hidden mb-6">
         <button
           onClick={testGeminiApi}
           disabled={isTestingApi}
@@ -494,8 +495,8 @@ const DetectWaste = () => {
 
       {detectedWasteDetails && (
         <div className="space-y-4 animate-fade-in">
-          <div className={`${bgColor} p-6 rounded-xl shadow-md`}>
-            <div className="flex items-start gap-4">
+          <div className={`sm:${bgColor} sm:p-6 text-left rounded-xl sm:shadow-md`}>
+            <div className="flex items-center gap-4">
               <div className={`p-3 rounded-lg ${iconBgColor}`}>
                 {detectedWasteDetails.category === 'paper' && <Image className={`${iconTextColor} h-6 w-6`} />}
                 {detectedWasteDetails.category === 'plastic' && <Trash2 className={`${iconTextColor} h-6 w-6`} />}
@@ -506,14 +507,14 @@ const DetectWaste = () => {
                 {detectedWasteDetails.category === 'unknown' && <HelpCircle className={`${iconTextColor} h-6 w-6`} />}
               </div>
               <div className="flex-1">
-                <h3 className={`text-lg font-semibold ${textColor}`}>
+                <h3 className={`text-md sm:text-lg font-semibold ${textColor}`}>
                   {detectedWasteDetails.id === 'unknown' ? 'Sampah Tidak Dikenali' : `${detectedWasteDetails.name}`}
                 </h3>
-                <p className="mt-1 text-gray-600 capitalize">
+                <p className="text-xs text-gray-600 capitalize">
                   Kategori: {translateCategory(detectedWasteDetails.category)}
                 </p>
                 {detectedWasteDetails.confidence > 0 && detectedWasteDetails.id !== 'unknown' && (
-                  <p className="mt-1 text-gray-600">
+                  <p className="text-xs text-gray-600">
                     Tingkat keyakinan: {Math.round(detectedWasteDetails.confidence * 100)}%
                   </p>
                 )}
@@ -522,15 +523,15 @@ const DetectWaste = () => {
 
             <div className="pt-4 mt-4 space-y-4 border-t">
               <div className="flex items-center gap-2">
-                <DollarSign className={`h-5 w-5 flex-shrink-0 ${checkTextColor}`} />
-                <span>Nilai estimasi: <strong>Rp {detectedWasteDetails.price?.toLocaleString('id-ID') || 0} / kg</strong></span>
+                <DollarSign className={`w-4 h-4 sm:h-5 sm:w-5 flex-shrink-0 ${checkTextColor}`} />
+                <span className="text-sm">Nilai estimasi: <strong>Rp {detectedWasteDetails.price?.toLocaleString('id-ID') || 0} / kg</strong></span>
               </div>
               
               {detectedWasteDetails.bagColor && (
                 <div className="flex items-center gap-2">
-                  <ShoppingBag className={`h-5 w-5 flex-shrink-0 ${checkTextColor}`} />
+                  <ShoppingBag className={`w-4 h-4sm:h-5 sm:w-5 flex-shrink-0 ${checkTextColor}`} />
                   <div className="flex flex-wrap items-center gap-2">
-                    <span>Kantong sampah:</span>
+                    <span className="text-sm">Kantong sampah:</span>
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${getBagColorClass(detectedWasteDetails.bagColor)}`}>
                       {detectedWasteDetails.bagColor.charAt(0).toUpperCase() + detectedWasteDetails.bagColor.slice(1)}
                     </span>
@@ -539,7 +540,7 @@ const DetectWaste = () => {
               )}
 
               {detectedWasteDetails.description && (
-                <div className="p-3 bg-white bg-opacity-50 rounded-lg">
+                <div className="p-2 sm:bg-white bg-opacity-50 rounded-lg">
                   <div className="flex items-start gap-2">
                     <Info className={`h-5 w-5 mt-0.5 flex-shrink-0 ${checkTextColor}`} />
                     <div>
@@ -551,12 +552,12 @@ const DetectWaste = () => {
               )}
               
               {detectedWasteDetails.recommendations && (
-                <div className="p-3 bg-white bg-opacity-50 rounded-lg">
+                <div className="p-2 sm:bg-white bg-opacity-50 rounded-lg">
                   <div className="flex items-start gap-2">
                     <Sparkles className={`h-5 w-5 mt-0.5 flex-shrink-0 ${checkTextColor}`} />
                     <div>
                       <h4 className="font-medium text-gray-800">Tips Penanganan</h4>
-                      <ul className="pl-1 mt-2 space-y-2">
+                      <ul className="pl-1 mt-1 space-y-3">
                         {getRecommendationItems(detectedWasteDetails.recommendations).map((item, index) => (
                           <li key={index} className="flex items-start gap-1.5 text-sm text-gray-600">
                             <span className={`inline-block w-1.5 h-1.5 rounded-full mt-1.5 ${iconBgColor}`}></span>
@@ -570,7 +571,7 @@ const DetectWaste = () => {
               )}
 
               {detectedWasteDetails.id === 'unknown' && (
-                <div className="flex items-center justify-center pt-2 mt-4 border-t">
+                <div className="hidden flex items-center justify-center pt-2 mt-4 border-t">
                   <button
                     onClick={resetDetection}
                     className="px-4 py-2 text-sm font-medium text-white transition-colors bg-blue-500 rounded-lg hover:bg-blue-600"

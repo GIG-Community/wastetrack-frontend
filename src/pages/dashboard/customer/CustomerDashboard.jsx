@@ -63,37 +63,46 @@ const CustomerDashboard = () => {
   const handleSignOut = async () => {
     try {
       const result = await Swal.fire({
-        title: 'Logout Confirmation',
-        text: 'Are you sure you want to logout?',
+        title: 'Konfirmasi Logout',
+        text: 'Apakah Anda yakin ingin keluar?',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#10B981',
         cancelButtonColor: '#EF4444',
-        confirmButtonText: 'Yes, logout',
-        cancelButtonText: 'Cancel',
+        confirmButtonText: 'Ya, Keluar',
+        cancelButtonText: 'Tidak',
         customClass: {
-          popup: 'rounded-lg',
-          title: 'text-lg font-semibold text-gray-800',
-          htmlContainer: 'text-gray-600',
-          confirmButton: 'font-medium',
-          cancelButton: 'font-medium'
-        }
+          popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+          title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+          htmlContainer: 'text-sm sm:text-base text-gray-600',
+          confirmButton: 'text-sm sm:text-base',
+          cancelButton: 'text-sm sm:text-base'
+        },
+        // Mencegah perubahan padding pada body
+        padding: '1em',
+        heightAuto: false,
+        scrollbarPadding: false
       });
 
       if (result.isConfirmed) {
         await logout();
         
         await Swal.fire({
-          title: 'Logged Out Successfully',
-          text: 'You have been logged out of your account',
+          title: 'Berhasil Keluar',
+          text: 'Anda telah berhasil keluar dari akun Anda.',
           icon: 'success',
           confirmButtonColor: '#10B981',
           timer: 1500,
           timerProgressBar: true,
           showConfirmButton: false,
           customClass: {
-            popup: 'rounded-lg'
-          }
+            popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+            title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+          },
+          // Mencegah perubahan padding pada body
+          padding: '1em',
+          heightAuto: false,
+          scrollbarPadding: false
         });
 
         navigate('/login');
@@ -101,13 +110,17 @@ const CustomerDashboard = () => {
     } catch (error) {
       console.error('Logout error:', error);
       Swal.fire({
-        title: 'Logout Failed',
-        text: 'An error occurred while logging out. Please try again.',
+        title: 'Gagal Keluar',
+        text: 'Terjadi kesalahan saat mencoba keluar. Silakan coba lagi.',
         icon: 'error',
         confirmButtonColor: '#10B981',
         customClass: {
-          popup: 'rounded-lg'
-        }
+          popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg'
+        },
+        // Mencegah perubahan padding pada body
+        padding: '1em',
+        heightAuto: false,
+        scrollbarPadding: false
       });
     }
   };
@@ -175,10 +188,10 @@ const CustomerDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="sm:min-h-screen">
       {/* Top Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-white border-b border-gray-100">
-        <div className="flex items-center justify-between h-full px-4">
+      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-white border-b border-gray-100 px-6">
+        <div className="flex items-center justify-between h-full">
           {/* Left side - Brand/Logo */}
           <div className="flex items-center gap-3">
             {/* <button 
@@ -191,11 +204,11 @@ const CustomerDashboard = () => {
                 <Menu className="w-6 h-6 text-gray-600" />
               )}
             </button> */}
-            <h1 className="text-xl font-bold text-emerald-600">WasteTrack</h1>
+            <h1 className="text-lg font-bold text-emerald-600 sm:text-xl">WasteTrack</h1>
           </div>
 
           {/* Right side - User menu & notifications */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             {/* Notifications */}
             <div className="relative notification-menu">
               <button 
@@ -212,14 +225,14 @@ const CustomerDashboard = () => {
 
               {/* Notifications Dropdown */}
               {isNotificationOpen && (
-                <div className="absolute right-0 py-2 mt-2 bg-white border border-gray-100 rounded-lg shadow-lg w-80">
+                <div className="absolute right-0 py-2 mt-2 bg-white border border-gray-100 rounded-lg shadow-lg w-64 sm:w-80">
                   <div className="px-4 py-2 border-b border-gray-100">
-                    <h3 className="font-semibold text-gray-700">Notifications</h3>
+                    <h3 className="text-md font-semibold text-gray-700 sm:text-lg">Notifikasi</h3>
                   </div>
                   {notifications.map((notification) => (
                     <div key={notification.id} className="px-4 py-3 hover:bg-gray-50">
-                      <p className="text-sm font-medium text-gray-800">{notification.title}</p>
-                      <p className="mt-1 text-xs text-gray-500">{notification.message}</p>
+                      <p className="text-sm text-left font-medium text-gray-800">{notification.title}</p>
+                      <p className="mt-1 text-left text-xs font-light text-gray-500">{notification.message}</p>
                     </div>
                   ))}
                 </div>
@@ -237,30 +250,30 @@ const CustomerDashboard = () => {
                     {userData?.profile?.fullName?.charAt(0) || 'U'}
                   </span>
                 </div>
-                <ChevronDown className="w-4 h-4 text-gray-600" />
+                {/* <ChevronDown className="w-4 h-4 text-gray-600" /> */}
               </button>
 
               {/* Profile Dropdown */}
               {isProfileOpen && (
-                <div className="absolute right-0 w-48 py-2 mt-2 bg-white border border-gray-100 rounded-lg shadow-lg">
+                <div className="absolute right-0 py-2 bg-white border border-gray-100 rounded-lg shadow-lg w-52 sm:w-72">
                   <div className="px-4 py-2 border-b border-gray-100">
-                    <p className="font-semibold text-gray-700">My Account</p>
+                    <p className="text-md font-semibold text-gray-700 sm:text-lg">Akun Saya</p>
                   </div>
-                  <button className="flex items-center w-full gap-2 px-4 py-2 text-left hover:bg-gray-50">
+                  <button className="flex items-center w-full bg-white gap-2 px-4 py-2 text-left hover:bg-gray-50">
                     <User className="w-4 h-4 text-gray-600" />
                     <span className="text-sm text-gray-700">Profile</span>
                   </button>
-                  <button className="flex items-center w-full gap-2 px-4 py-2 text-left hover:bg-gray-50">
+                  <button className="flex items-center w-full bg-white gap-2 px-4 py-2 text-left hover:bg-gray-50">
                     <Settings className="w-4 h-4 text-gray-600" />
-                    <span className="text-sm text-gray-700">Settings</span>
+                    <span className="text-sm text-gray-700">Pengaturan</span>
                   </button>
-                  <div className="mt-2 border-t border-gray-100">
+                  <div className="mt-3 border-t bg-white border-gray-100">
                     <button 
                       onClick={handleSignOut}
-                      className="flex items-center w-full gap-2 px-4 py-2 text-left text-red-600 hover:bg-gray-50"
+                      className="flex items-center w-full gap-2 bg-white px-4 py-2 text-left text-red-600 hover:bg-gray-50"
                     >
                       <LogOut className="w-4 h-4" />
-                      <span className="text-sm">Sign Out</span>
+                      <span className="text-sm">Keluar</span>
                     </button>
                   </div>
                 </div>
@@ -273,11 +286,11 @@ const CustomerDashboard = () => {
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
-             onClick={() => setIsMobileMenuOpen(false)} />
+            onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
       {/* Main Content */}
-      <div className="pt-16 pb-16">
+      <div className="pt-14 pb-14">
         {renderContent()}
         {/* Render the child routes */}
         <Routes>
