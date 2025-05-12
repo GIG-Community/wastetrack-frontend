@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, where } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -63,15 +63,15 @@ import {
 
 const COLORS = ['#10B981', '#6366F1', '#F59E0B', '#EF4444'];
 const COMPLIANCE_LEVELS = {
-  HIGH: { color: '#10B981', label: 'High Compliance' },
-  MEDIUM: { color: '#F59E0B', label: 'Medium Compliance' },
-  LOW: { color: '#EF4444', label: 'Low Compliance' },
+  HIGH: { color: '#10B981', label: 'Kepatuhan Tinggi' },
+  MEDIUM: { color: '#F59E0B', label: 'Kepatuhan Sedang' },
+  LOW: { color: '#EF4444', label: 'Kepatuhan Rendah' },
 };
 
 // Utility function to format numbers
 const formatNumber = (num) => {
-  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + ' Juta';
+  if (num >= 1000) return (num / 1000).toFixed(1) + ' Ribu';
   return num.toFixed(1);
 };
 
@@ -723,47 +723,42 @@ const GovernmentMonitoring = () => {
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Fetch all data sources
-        const [
-          wasteBankSnapshot,
-          masterBankSnapshot,
-          pickupsSnapshot,
-          masterRequestsSnapshot
-        ] = await Promise.all([
-          getDocs(query(collection(db, 'users'), where('role', '==', 'wastebank_admin'))),
-          getDocs(query(collection(db, 'users'), where('role', '==', 'wastebank_master'))),
-          getDocs(query(collection(db, 'pickups'))),
-          getDocs(query(collection(db, 'masterBankRequests')))
-        ]);
+    setLoading(true);
+    
+    try {
+      // Create queries
+      const wasteBankQuery = query(collection(db, 'users'), where('role', '==', 'wastebank_admin'));
+      const masterBankQuery = query(collection(db, 'users'), where('role', '==', 'wastebank_master'));
+      const pickupsQuery = query(collection(db, 'pickups'));
+      const masterRequestsQuery = query(collection(db, 'masterBankRequests'));
+      
+      // Keep track of unsubscribe functions for cleanup
+      const unsubscribes = [];
+      
+      // Data collectors
+      let wasteBankData = [];
+      let masterBankData = [];
+      let pickupsData = [];
+      let masterRequestsData = [];
+      
+      // Counter to track when all data sources have loaded
+      let dataSourcesLoaded = 0;
+      const totalDataSources = 4;
+      
+      // Process the data when all data sources have loaded
+      const processData = () => {
+        if (dataSourcesLoaded < totalDataSources) return;
         
-        // Process wastebank data
-        const wasteBankData = wasteBankSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        // Process master bank data
-        const masterBankData = masterBankSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        const pickupsData = pickupsSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(pickup => pickup.status === 'completed');
+        // Process pickups data (filter completed)
+        const completedPickups = pickupsData.filter(pickup => pickup.status === 'completed');
 
         // Process master bank requests with advanced metrics
-        const masterRequestsData = masterRequestsSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(request => request.status === 'completed');
+        const completedMasterRequests = masterRequestsData.filter(request => request.status === 'completed');
 
         // Calculate waste bank statistics and advanced metrics
         const wasteBanksWithStats = wasteBankData.map(bank => {
-          const bankPickups = pickupsData.filter(pickup => pickup.wasteBankId === bank.id);
-          const bankTransfers = masterRequestsData.filter(req => req.wasteBankId === bank.id);
+          const bankPickups = completedPickups.filter(pickup => pickup.wasteBankId === bank.id);
+          const bankTransfers = completedMasterRequests.filter(req => req.wasteBankId === bank.id);
           
           // Calculate efficiency metrics
           const totalPickupVolume = bankPickups.reduce((sum, pickup) => {
@@ -898,7 +893,7 @@ const GovernmentMonitoring = () => {
         }
         
         // Add pickup data
-        pickupsData.forEach(pickup => {
+        completedPickups.forEach(pickup => {
           if (!pickup.completedAt) return;
           
           const date = new Date(pickup.completedAt.seconds * 1000);
@@ -914,7 +909,7 @@ const GovernmentMonitoring = () => {
         });
         
         // Add transfer data
-        masterRequestsData.forEach(request => {
+        completedMasterRequests.forEach(request => {
           if (!request.completedAt) return;
           
           const date = new Date(request.completedAt.seconds * 1000);
@@ -928,7 +923,7 @@ const GovernmentMonitoring = () => {
         // Calculate waste type breakdown across all pickups
         const wasteTypesMap = {};
         
-        pickupsData.forEach(pickup => {
+        completedPickups.forEach(pickup => {
           Object.entries(pickup.wastes || {}).forEach(([type, data]) => {
             if (!wasteTypesMap[type]) {
               wasteTypesMap[type] = { 
@@ -947,24 +942,102 @@ const GovernmentMonitoring = () => {
         setData({
           wasteBanks: wasteBanksWithStats,
           masterBanks: masterBankData,
-          pickups: pickupsData,
-          masterRequests: masterRequestsData,
+          pickups: completedPickups,
+          masterRequests: completedMasterRequests,
           complianceStats,
           totalVolume: wasteBanksWithStats.reduce((sum, bank) => sum + (bank.stats?.totalWeight || 0), 0),
-          totalPickups: pickupsData.length,
+          totalPickups: completedPickups.length,
           monthlyData: Object.values(monthlyStats),
           wasteTypeBreakdown: Object.values(wasteTypesMap),
         });
-
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError('Failed to load monitoring data');
-      } finally {
+        
         setLoading(false);
-      }
-    };
-
-    fetchData();
+      };
+      
+      // Set up real-time listeners for each collection
+      
+      // Listen for waste banks
+      const wasteBankUnsubscribe = onSnapshot(wasteBankQuery, 
+        (snapshot) => {
+          wasteBankData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          dataSourcesLoaded++;
+          processData();
+        },
+        (error) => {
+          console.error('Error fetching waste banks:', error);
+          setError('Failed to load waste bank data');
+          setLoading(false);
+        }
+      );
+      unsubscribes.push(wasteBankUnsubscribe);
+      
+      // Listen for master banks
+      const masterBankUnsubscribe = onSnapshot(masterBankQuery, 
+        (snapshot) => {
+          masterBankData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          dataSourcesLoaded++;
+          processData();
+        },
+        (error) => {
+          console.error('Error fetching master banks:', error);
+          setError('Failed to load master bank data');
+          setLoading(false);
+        }
+      );
+      unsubscribes.push(masterBankUnsubscribe);
+      
+      // Listen for pickups
+      const pickupsUnsubscribe = onSnapshot(pickupsQuery, 
+        (snapshot) => {
+          pickupsData = snapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+          }));
+          dataSourcesLoaded++;
+          processData();
+        },
+        (error) => {
+          console.error('Error fetching pickups:', error);
+          setError('Failed to load pickups data');
+          setLoading(false);
+        }
+      );
+      unsubscribes.push(pickupsUnsubscribe);
+      
+      // Listen for master requests
+      const masterRequestsUnsubscribe = onSnapshot(masterRequestsQuery, 
+        (snapshot) => {
+          masterRequestsData = snapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+          }));
+          dataSourcesLoaded++;
+          processData();
+        },
+        (error) => {
+          console.error('Error fetching master requests:', error);
+          setError('Failed to load master requests data');
+          setLoading(false);
+        }
+      );
+      unsubscribes.push(masterRequestsUnsubscribe);
+      
+      // Clean up all listeners when component unmounts
+      return () => {
+        unsubscribes.forEach(unsubscribe => unsubscribe());
+      };
+      
+    } catch (err) {
+      console.error('Error setting up listeners:', err);
+      setError('Failed to load monitoring data');
+      setLoading(false);
+    }
   }, []);
 
   // Filter and sort the waste banks
@@ -1055,40 +1128,53 @@ const GovernmentMonitoring = () => {
                 <Activity className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-800">Waste Bank Monitoring</h1>
-                <p className="text-sm text-gray-500">Monitor and analyze waste bank performance</p>
+                <h1 className="text-2xl font-semibold text-gray-800">Pemantauan Bank Sampah</h1>
+                <p className="text-sm text-gray-500">Pantau dan analisis kinerja bank sampah</p>
               </div>
             </div>
+          </div>
+
+          {/* Panduan Membaca Dashboard */}
+          <div className="p-4 mb-8 text-blue-700 rounded-lg bg-blue-50">
+            <h2 className="mb-2 text-lg font-semibold">Panduan Membaca Dashboard:</h2>
+            <ul className="space-y-2 text-sm">
+              <li>• Semua grafik menampilkan data 6 bulan terakhir</li>
+              <li>• Angka yang ditampilkan dalam "Ribu" atau "Juta" untuk memudahkan pembacaan</li>
+              <li>• Warna hijau menandakan kinerja baik, kuning sedang, dan merah perlu perhatian</li>
+              <li>• Klik pada setiap bank sampah untuk melihat detail lengkap</li>
+            </ul>
           </div>
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
               icon={Building2}
-              label="Registered Waste Banks"
+              label="Total Bank Sampah"
               value={data.wasteBanks.length}
-              subValue={`${data.complianceStats.high} high compliance`}
+              subValue={`${data.complianceStats.high} bank berkinerja baik`}
             />
             <StatCard
               icon={Scale}
-              label="Total Volume Processed"
+              label="Total Volume Sampah"
               value={`${formatNumber(data.totalVolume)} kg`}
               trend={data.monthlyData.length >= 2 ? 
                 Math.round((data.monthlyData[data.monthlyData.length-1].weight / 
                   Math.max(0.1, data.monthlyData[data.monthlyData.length-2].weight) * 100) - 100) : 0}
+              subValue="Dibandingkan bulan lalu"
             />
             <StatCard
               icon={Activity}
-              label="Compliance Rate"
+              label="Tingkat Kepatuhan"
               value={`${Math.round((data.complianceStats.high + data.complianceStats.medium) / 
                 Math.max(1, data.wasteBanks.length) * 100)}%`}
               color="blue"
+              subValue="Bank sampah yang aktif"
             />
             <StatCard
               icon={AlertTriangle}
-              label="At Risk Facilities"
+              label="Bank Perlu Perhatian"
               value={data.complianceStats.low}
-              subValue="Low compliance score"
+              subValue="Kinerja perlu ditingkatkan"
               color="amber"
             />
           </div>
@@ -1096,17 +1182,31 @@ const GovernmentMonitoring = () => {
           {/* Compliance Distribution and Monthly Activity */}
           <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-3">
             <ChartCard
-              title="Compliance Distribution"
-              description="Distribution of waste banks by compliance level"
+              title="Distribusi Tingkat Kepatuhan"
+              description={
+                <div className="space-y-2">
+                  <p>Pembagian bank sampah berdasarkan kinerja:</p>
+                  <ul className="pl-4 text-xs list-disc">
+                    <li>Hijau: Kinerja sangat baik ({'>'}90%)</li>
+                    <li>Kuning: Kinerja cukup (70-90%)</li>
+                    <li>Merah: Perlu peningkatan (&lt;70%)</li>
+                  </ul>
+                  <p className="mt-2 text-xs italic text-gray-600">
+                    Tingkat kepatuhan diukur dari beberapa faktor termasuk: frekuensi pengumpulan, 
+                    efisiensi transfer sampah ke bank master, pemanfaatan gudang yang optimal, 
+                    dan keteraturan pelaporan. Bank dengan skor rendah memerlukan pembinaan khusus.
+                  </p>
+                </div>
+              }
             >
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={[
-                        { name: 'High Compliance', value: data.complianceStats.high },
-                        { name: 'Medium Compliance', value: data.complianceStats.medium },
-                        { name: 'Low Compliance', value: data.complianceStats.low },
+                        { name: 'Kepatuhan Tinggi', value: data.complianceStats.high },
+                        { name: 'Kepatuhan Sedang', value: data.complianceStats.medium },
+                        { name: 'Kepatuhan Rendah', value: data.complianceStats.low },
                       ]}
                       cx="50%"
                       cy="50%"
@@ -1153,8 +1253,17 @@ const GovernmentMonitoring = () => {
 
             {/* Monthly Activity */}
             <ChartCard 
-              title="Monthly Activity"
-              description="Volume collected and number of transactions by month"
+              title="Aktivitas Bulanan"
+              description={
+                <div className="space-y-2">
+                  <p>Grafik menunjukkan:</p>
+                  <ul className="pl-4 text-xs list-disc">
+                    <li>Area hijau: Total volume sampah (kg)</li>
+                    <li>Batang ungu: Jumlah pengumpulan</li>
+                    <li>Batang oranye: Jumlah transfer</li>
+                  </ul>
+                </div>
+              }
               className="lg:col-span-2"
             >
               <div className="h-[300px]">
@@ -1210,8 +1319,17 @@ const GovernmentMonitoring = () => {
 
           {/* Waste Type Breakdown */}
           <ChartCard
-            title="Waste Type Analysis"
-            description="Volume and value breakdown by waste category"
+            title="Analisis Jenis Sampah"
+            description={
+              <div className="space-y-2">
+                <p>Perbandingan volume dan nilai tiap jenis sampah:</p>
+                <ul className="pl-4 text-xs list-disc">
+                  <li>Batang hijau: Volume dalam kilogram (kg)</li>
+                  <li>Batang kuning: Nilai dalam Rupiah (Rp)</li>
+                  <li>Klik pada grafik untuk melihat detail</li>
+                </ul>
+              </div>
+            }
             className="mb-8"
           >
             <div className="h-[300px]">
@@ -1243,33 +1361,13 @@ const GovernmentMonitoring = () => {
             </div>
           </ChartCard>
 
-          {/* Master Waste Banks Section */}
-          {/* <div className="mb-8">
-            <h2 className="mb-4 text-xl font-semibold text-gray-800">Master Waste Banks</h2>
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {data.masterBanks.map(masterBank => (
-                <WasteBankCard
-                  key={masterBank.id}
-                  wasteBank={masterBank}
-                  masterRequests={data.masterRequests}
-                  onSelect={setSelectedMasterBank}
-                />
-              ))}
-              {data.masterBanks.length === 0 && (
-                <div className="col-span-2 p-8 text-center bg-white rounded-xl">
-                  <p className="text-gray-500">No master waste banks registered</p>
-                </div>
-              )}
-            </div>
-          </div> */}
-
           {/* Waste Bank Facilities */}
           <div className="p-6 bg-white border border-gray-200 rounded-xl">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-gray-800">Waste Bank Facilities</h3>
+                <h3 className="text-lg font-semibold text-gray-800">Daftar Bank Sampah</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  Overview of all waste management facilities in the network
+                  Informasi lengkap semua bank sampah dalam jaringan
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -1277,7 +1375,7 @@ const GovernmentMonitoring = () => {
                   <Search className="absolute w-5 h-5 text-gray-400 -translate-y-1/2 left-3 top-1/2" />
                   <input
                     type="text"
-                    placeholder="Search facilities..."
+                    placeholder="Cari bank sampah..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="py-2 pl-10 pr-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
@@ -1288,29 +1386,29 @@ const GovernmentMonitoring = () => {
                   onChange={(e) => setFilters({ ...filters, type: e.target.value })}
                   className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="all">All Facilities</option>
-                  <option value="master">Master Banks</option>
-                  <option value="regular">Regular Banks</option>
+                  <option value="all">Semua Bank</option>
+                  <option value="master">Bank Master</option>
+                  <option value="regular">Bank Reguler</option>
                 </select>
                 <select
                   value={filters.compliance}
                   onChange={(e) => setFilters({ ...filters, compliance: e.target.value })}
                   className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="all">All Compliance</option>
-                  <option value="high">High Compliance</option>
-                  <option value="medium">Medium Compliance</option>
-                  <option value="low">Low Compliance</option>
+                  <option value="all">Semua Tingkat</option>
+                  <option value="high">Kinerja Tinggi</option>
+                  <option value="medium">Kinerja Sedang</option>
+                  <option value="low">Perlu Perhatian</option>
                 </select>
                 <select
                   value={filters.sortBy}
                   onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
                   className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="name">Sort by Name</option>
-                  <option value="volume">Sort by Volume</option>
-                  <option value="compliance">Sort by Compliance</option>
-                  <option value="activity">Sort by Activity</option>
+                  <option value="name">Urut Nama</option>
+                  <option value="volume">Urut Volume</option>
+                  <option value="compliance">Urut Kinerja</option>
+                  <option value="activity">Urut Aktivitas</option>
                 </select>
               </div>
             </div>
@@ -1321,27 +1419,27 @@ const GovernmentMonitoring = () => {
                 <div className="p-1.5 bg-indigo-50 rounded">
                   <Network className="w-4 h-4 text-indigo-600" />
                 </div>
-                <span className="text-sm font-medium text-gray-600">Master Waste Banks</span>
+                <span className="text-sm font-medium text-gray-600">Bank Sampah Master</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-emerald-50 rounded">
                   <Building2 className="w-4 h-4 text-emerald-600" />
                 </div>
-                <span className="text-sm font-medium text-gray-600">Regular Waste Banks</span>
+                <span className="text-sm font-medium text-gray-600">Bank Sampah Reguler</span>
               </div>
               <div className="h-6 border-l border-gray-300" />
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                  <span className="text-sm text-gray-600">High</span>
+                  <span className="text-sm text-gray-600">Baik</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-amber-500" />
-                  <span className="text-sm text-gray-600">Medium</span>
+                  <span className="text-sm text-gray-600">Sedang</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 bg-red-500 rounded-full" />
-                  <span className="text-sm text-gray-600">Low</span>
+                  <span className="text-sm text-gray-600">Kurang</span>
                 </div>
               </div>
             </div>

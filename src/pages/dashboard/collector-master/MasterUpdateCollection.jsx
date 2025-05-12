@@ -5,6 +5,7 @@ import {
   User,
   Loader2,
   AlertCircle,
+  Coins,
   Calculator
 } from 'lucide-react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -14,8 +15,10 @@ import Sidebar from '../../../components/Sidebar';
 import { useParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { 
+  calculatePoints, 
   calculateTotalValue, 
-  WASTE_PRICES,
+  WASTE_PRICES, 
+  POINTS_CONVERSION_RATE,
   getWasteDetails 
 } from '../../../lib/constants';
 
@@ -45,6 +48,7 @@ const MasterUpdateCollection = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [wasteData, setWasteData] = useState({});
+  const [calculatedPoints, setCalculatedPoints] = useState(0);
   const [totalValue, setTotalValue] = useState(0);
   const { pickupId } = useParams();
   const navigate = useNavigate();
@@ -91,7 +95,7 @@ const MasterUpdateCollection = () => {
     }
   }, [pickupId]);
 
-  // Calculate value whenever waste data changes
+  // Calculate points and value whenever waste data changes
   useEffect(() => {
     const wastes = {};
     Object.entries(wasteData).forEach(([typeId, data]) => {
@@ -106,6 +110,9 @@ const MasterUpdateCollection = () => {
     });
 
     const total = calculateTotalValue(wastes);
+    const points = calculatePoints(total);
+
+    setCalculatedPoints(points);
     setTotalValue(total);
   }, [wasteData]);
 
@@ -131,17 +138,19 @@ const MasterUpdateCollection = () => {
 
       const pickupRef = doc(db, 'masterBankRequests', pickupId);
       
-      // Prepare wastes object with weights and values
+      // Prepare wastes object with weights, values and points
       const wastes = {};
       
       Object.entries(wasteData).forEach(([type, data]) => {
         if (data.weight > 0) {
+          // Get base type (remove any prefixes/suffixes)
           const baseType = type.split('-').pop().toLowerCase();
           const price = WASTE_PRICES[baseType] || 1000; // Default price if type not found
           
           wastes[type] = {
             weight: data.weight,
-            value: data.weight * price
+            value: data.weight * price,
+            points: calculatePoints(data.weight)
           };
         }
       });
@@ -151,6 +160,8 @@ const MasterUpdateCollection = () => {
         completedAt: new Date(),
         wastes,
         totalValue,
+        pointsAmount: calculatedPoints,
+        pointsAdded: false, // Will be set to true by the waste bank
         updatedAt: new Date()
       });
 
@@ -236,23 +247,37 @@ const MasterUpdateCollection = () => {
           </div>
         </div>
 
-        {/* Value Summary */}
+        {/* Points and Value Summary */}
         <div className="p-6 mb-6 bg-white border border-gray-200 rounded-xl">
           <h3 className="flex items-center gap-2 mb-4 font-medium text-gray-900">
             <Calculator className="w-5 h-5 text-emerald-500" />
-            Value Calculation
+            Points & Value Calculation
           </h3>
-          <div className="p-4 rounded-lg bg-blue-50">
-            <div className="flex items-start gap-3">
-              <Scale className="w-5 h-5 text-blue-600" />
-              <div>
-                <p className="text-sm font-medium text-blue-800">Total Value</p>
-                <p className="mt-1 text-2xl font-semibold text-blue-700">
-                  Rp {totalValue.toLocaleString()}
-                </p>
-                <p className="mt-1 text-xs text-blue-600">
-                  Based on waste type market values
-                </p>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="p-4 rounded-lg bg-emerald-50">
+              <div className="flex items-start gap-3">
+                <Coins className="w-5 h-5 text-emerald-600" />
+                <div>
+                  <p className="text-sm font-medium text-emerald-800">Total Points</p>
+                  <p className="mt-1 text-2xl font-semibold text-emerald-700">
+                    {calculatedPoints} points
+                  </p>
+                  <p className="mt-1 text-xs text-emerald-600">1 point per {POINTS_CONVERSION_RATE} Rupiah</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 rounded-lg bg-blue-50">
+              <div className="flex items-start gap-3">
+                <Scale className="w-5 h-5 text-blue-600" />
+                <div>
+                  <p className="text-sm font-medium text-blue-800">Total Value</p>
+                  <p className="mt-1 text-2xl font-semibold text-blue-700">
+                    Rp {totalValue.toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-xs text-blue-600">
+                    Based on waste type market values
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -274,6 +299,9 @@ const MasterUpdateCollection = () => {
                     <p className="text-sm text-gray-500">Quantity: {quantity} bags</p>
                     {wasteData[typeId]?.weight > 0 && (
                       <div className="mt-2 text-sm">
+                        <p className="text-emerald-600">
+                          Points: {calculatePoints(wasteData[typeId].weight * price)}
+                        </p>
                         <p className="text-blue-600">
                           Value: Rp {(wasteData[typeId].weight * price).toLocaleString()}
                         </p>

@@ -90,7 +90,7 @@ const getStorageAlert = (percentage) => {
   return null;
 };
 
-const MasterWarehouse = () => {
+const Warehouse = () => {
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -205,7 +205,7 @@ const MasterWarehouse = () => {
       const newUnsubscribes = [];
 
       const pickupsQuery = query(
-        collection(db, 'masterBankRequests'),
+        collection(db, 'pickups'),
         where('wasteBankId', '==', currentUser.uid),
         where('status', '==', 'completed')
       );
@@ -737,4 +737,4 @@ const MasterWarehouse = () => {
   );
 };
 
-export default MasterWarehouse;
+export default Warehouse;

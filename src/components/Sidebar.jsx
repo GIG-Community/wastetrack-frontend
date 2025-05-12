@@ -48,6 +48,7 @@ const Sidebar = ({ role, onCollapse }) => {
   const getIcon = (label) => {
     const iconProps = { size: 20, className: "group-hover:text-emerald-400 transition-colors" };
     const icons = {
+      // Original English labels
       'Dashboard': <LayoutDashboard {...iconProps} />,
       'User Management': <Users {...iconProps} />,
       'Waste Bank Management': <Building2 {...iconProps} />,
@@ -63,31 +64,58 @@ const Sidebar = ({ role, onCollapse }) => {
       'Collections': <Scale {...iconProps} />,
       'Update Collection': <ClipboardList {...iconProps} />,
       'Routes': <MapPin {...iconProps} />,
-      // 'Schedule Pickup': <Calendar {...iconProps} />,
-      // 'Track Pickup': <Navigation {...iconProps} />,
-      // 'Rewards': <Award {...iconProps} />,
       'History': <History {...iconProps} />,
       'Monitoring': <PieChart {...iconProps} />,
       'Offset Planner': <PieChart {...iconProps} />,
       'Recycling Hub': <Recycle {...iconProps} />,
       'Carbon Management': <Factory {...iconProps} />,
-      // 'Marketplace': <Store {...iconProps} />,
       'Analytics': <AreaChart {...iconProps} />,
       'Products': <Package {...iconProps} />,
       'Orders': <ShoppingCart {...iconProps} />,
       'Waste Detector': <Recycle {...iconProps} />,
       'Recycled Hub': <Recycle {...iconProps} />,
-      // 'Offset Planner': <LineChart {...iconProps} />,
       'Schedule Pickup': <Calendar {...iconProps} />,
       'Track Pickup': <Truck {...iconProps} />,
       'Rewards': <Gift {...iconProps} />,
-      // 'History': <Receipt {...iconProps} />,
-      // 'Transactions': <Scale {...iconProps} />,
       'Collectors': <Users {...iconProps} />,
       'Settings': <Settings {...iconProps} />,
       'Marketplace': <ShoppingCart {...iconProps} />,
       'Request Induk': <Truck {...iconProps} />,
       'Salary': <Wallet {...iconProps} />,
+      
+      // Indonesian translations
+      'Dasbor': <LayoutDashboard {...iconProps} />,
+      'Manajemen Pengguna': <Users {...iconProps} />,
+      'Manajemen Bank Sampah': <Building2 {...iconProps} />,
+      'Pengaturan Sistem': <Settings {...iconProps} />,
+      'Laporan': <FileBarChart {...iconProps} />,
+      'Manajemen Kolektor': <UserCog {...iconProps} />,
+      'Transaksi': <Receipt {...iconProps} />,
+      'Penyimpanan Gudang': <Building {...iconProps} />,
+      'Proses Transaksi': <Receipt {...iconProps} />,
+      'Kelola Sampah': <Trash2 {...iconProps} />,
+      'Laporan Harian': <ClipboardList {...iconProps} />,
+      'Tugas Saya': <Truck {...iconProps} />,
+      'Koleksi': <Scale {...iconProps} />,
+      'Perbarui Koleksi': <ClipboardList {...iconProps} />,
+      'Rute': <MapPin {...iconProps} />,
+      'Riwayat': <History {...iconProps} />,
+      'Pemantauan': <PieChart {...iconProps} />,
+      'Perencana Offset': <PieChart {...iconProps} />,
+      'Pusat Daur Ulang': <Recycle {...iconProps} />,
+      'Manajemen Karbon': <Factory {...iconProps} />,
+      'Analitik': <AreaChart {...iconProps} />,
+      'Produk': <Package {...iconProps} />,
+      'Pesanan': <ShoppingCart {...iconProps} />,
+      'Detektor Sampah': <Recycle {...iconProps} />,
+      'Jadwal Pengambilan': <Calendar {...iconProps} />,
+      'Lacak Pengambilan': <Truck {...iconProps} />,
+      'Penghargaan': <Gift {...iconProps} />,
+      'Kolektor': <Users {...iconProps} />,
+      'Pengaturan': <Settings {...iconProps} />,
+      'Pasar': <ShoppingCart {...iconProps} />,
+      'Permintaan Induk': <Truck {...iconProps} />,
+      'Gaji': <Wallet {...iconProps} />,
     };
     return icons[label] || <ChevronRight {...iconProps} />;
   };
@@ -96,72 +124,66 @@ const Sidebar = ({ role, onCollapse }) => {
   const getMenuItems = (role) => {
     const menuConfigs = {
       super_admin: [
-        { label: 'Dashboard', path: '/dashboard/super-admin' },
-        { label: 'User Management', path: '/dashboard/super-admin/users' },
-        { label: 'Waste Bank Management', path: '/dashboard/super-admin/wastebanks' },
-        { label: 'System Settings', path: '/dashboard/super-admin/settings' },
-        { label: 'Reports', path: '/dashboard/super-admin/reports' }
+        { label: 'Dasbor', path: '/dashboard/super-admin' },
+        { label: 'Manajemen Pengguna', path: '/dashboard/super-admin/users' },
+        { label: 'Manajemen Bank Sampah', path: '/dashboard/super-admin/wastebanks' },
+        { label: 'Pengaturan Sistem', path: '/dashboard/super-admin/settings' },
+        { label: 'Laporan', path: '/dashboard/super-admin/reports' }
       ],
       wastebank_admin: [
-        { label: 'Dashboard', path: '/dashboard/wastebank' },
-        { label: 'Collector Management', path: '/dashboard/wastebank/employees' },
-        { label: 'Transactions', path: '/dashboard/wastebank/transactions' },
-        { label: 'Warehouse Storage', path: '/dashboard/wastebank/warehouse-storage' },
-        { label: 'Salary', path: '/dashboard/wastebank/salary' },
-        { label: 'Request Induk', path: '/dashboard/wastebank/request-induk' },
-        { label: 'Reports', path: '/dashboard/wastebank/reports' },
+        { label: 'Dasbor', path: '/dashboard/wastebank' },
+        { label: 'Manajemen Kolektor', path: '/dashboard/wastebank/employees' },
+        { label: 'Transaksi', path: '/dashboard/wastebank/transactions' },
+        { label: 'Penyimpanan Gudang', path: '/dashboard/wastebank/warehouse-storage' },
+        { label: 'Gaji', path: '/dashboard/wastebank/salary' },
+        { label: 'Permintaan Induk', path: '/dashboard/wastebank/request-induk' },
+        { label: 'Laporan', path: '/dashboard/wastebank/reports' },
       ],
-      // wastebank_employee: [
-      //   { label: 'Dashboard', path: '/dashboard/wastebank_employee' },
-      //   { label: 'Process Transactions', path: '/dashboard/wastebank_employee/transactions' },
-      //   { label: 'Manage Waste', path: '/dashboard/wastebank_employee/waste' },
-      //   { label: 'Daily Reports', path: '/dashboard/wastebank_employee/reports' }
-      // ],
       collector: [
-        { label: 'Dashboard', path: '/dashboard/collector/dashboard' },
-        { label: 'My Assignments', path: '/dashboard/collector/assignments' },
-        { label: 'Collections', path: '/dashboard/collector/collections' },
-        { label: 'Routes', path: '/dashboard/collector/routes' }
+        { label: 'Dasbor', path: '/dashboard/collector/dashboard' },
+        { label: 'Tugas Saya', path: '/dashboard/collector/assignments' },
+        { label: 'Koleksi', path: '/dashboard/collector/collections' },
+        { label: 'Rute', path: '/dashboard/collector/routes' }
       ],
       customer: [
-        { label: 'Dashboard', path: '/dashboard/customer' },
-        { label: 'Schedule Pickup', path: '/dashboard/customer/schedule' },
-        { label: 'Track Pickup', path: '/dashboard/customer/track' },
-        { label: 'Marketplace', path: '/dashboard/customer/marketplace' },
-        { label: 'History', path: '/dashboard/customer/history' },
-        { label: 'Waste Detector', path: '/dashboard/customer/detect' }
+        { label: 'Dasbor', path: '/dashboard/customer' },
+        { label: 'Jadwal Pengambilan', path: '/dashboard/customer/schedule' },
+        { label: 'Lacak Pengambilan', path: '/dashboard/customer/track' },
+        { label: 'Pasar', path: '/dashboard/customer/marketplace' },
+        { label: 'Riwayat', path: '/dashboard/customer/history' },
+        { label: 'Detektor Sampah', path: '/dashboard/customer/detect' }
       ],
       government: [
-        { label: 'Dashboard', path: '/dashboard/government' },
-        { label: 'Monitoring', path: '/dashboard/government/monitoring' },
-        { label: 'Analytics', path: '/dashboard/government/analytics' },
-        { label: 'Reports', path: '/dashboard/government/wastebank-reports' }
+        { label: 'Dasbor', path: '/dashboard/government' },
+        { label: 'Pemantauan', path: '/dashboard/government/monitoring' },
+        { label: 'Analitik', path: '/dashboard/government/analytics' },
+        { label: 'Laporan', path: '/dashboard/government/wastebank-reports' }
       ],
       industry: [
-        { label: 'Dashboard', path: '/dashboard/industry' },
-        { label: 'Recycling Hub', path: '/dashboard/industry/recycledhub' },
-        { label: 'Offset Planner', path: '/dashboard/industry/offset-planner' }
+        { label: 'Dasbor', path: '/dashboard/industry' },
+        { label: 'Pusat Daur Ulang', path: '/dashboard/industry/recycledhub' },
+        { label: 'Perencana Offset', path: '/dashboard/industry/offset-planner' }
       ],
       marketplace: [
-        { label: 'Dashboard', path: '/dashboard/marketplace' },
-        { label: 'Products', path: '/dashboard/marketplace/products' },
-        { label: 'Orders', path: '/dashboard/marketplace/orders' },
-        { label: 'Analytics', path: '/dashboard/marketplace/analytics' }
+        { label: 'Dasbor', path: '/dashboard/marketplace' },
+        { label: 'Produk', path: '/dashboard/marketplace/products' },
+        { label: 'Pesanan', path: '/dashboard/marketplace/orders' },
+        { label: 'Analitik', path: '/dashboard/marketplace/analytics' }
       ],
       wastebank_master: [
-        { label: 'Dashboard', path: '/dashboard/wastebank-master' },
-        { label: 'Collector Management', path: '/dashboard/wastebank-master/collectors' },
-        { label: 'Transactions', path: '/dashboard/wastebank-master/transactions' },
-        { label: 'Warehouse Storage', path: '/dashboard/wastebank-master/warehouse' },
-        { label: 'Salary', path: '/dashboard/wastebank-master/salary' },
-        { label: 'Request Induk', path: '/dashboard/wastebank-master/requests' },
-        { label: 'Reports', path: '/dashboard/wastebank-master/reports' },
+        { label: 'Dasbor', path: '/dashboard/wastebank-master' },
+        { label: 'Manajemen Kolektor', path: '/dashboard/wastebank-master/collectors' },
+        { label: 'Transaksi', path: '/dashboard/wastebank-master/transactions' },
+        { label: 'Penyimpanan Gudang', path: '/dashboard/wastebank-master/warehouse' },
+        { label: 'Gaji', path: '/dashboard/wastebank-master/salary' },
+        { label: 'Permintaan Induk', path: '/dashboard/wastebank-master/requests' },
+        { label: 'Laporan', path: '/dashboard/wastebank-master/reports' },
       ],
       wastebank_master_collector: [ 
-          { label: 'Dashboard', path: '/dashboard/collector-master/dashboard' },
-          { label: 'My Assignments', path: '/dashboard/collector-master/assignments' },
-          { label: 'Collections', path: '/dashboard/collector-master/collections' },
-          { label: 'Routes', path: '/dashboard/collector-master/routes' }
+          { label: 'Dasbor', path: '/dashboard/collector-master' },
+          { label: 'Tugas Saya', path: '/dashboard/collector-master/assignments' },
+          { label: 'Koleksi', path: '/dashboard/collector-master/collections' },
+          { label: 'Rute', path: '/dashboard/collector-master/routes' }
       ]
     };
     return menuConfigs[role] || [];
