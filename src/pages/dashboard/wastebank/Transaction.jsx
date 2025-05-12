@@ -16,9 +16,11 @@ import {
   TreePine,
   TreePineIcon,
   BoxSelectIcon,
-  ChevronRight
+  ChevronRight,
+  Info,
+  HelpCircle
 } from 'lucide-react';
-import { collection, query, getDocs, updateDoc, doc, where, getDoc } from 'firebase/firestore';
+import { collection, query, doc, updateDoc, where, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -66,14 +68,73 @@ const Badge = ({ variant = "default", children, className = "", ...props }) => {
   );
 };
 
-const StatusCard = ({ label, count, icon: Icon, description, className }) => (
+// Tooltip component for additional information - modified to be toggle-based instead of hover
+const Tooltip = ({ children, content }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  
+  return (
+    <div className="relative group">
+      <div onClick={() => setIsVisible(!isVisible)} className="cursor-pointer">
+        {children}
+      </div>
+      {isVisible && (
+        <div className="absolute z-20 w-48 px-3 py-2 mb-2 text-xs text-white transform -translate-x-1/2 rounded-lg bg-zinc-800 bottom-full left-1/2">
+          {content}
+          <div className="absolute transform -translate-x-1/2 border-4 border-transparent top-full left-1/2 border-t-zinc-800"></div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Hover-based tooltip specifically for help icons (question mark)
+const HoverTooltip = ({ children, content }) => (
+  <div className="relative group">
+    {children}
+    <div className="absolute z-50 invisible w-48 px-3 py-2 mb-2 text-xs text-white transition-all duration-200 transform -translate-x-1/2 rounded-lg opacity-0 bottom-full left-1/2 bg-zinc-800 group-hover:opacity-100 group-hover:visible">
+      {content}
+      <div className="absolute transform -translate-x-1/2 border-4 border-transparent top-full left-1/2 border-t-zinc-800"></div>
+    </div>
+  </div>
+);
+
+// Information panel component - modified with collapsible behavior
+const InfoPanel = ({ title, children }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  return (
+    <div className="p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+      <div className="flex gap-3">
+        <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+            <h3 className="text-sm font-medium text-blue-800">{title}</h3>
+            <ChevronRight className={`w-4 h-4 text-blue-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+          </div>
+          {isExpanded && (
+            <div className="mt-1 text-sm text-blue-700">{children}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const StatusCard = ({ label, count, icon: Icon, description, className, tooltip }) => (
   <div className={`bg-white p-6 rounded-xl border border-gray-200 hover:shadow-md transition-all cursor-pointer group ${className}`}>
     <div className="flex items-start justify-between">
       <div>
         <div className="p-2.5 bg-gray-50 rounded-lg w-fit group-hover:bg-emerald-50 transition-colors">
           <Icon className="w-5 h-5 text-gray-600 transition-colors group-hover:text-emerald-600" />
         </div>
-        <p className="mt-3 text-sm font-medium text-gray-600">{label}</p>
+        <div className="flex items-center gap-1.5 mt-3">
+          <p className="text-sm font-medium text-gray-600">{label}</p>
+          {tooltip && (
+            <HoverTooltip content={tooltip}>
+              <HelpCircle className="w-3.5 h-3.5 text-gray-400" />
+            </HoverTooltip>
+          )}
+        </div>
         <p className="mt-1 text-2xl font-semibold text-gray-800">{count}</p>
         {description && (
           <p className="mt-1 text-sm text-gray-500">{description}</p>
@@ -83,7 +144,7 @@ const StatusCard = ({ label, count, icon: Icon, description, className }) => (
   </div>
 );
 
-const QuickAction = ({ icon: Icon, label, onClick, variant = "default" }) => {
+const QuickAction = ({ icon: Icon, label, onClick, variant = "default", tooltip }) => {
   const variants = {
     default: "bg-gray-100 text-gray-700 hover:bg-gray-200",
     success: "bg-emerald-100 text-emerald-700 hover:bg-emerald-200",
@@ -91,7 +152,7 @@ const QuickAction = ({ icon: Icon, label, onClick, variant = "default" }) => {
     danger: "bg-red-100 text-red-700 hover:bg-red-200"
   };
 
-  return (
+  const button = (
     <button
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium 
@@ -101,6 +162,12 @@ const QuickAction = ({ icon: Icon, label, onClick, variant = "default" }) => {
       {label}
     </button>
   );
+
+  if (tooltip) {
+    return <Tooltip content={tooltip}>{button}</Tooltip>;
+  }
+
+  return button;
 };
 
 const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) => {
@@ -141,6 +208,18 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
     });
   };
 
+  // Translate status
+  const translateStatus = (status) => {
+    const statusMap = {
+      'pending': 'Menunggu',
+      'processing': 'Diproses',
+      'received': 'Diterima',
+      'completed': 'Selesai',
+      'cancelled': 'Dibatalkan'
+    };
+    return statusMap[status] || status.charAt(0).toUpperCase() + status.slice(1);
+  };
+
   const StatusIcon = getStatusIcon(pickup.status);
   const isDelivery = pickup.deliveryType === 'self-delivery';
   const isCompleted = pickup.status === 'completed';
@@ -151,7 +230,7 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
       <div className="flex items-center">
         <div className={`h-1 flex-grow ${statusColors[pickup.status]?.replace('text-', 'bg-').split(' ')[0]}`} />
         <span className={`px-2 py-0.5 text-xs font-medium ${isDelivery ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
-          {isDelivery ? 'Self Delivery' : 'Pickup'}
+          {isDelivery ? 'Antar Sendiri' : 'Jemput'}
         </span>
       </div>
       
@@ -170,13 +249,13 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
                 <div className="flex items-center gap-1.5">
                   <PhoneCall className="w-4 h-4 text-gray-400" />
                   <span className="text-sm text-gray-600">
-                    {pickup.phone || 'No phone number'}
+                    {pickup.phone || 'Tidak ada nomor telepon'}
                   </span>
                 </div>
                 <span className="text-gray-300">•</span>
                 <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${statusColors[pickup.status]}`}>
                   <StatusIcon className="w-4 h-4" />
-                  {pickup.status.charAt(0).toUpperCase() + pickup.status.slice(1)}
+                  {translateStatus(pickup.status)}
                 </div>
               </div>
             </div>
@@ -184,13 +263,13 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
           
           <div className="flex items-start gap-4 text-right">
             <div>
-              <p className="text-xs text-gray-400">Created At</p>
+              <p className="text-xs text-gray-400">Dibuat Pada</p>
               <p className="text-sm font-medium text-gray-600">
                 {formatDateTime(pickup.createdAt)}
               </p>
               {isCompleted && pickup.completedAt && (
                 <>
-                  <p className="mt-2 text-xs text-gray-400">Completed At</p>
+                  <p className="mt-2 text-xs text-gray-400">Selesai Pada</p>
                   <p className="text-sm font-medium text-emerald-600">
                     {formatDateTime(pickup.completedAt)}
                   </p>
@@ -211,9 +290,9 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
             <div className="flex items-start gap-3 p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50">
               <Calendar className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
               <div>
-                <p className="text-sm font-medium text-gray-700">Schedule</p>
+                <p className="text-sm font-medium text-gray-700">Jadwal</p>
                 <p className="mt-1 text-sm text-gray-600">
-                  {new Date(pickup.date?.seconds * 1000).toLocaleDateString('en-US', {
+                  {new Date(pickup.date?.seconds * 1000).toLocaleDateString('id-ID', {
                     weekday: 'long',
                     year: 'numeric',
                     month: 'long',
@@ -227,7 +306,7 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
             <div className="flex items-start gap-3 p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50">
               <MapPin className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
               <div>
-                <p className="text-sm font-medium text-gray-700">Location</p>
+                <p className="text-sm font-medium text-gray-700">Lokasi</p>
                 <p className="mt-1 text-sm text-gray-600">{pickup.location}</p>
                 {pickup.notes && (
                   <p className="mt-1 text-sm italic text-gray-500">"{pickup.notes}"</p>
@@ -244,13 +323,13 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
               <div className="flex items-start gap-3 p-4 transition-colors bg-emerald-50 rounded-xl">
                 <TreePine className="w-5 h-5 text-emerald-600" />
                 <div>
-                  <p className="text-sm font-medium text-emerald-700">Collection Results</p>
+                  <p className="text-sm font-medium text-emerald-700">Hasil Pengumpulan</p>
                   <p className="mt-2 text-sm text-emerald-600">
-                    Total Value: <span className="font-semibold">{formatCurrency(pickup.totalValue)}</span>
+                    Total Nilai: <span className="font-semibold">{formatCurrency(pickup.totalValue)}</span>
                   </p>
                   {pickup.pointsAmount && (
                     <p className="text-sm text-emerald-600">
-                      Points Earned: <span className="font-semibold">{pickup.pointsAmount}</span>
+                      Poin Diperoleh: <span className="font-semibold">{pickup.pointsAmount}</span>
                     </p>
                   )}
                 </div>
@@ -259,7 +338,7 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
               <div className="flex items-start gap-3 p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50">
                 <Package className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Waste Types</p>
+                  <p className="text-sm font-medium text-gray-700">Jenis Sampah</p>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {pickup.wasteTypes?.map((type, index) => (
                       <span 
@@ -278,14 +357,14 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
           {/* Waste Details Table */}
           {isCompleted && pickup.wastes && (
             <div className="pt-6 mt-6 border-t border-gray-200">
-              <h4 className="mb-4 text-sm font-medium text-gray-700">Collection Details</h4>
+              <h4 className="mb-4 text-sm font-medium text-gray-700">Detail Pengumpulan</h4>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead>
                     <tr>
-                      <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Type</th>
-                      <th className="px-4 py-2 text-xs font-medium text-right text-gray-500 uppercase">Weight (kg)</th>
-                      <th className="px-4 py-2 text-xs font-medium text-right text-gray-500 uppercase">Value</th>
+                      <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Jenis</th>
+                      <th className="px-4 py-2 text-xs font-medium text-right text-gray-500 uppercase">Berat (kg)</th>
+                      <th className="px-4 py-2 text-xs font-medium text-right text-gray-500 uppercase">Nilai</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -317,22 +396,24 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
           <div className="flex items-center gap-2">
             <QuickAction
               icon={Package}
-              label="Change Status"
+              label="Ubah Status"
               onClick={() => onStatusChange(pickup)}
               variant={pickup.status === 'completed' ? 'success' : 'default'}
+              // tooltip="Ubah status pengumpulan sampah"
             />
             {isCompleted && !pickup.pointsAdded && pickup.wastes && (
               <QuickAction
                 icon={TreePine}
-                label="Add Points"
+                label="Tambah Poin"
                 variant="success"
                 onClick={() => onUpdatePoints(pickup)}
+                tooltip="Berikan poin rewards kepada pengguna"
               />
             )}
             {isCompleted && pickup.pointsAdded && (
               <span className="flex items-center gap-1 text-sm text-emerald-600">
                 <CheckCircle2 className="w-4 h-4" />
-                Points Added: {pickup.pointsAmount}
+                Poin Ditambahkan: {pickup.pointsAmount}
               </span>
             )}
           </div>
@@ -340,9 +421,10 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
           {pickup.status === 'pending' && (
             <QuickAction
               icon={AlertCircle}
-              label="Cancel"
+              label="Batalkan"
               variant="danger"
               onClick={() => onStatusChange(pickup)}
+              tooltip="Batalkan permintaan pengumpulan ini"
             />
           )}
         </div>
@@ -361,37 +443,59 @@ const Transaction = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const itemsPerPage = 5;
 
   // Fetch data when authenticated
   useEffect(() => {
+    let pickupsUnsubscribe;
+    let collectorsUnsubscribe;
+    
     if (currentUser?.uid) {
-      fetchInitialData();
-      fetchCollectors();
+      // Using closures to manage unsubscribe functions
+      const unsubscribes = fetchInitialData();
+      pickupsUnsubscribe = unsubscribes.pickupsUnsubscribe;
+      collectorsUnsubscribe = unsubscribes.collectorsUnsubscribe;
     }
+    
+    // Cleanup function when component unmounts
+    return () => {
+      if (pickupsUnsubscribe) pickupsUnsubscribe();
+      if (collectorsUnsubscribe) collectorsUnsubscribe();
+    };
   }, [currentUser?.uid]);
 
-  const fetchInitialData = async () => {
+  const fetchInitialData = () => {
     setLoading(true);
     setError(null);
+    
     try {
-      await fetchPickups();
+      // Setup both listeners
+      const pickupsUnsubscribe = setupPickupsListener();
+      const collectorsUnsubscribe = setupCollectorsListener();
+      
+      return { pickupsUnsubscribe, collectorsUnsubscribe };
     } catch (err) {
-      setError('Failed to load data. Please try again.');
+      setError('Gagal memuat data. Silakan coba lagi.');
       Swal.fire({
         title: 'Error',
-        text: 'Failed to load data',
+        text: 'Gagal memuat data',
         icon: 'error',
         confirmButtonColor: '#10B981'
       });
-    } finally {
       setLoading(false);
+      return { pickupsUnsubscribe: () => {}, collectorsUnsubscribe: () => {} };
     }
   };
 
-  const fetchPickups = async () => {
+  const setupPickupsListener = () => {
     if (!currentUser?.uid) {
-      setError('Authentication required');
-      return;
+      setError('Autentikasi diperlukan');
+      return () => {};
     }
     
     try {
@@ -400,52 +504,71 @@ const Transaction = () => {
         where('wasteBankId', '==', currentUser.uid)
       );
       
-      const snapshot = await getDocs(pickupsQuery);
-      const pickupsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      // Using onSnapshot instead of getDocs
+      const unsubscribe = onSnapshot(
+        pickupsQuery,
+        (snapshot) => {
+          const pickupsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          
+          setPickups(pickupsData);
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Error memantau data pengumpulan:', error);
+          setError('Gagal memuat data pengumpulan');
+          setLoading(false);
+        }
+      );
       
-      setPickups(pickupsData);
+      return unsubscribe;
     } catch (error) {
-      console.error('Error fetching pickups:', error);
-      throw error;
+      console.error('Error menyiapkan listener pengumpulan:', error);
+      setLoading(false);
+      return () => {};
     }
   };
 
-  const fetchCollectors = async () => {
+  const setupCollectorsListener = () => {
     try {
       const collectorsQuery = query(
         collection(db, 'users'),
         where('role', '==', 'collector'),
         where('profile.institution', '==', userData.id)
       );
-      const snapshot = await getDocs(collectorsQuery);
-      const collectorsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setCollectors(collectorsData);
+      
+      // Using onSnapshot instead of getDocs
+      const unsubscribe = onSnapshot(
+        collectorsQuery,
+        (snapshot) => {
+          const collectorsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setCollectors(collectorsData);
+        },
+        (error) => {
+          console.error('Error memantau data petugas:', error);
+        }
+      );
+      
+      return unsubscribe;
     } catch (error) {
-      console.error('Error fetching collectors:', error);
+      console.error('Error menyiapkan listener petugas:', error);
+      return () => {};
     }
   };
 
   const openChangeStatusModal = async (pickup) => {
     const statusOptions = [
-      { value: 'pending', label: 'Pending', icon: '⏳', color: 'bg-yellow-50 text-yellow-600' },
-      { value: 'assigned', label: 'Assigned', icon: '🚛', color: 'bg-blue-50 text-blue-600' },
-      { value: 'in_progress', label: 'In Progress', icon: '⏳', color: 'bg-green-50 text-green-600' },
-      { value: 'completed', label: 'Completed', icon: '✅', color: 'bg-emerald-50 text-emerald-600' },
-      { value: 'cancelled', label: 'Cancelled', icon: '❌', color: 'bg-red-50 text-red-600' }
+      { value: 'pending', label: 'Menunggu', icon: '⏳', color: 'bg-yellow-50 text-yellow-600' },
+      { value: 'assigned', label: 'Ditugaskan', icon: '🚛', color: 'bg-blue-50 text-blue-600' },
+      // { value: 'in_progress', label: 'Dalam Proses', icon: '⏳', color: 'bg-green-50 text-green-600' },
+      // { value: 'completed', label: 'Selesai', icon: '✅', color: 'bg-emerald-50 text-emerald-600' },
+      { value: 'cancelled', label: 'Dibatalkan', icon: '❌', color: 'bg-red-50 text-red-600' }
     ];
-
-    const handleCollectorSelect = (status) => {
-      const collectorDiv = document.getElementById('collectorSelectDiv');
-      if (collectorDiv) {
-        collectorDiv.style.display = status === 'assigned' ? 'block' : 'none';
-      }
-    };
 
     // Format collector options untuk dropdown
     const collectorOptions = collectors
@@ -453,23 +576,28 @@ const Transaction = () => {
         <option value="${collector.id}" 
           ${pickup.collectorId === collector.id ? 'selected' : ''}
           ${collector.status !== 'active' ? 'disabled' : ''}>
-          ${collector.profile?.fullName || collector.email || 'Unnamed Collector'}
-          ${collector.status !== 'active' ? ' (Inactive)' : ''}
+          ${collector.profile?.fullName || collector.email || 'Petugas Tanpa Nama'}
+          ${collector.status !== 'active' ? ' (Tidak Aktif)' : ''}
         </option>
       `).join('');
 
     const { value: formValues } = await Swal.fire({
-      title: 'Update Pickup Status',
+      title: 'Perbarui Status Pengumpulan',
       width: 600,
       html: `
         <div class="text-left p-4">
           <!-- Current Status Display -->
           <div class="mb-6 bg-gray-50 p-4 rounded-lg">
-            <p class="text-sm font-medium text-gray-600 mb-2">Current Status</p>
+            <p class="text-sm font-medium text-gray-600 mb-2">Status Saat Ini</p>
             <div class="flex items-center gap-2">
               <span class="text-base">${statusOptions.find(s => s.value === pickup.status)?.icon}</span>
               <span class="font-medium ${statusOptions.find(s => s.value === pickup.status)?.color} px-3 py-1 rounded-lg">
-                ${pickup.status.charAt(0).toUpperCase() + pickup.status.slice(1)}
+                ${pickup.status === 'pending' ? 'Menunggu' : 
+                  pickup.status === 'assigned' ? 'Ditugaskan' : 
+                  pickup.status === 'in_progress' ? 'Dalam Proses' : 
+                  pickup.status === 'completed' ? 'Selesai' : 
+                  pickup.status === 'cancelled' ? 'Dibatalkan' : 
+                  pickup.status.charAt(0).toUpperCase() + pickup.status.slice(1)}
               </span>
             </div>
           </div>
@@ -477,11 +605,11 @@ const Transaction = () => {
           <!-- New Status Selection -->
           <div class="mb-6">
             <label for="newStatus" class="block text-sm font-medium text-gray-700 mb-2">
-              New Status
+              Status Baru
             </label>
             <select id="newStatus" class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg
               focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 
-              transition-all shadow-sm text-gray-700" onchange="handleStatusChange(this.value)">
+              transition-all shadow-sm text-gray-700">
               ${statusOptions.map(status => `
                 <option value="${status.value}" ${pickup.status === status.value ? 'selected' : ''}>
                   ${status.icon} ${status.label}
@@ -490,33 +618,34 @@ const Transaction = () => {
             </select>
           </div>
 
-          <!-- Collector Selection - Always visible but conditionally required -->
-          <div id="collectorSelectDiv" class="mb-4">
+          <!-- Collector Selection -->
+          <div id="collectorSelectDiv" class="mb-4" style="display: ${pickup.status === 'assigned' ? 'block' : 'none'}">
             <label for="collectorSelect" class="block text-sm font-medium text-gray-700 mb-2">
-              Assign Collector
+              Tugaskan Petugas
             </label>
             <select id="collectorSelect" class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg
               focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 
               transition-all shadow-sm text-gray-700">
-              <option value="">Select a collector</option>
+              <option value="">Pilih petugas</option>
               ${collectorOptions}
             </select>
-            <p class="mt-2 text-xs text-gray-500 italic">
-              * Only active collectors can be assigned to pickups
-            </p>
           </div>
         </div>
       `,
       didOpen: () => {
         const statusSelect = document.getElementById('newStatus');
-        if (statusSelect) {
-          handleCollectorSelect(statusSelect.value);
-          statusSelect.addEventListener('change', (e) => handleCollectorSelect(e.target.value));
+        const collectorDiv = document.getElementById('collectorSelectDiv');
+        
+        if (statusSelect && collectorDiv) {
+          // Add event listener directly, without depending on external function
+          statusSelect.addEventListener('change', (e) => {
+            collectorDiv.style.display = e.target.value === 'assigned' ? 'block' : 'none';
+          });
         }
       },
       showCancelButton: true,
-      confirmButtonText: 'Update Status',
-      cancelButtonText: 'Cancel',
+      confirmButtonText: 'Perbarui Status',
+      cancelButtonText: 'Batal',
       confirmButtonColor: '#10B981',
       cancelButtonColor: '#EF4444',
       customClass: {
@@ -551,20 +680,20 @@ const Transaction = () => {
       }
 
       await updateDoc(pickupRef, updates);
-      await fetchPickups();
+      // No need to call fetchPickups() manually since we're using onSnapshot
 
       Swal.fire({
         icon: 'success',
-        title: 'Status Updated',
-        text: 'The pickup status has been successfully updated.',
+        title: 'Status Diperbarui',
+        text: 'Status pengumpulan telah berhasil diperbarui.',
         confirmButtonColor: '#10B981'
       });
     } catch (error) {
-      console.error('Error updating status:', error);
+      console.error('Error memperbarui status:', error);
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Failed to update status. Please try again.',
+        text: 'Gagal memperbarui status. Silakan coba lagi.',
         confirmButtonColor: '#10B981'
       });
     } finally {
@@ -592,7 +721,7 @@ const Transaction = () => {
       // Get current user data
       const userSnapshot = await getDoc(userRef);
       if (!userSnapshot.exists()) {
-        throw new Error('User not found');
+        throw new Error('Pengguna tidak ditemukan');
       }
 
       const userData = userSnapshot.data();
@@ -612,20 +741,20 @@ const Transaction = () => {
         })
       ]);
 
-      await fetchPickups();
+      // No need to call fetchPickups() manually since we're using onSnapshot
 
       Swal.fire({
         icon: 'success',
-        title: 'Points Added',
-        text: `${totalPoints} points have been successfully added. Customer's total points: ${newTotalPoints}`,
+        title: 'Poin Ditambahkan',
+        text: `${totalPoints} poin telah berhasil ditambahkan. Total poin pelanggan: ${newTotalPoints}`,
         confirmButtonColor: '#10B981'
       });
     } catch (error) {
-      console.error('Error updating points:', error);
+      console.error('Error menambahkan poin:', error);
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Failed to add points. Please try again.',
+        text: 'Gagal menambahkan poin. Silakan coba lagi.',
         confirmButtonColor: '#10B981'
       });
     } finally {
@@ -633,14 +762,86 @@ const Transaction = () => {
     }
   };
 
-  // Filter pickups based on status and search term
+  // Filter pickups based on status, search term, and date range
   const filteredPickups = pickups.filter(pickup => {
     const matchesStatus = filterStatus === 'all' || pickup.status === filterStatus;
     const matchesSearch = 
       pickup.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       pickup.location?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesStatus && matchesSearch;
+    
+    // Date filtering
+    const pickupDate = pickup.date ? new Date(pickup.date.seconds * 1000) : null;
+    const matchesDateRange = (!startDate || !endDate || !pickupDate) ? true : (
+      pickupDate >= new Date(startDate) &&
+      pickupDate <= new Date(endDate)
+    );
+
+    return matchesStatus && matchesSearch && matchesDateRange;
   });
+
+  // Sort and filter pickups
+  const sortedAndFilteredPickups = filteredPickups.sort((a, b) => {
+    const aValue = a[sortBy]?.seconds || 0;
+    const bValue = b[sortBy]?.seconds || 0;
+    return sortOrder === 'desc' ? bValue - aValue : aValue - bValue;
+  });
+
+  // Pagination logic
+  const totalPages = Math.ceil(sortedAndFilteredPickups.length / itemsPerPage);
+  const paginatedPickups = sortedAndFilteredPickups.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+    } else {
+      setSortBy(field);
+      setSortOrder('desc');
+    }
+  };
+
+  // Pagination component
+  const Pagination = () => (
+    <div className="flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg sm:px-6">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-700">
+          Menampilkan {((currentPage - 1) * itemsPerPage) + 1} hingga {Math.min(currentPage * itemsPerPage, sortedAndFilteredPickups.length)} dari{' '}
+          {sortedAndFilteredPickups.length} hasil
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+          className="px-3 py-1 text-sm bg-white border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+        >
+          Sebelumnya
+        </button>
+        {[...Array(totalPages)].map((_, index) => (
+          <button
+            key={index + 1}
+            onClick={() => setCurrentPage(index + 1)}
+            className={`px-3 py-1 text-sm border rounded-md ${
+              currentPage === index + 1
+                ? 'bg-emerald-500 text-white'
+                : 'bg-white hover:bg-gray-50'
+            }`}
+          >
+            {index + 1}
+          </button>
+        ))}
+        <button
+          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+          disabled={currentPage === totalPages}
+          className="px-3 py-1 text-sm bg-white border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+        >
+          Berikutnya
+        </button>
+      </div>
+    </div>
+  );
 
   // Get counts for each status
   const statusCounts = pickups.reduce((acc, pickup) => {
@@ -670,17 +871,35 @@ const Transaction = () => {
                 <p className="mt-1 text-sm text-gray-500">
                   Kelola dan pantau semua permintaan pengumpulan sampah
                 </p>
+                <button 
+                  className="px-2 py-1 mt-1 text-xs text-blue-600 rounded-md bg-blue-50 hover:bg-blue-100"
+                  onClick={() => document.getElementById('infoPanel').scrollIntoView({ behavior: 'smooth' })}
+                >
+                  Lihat Panduan
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Status Cards */}
+          {/* Information Panel with ID for direct access */}
+          <div id="infoPanel">
+            <InfoPanel title="Tentang Pengumpulan Sampah">
+              <p>
+                Halaman ini memungkinkan Anda untuk mengelola semua permintaan pengumpulan sampah. 
+                Data ditampilkan secara real-time dan akan diperbarui otomatis ketika ada perubahan.
+                Anda dapat mengubah status pengumpulan, menugaskan petugas, dan menambahkan poin reward untuk pengguna.
+              </p>
+            </InfoPanel>
+          </div>
+
+          {/* Status Cards - with less intrusive tooltips */}
           <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
             <StatusCard
               label="Total Pengumpulan"
               count={pickups.length}
               icon={Package}
               description="Total semua pengumpulan"
+              tooltip="Jumlah keseluruhan permintaan pengumpulan yang tercatat dalam sistem"
             />
             <StatusCard
               label="Menunggu"
@@ -688,6 +907,7 @@ const Transaction = () => {
               icon={Clock}
               description="Belum diproses"
               className="border-yellow-200"
+              tooltip="Permintaan pengumpulan yang belum diproses atau ditugaskan ke petugas"
             />
             <StatusCard
               label="Sedang Diproses"
@@ -695,6 +915,7 @@ const Transaction = () => {
               icon={Truck}
               description="Sedang dalam pengumpulan"
               className="border-blue-200"
+              tooltip="Permintaan pengumpulan yang sedang dalam proses pengambilan oleh petugas"
             />
             <StatusCard
               label="Selesai"
@@ -702,59 +923,123 @@ const Transaction = () => {
               icon={CheckCircle2}
               description="Berhasil diselesaikan"
               className="border-emerald-200"
+              tooltip="Permintaan pengumpulan yang telah berhasil diselesaikan"
             />
           </div>
 
-          {/* Filters and Search */}
-          <div className="flex flex-col gap-4 mb-6 sm:flex-row">
-            <div className="flex-1">
-              <Input
-                type="text"
-                placeholder="Cari berdasarkan nama pelanggan atau lokasi..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-md"
-              />
+          {/* Filters, Search, and Sort */}
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="flex flex-col gap-4 sm:flex-row">
+              <div className="flex flex-1 gap-4">
+                <Input
+                  type="text"
+                  placeholder="Cari berdasarkan nama pelanggan atau lokasi..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="max-w-md"
+                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-40"
+                  />
+                  <span className="text-gray-500">sampai</span>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-40"
+                  />
+                </div>
+              </div>
+              <Select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full sm:w-48"
+              >
+                <option value="all">Semua Status</option>
+                <option value="pending">Menunggu</option>
+                <option value="processing">Diproses</option>
+                <option value="completed">Selesai</option>
+                <option value="cancelled">Dibatalkan</option>
+              </Select>
             </div>
-            <Select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full sm:w-48"
-            >
-              <option value="all">Semua Status</option>
-              <option value="pending">Menunggu</option>
-              <option value="processing">Diproses</option>
-              <option value="completed">Selesai</option>
-              <option value="cancelled">Dibatalkan</option>
-            </Select>
+            
+            {/* Sort Options */}
+            <div className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-lg">
+              <span className="text-sm font-medium text-gray-600">Urutkan:</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleSort('createdAt')}
+                  className={`flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-md transition-colors
+                    ${sortBy === 'createdAt' 
+                      ? 'bg-emerald-50 text-emerald-600' 
+                      : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                  Tanggal Dibuat
+                  {sortBy === 'createdAt' && (
+                    <span className="text-xs">
+                      {sortOrder === 'desc' ? '↓' : '↑'}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleSort('completedAt')}
+                  className={`flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-md transition-colors
+                    ${sortBy === 'completedAt' 
+                      ? 'bg-emerald-50 text-emerald-600' 
+                      : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                  Tanggal Selesai
+                  {sortBy === 'completedAt' && (
+                    <span className="text-xs">
+                      {sortOrder === 'desc' ? '↓' : '↑'}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
 
-          {/* Pickup Cards */}
+          {/* Pickup Cards with Pagination */}
           <div className="pb-8">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+                <span className="ml-3 text-gray-600">Memuat data pengumpulan...</span>
               </div>
             ) : error ? (
               <div className="py-12 text-center">
                 <p className="text-red-500">{error}</p>
+                <button 
+                  className="px-4 py-2 mt-4 text-white rounded-lg bg-emerald-500"
+                  onClick={fetchInitialData}
+                >
+                  Coba Lagi
+                </button>
               </div>
-            ) : filteredPickups.length === 0 ? (
+            ) : sortedAndFilteredPickups.length === 0 ? (
               <div className="py-12 text-center">
                 <p className="text-gray-500">Tidak ada data pengumpulan ditemukan</p>
+                <p className="mt-2 text-sm text-gray-400">Coba sesuaikan filter pencarian Anda</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-6">
-                {filteredPickups.map((pickup) => (
-                  <PickupCard
-                    key={pickup.id}
-                    pickup={pickup}
-                    onStatusChange={openChangeStatusModal}
-                    onUpdatePoints={handleUpdatePoints}
-                    isProcessing={processing}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 gap-6 mb-6">
+                  {paginatedPickups.map((pickup) => (
+                    <PickupCard
+                      key={pickup.id}
+                      pickup={pickup}
+                      onStatusChange={openChangeStatusModal}
+                      onUpdatePoints={handleUpdatePoints}
+                      isProcessing={processing}
+                    />
+                  ))}
+                </div>
+                <Pagination />
+              </>
             )}
           </div>
         </div>

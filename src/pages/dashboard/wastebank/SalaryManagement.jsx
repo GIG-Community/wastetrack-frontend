@@ -1,10 +1,38 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, setDoc, getDoc, runTransaction } from 'firebase/firestore';
+import { collection, query, where, doc, setDoc, getDoc, runTransaction, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { Search, AlertCircle, UserCheck, User, Users, Filter, Wallet, Calculator, Loader2, DollarSign, Clock, ArrowDown } from 'lucide-react';
+import { Search, AlertCircle, UserCheck, User, Users, Filter, Wallet, Calculator, Loader2, DollarSign, Clock, ArrowDown, Info, HelpCircle } from 'lucide-react';
 import Swal from 'sweetalert2';
 import Sidebar from '../../../components/Sidebar';
 import { useAuth } from '../../../hooks/useAuth';
+
+// Helper component for tooltips
+const Tooltip = ({ children, content }) => (
+  <div className="relative group">
+    {children}
+    <div className="absolute z-50 invisible w-48 px-3 py-2 mb-2 text-xs text-white transition-all duration-200 transform -translate-x-1/2 rounded-lg opacity-0 bottom-full left-1/2 bg-zinc-800 group-hover:opacity-100 group-hover:visible">
+      {content}
+      <div className="absolute transform -translate-x-1/2 border-4 border-transparent top-full left-1/2 border-t-zinc-800"></div>
+    </div>
+  </div>
+);
+
+// Information card component
+const InfoCard = ({ title, children, icon: Icon }) => (
+  <div className="p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+    <div className="flex items-start gap-3">
+      <div className="mt-0.5 text-blue-500 flex-shrink-0">
+        {Icon ? <Icon size={20} /> : <Info size={20} />}
+      </div>
+      <div>
+        <h3 className="mb-1 text-sm font-medium text-blue-800">{title}</h3>
+        <div className="text-sm text-blue-700">
+          {children}
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 export default function SalaryManagement() {
   const { userData } = useAuth();
@@ -33,208 +61,322 @@ export default function SalaryManagement() {
   const [incomingTransfers, setIncomingTransfers] = useState([]);
   const [showIncomingTransfers, setShowIncomingTransfers] = useState(false);
 
-  const fetchTransactionHistory = async (userId) => {
+  const fetchTransactionHistory = (userId) => {
     if (!userId) return;
     
+    setLoadingTransactions(true);
+    
     try {
-      setLoadingTransactions(true);
       const transactionsQuery = query(
         collection(db, 'transactions'),
         where('userId', '==', userId)
       );
       
-      const transactionsSnapshot = await getDocs(transactionsQuery);
-      const transactionsData = transactionsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date()
-      }));
+      // Using onSnapshot instead of getDocs
+      const unsubscribe = onSnapshot(transactionsQuery, 
+        (transactionsSnapshot) => {
+          const transactionsData = transactionsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date()
+          }));
+          
+          const sortedTransactions = transactionsData.sort((a, b) => 
+            b.createdAt.getTime() - a.createdAt.getTime()
+          ).slice(0, 10);
+          
+          setTransactions(sortedTransactions);
+          setLoadingTransactions(false);
+        },
+        (error) => {
+          console.error('Error memantau riwayat transaksi:', error);
+          setLoadingTransactions(false);
+        }
+      );
       
-      const sortedTransactions = transactionsData.sort((a, b) => 
-        b.createdAt.getTime() - a.createdAt.getTime()
-      ).slice(0, 10);
-      
-      setTransactions(sortedTransactions);
+      return unsubscribe;
     } catch (error) {
-      console.error('Error fetching transaction history:', error);
-    } finally {
+      console.error('Error saat menyiapkan listener riwayat transaksi:', error);
       setLoadingTransactions(false);
+      return () => {};
     }
   };
 
-  const fetchIncomingTransfers = async () => {
+  const fetchIncomingTransfers = () => {
     if (!userData?.id) return;
     
+    setLoadingIncomingTransfers(true);
+    
     try {
-      setLoadingIncomingTransfers(true);
-      
       const transfersQuery = query(
         collection(db, 'transactions'),
         where('userId', '==', userData.id)
       );
       
-      const transfersSnapshot = await getDocs(transfersQuery);
-      const transfersData = transfersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date()
-      }));
+      // Using onSnapshot instead of getDocs
+      const unsubscribe = onSnapshot(transfersQuery, 
+        (transfersSnapshot) => {
+          const transfersData = transfersSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date()
+          }));
+          
+          const sortedTransfers = transfersData.sort((a, b) => 
+            b.createdAt.getTime() - a.createdAt.getTime()
+          ).slice(0, 10);
+          
+          setIncomingTransfers(sortedTransfers);
+          setLoadingIncomingTransfers(false);
+        },
+        (error) => {
+          console.error('Error memantau transfer masuk:', error);
+          setLoadingIncomingTransfers(false);
+        }
+      );
       
-      const sortedTransfers = transfersData.sort((a, b) => 
-        b.createdAt.getTime() - a.createdAt.getTime()
-      ).slice(0, 10);
-      
-      setIncomingTransfers(sortedTransfers);
+      return unsubscribe;
     } catch (error) {
-      console.error('Error fetching incoming transfers:', error);
-    } finally {
+      console.error('Error saat menyiapkan listener transfer masuk:', error);
       setLoadingIncomingTransfers(false);
+      return () => {};
     }
   };
 
-  const fetchWasteBankBalance = async () => {
-    if (!userData?.id) return;
+  const fetchWasteBankBalance = () => {
+    if (!userData?.id) return () => {};
     
     try {
-      const wasteBankDoc = await getDoc(doc(db, 'users', userData.id));
-      if (wasteBankDoc.exists()) {
-        setWasteBankBalance(wasteBankDoc.data().balance || 0);
-      }
+      // Using onSnapshot for real-time balance updates
+      const unsubscribe = onSnapshot(doc(db, 'users', userData.id), 
+        (wasteBankDoc) => {
+          if (wasteBankDoc.exists()) {
+            setWasteBankBalance(wasteBankDoc.data().balance || 0);
+          }
+        },
+        (error) => {
+          console.error('Error memantau saldo bank sampah:', error);
+        }
+      );
+      
+      return unsubscribe;
     } catch (error) {
-      console.error('Error fetching waste bank balance:', error);
+      console.error('Error saat menyiapkan listener saldo bank sampah:', error);
+      return () => {};
     }
   };
 
   useEffect(() => {
-    fetchWasteBankBalance();
-    fetchIncomingTransfers();
+    let balanceUnsubscribe = () => {};
+    let transfersUnsubscribe = () => {};
+    
+    if (userData?.id) {
+      balanceUnsubscribe = fetchWasteBankBalance();
+      transfersUnsubscribe = fetchIncomingTransfers();
+    }
+    
+    // Cleanup function
+    return () => {
+      if (typeof balanceUnsubscribe === 'function') balanceUnsubscribe();
+      if (typeof transfersUnsubscribe === 'function') transfersUnsubscribe();
+    };
   }, [userData]);
 
   useEffect(() => {
-    const fetchUsers = async () => {
+    let usersUnsubscribe;
+    
+    const fetchUsers = () => {
       if (!userData?.id) return;
       
       try {
         setLoadingUsers(true);
         
+        // First, get all pickups for this waste bank
         const pickupsQuery = query(
           collection(db, 'pickups'),
           where('wasteBankId', '==', userData.id)
         );
-        const pickupsSnapshot = await getDocs(pickupsQuery);
         
-        const customerIds = [...new Set(
-          pickupsSnapshot.docs.map(doc => doc.data().userId)
-        )].filter(Boolean);
+        // Using onSnapshot for pickups
+        const pickupsUnsubscribe = onSnapshot(pickupsQuery, async (pickupsSnapshot) => {
+          const customerIds = [...new Set(
+            pickupsSnapshot.docs
+              .map(doc => doc.data().userId)
+              .filter(Boolean)
+          )];
+          
+          // Only proceed if we have customer IDs or to get collectors
+          const collectorQuery = query(
+            collection(db, 'users'),
+            where('role', '==', 'collector'),
+            where('profile.institution', '==', userData.id)
+          );
+          
+          // Using onSnapshot for collectors
+          const collectorUnsubscribe = onSnapshot(collectorQuery, (collectorSnapshot) => {
+            const collectorData = collectorSnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            
+            // If we have customer IDs, fetch those users too
+            if (customerIds.length > 0) {
+              const customerQuery = query(
+                collection(db, 'users'),
+                where('role', '==', 'customer'),
+                where('__name__', 'in', customerIds)
+              );
+              
+              // Using onSnapshot for customers
+              const customerUnsubscribe = onSnapshot(customerQuery, (customerSnapshot) => {
+                const customerData = customerSnapshot.docs.map(doc => ({
+                  id: doc.id,
+                  ...doc.data()
+                }));
+                
+                // Combine both datasets
+                setUsers([...collectorData, ...customerData]);
+                setLoadingUsers(false);
+              }, (error) => {
+                console.error('Error memantau data pelanggan:', error);
+                // Still show collectors even if there's an error with customers
+                setUsers(collectorData);
+                setLoadingUsers(false);
+              });
+              
+              return () => customerUnsubscribe();
+            } else {
+              // Just use collectors if no customers
+              setUsers(collectorData);
+              setLoadingUsers(false);
+            }
+          }, (error) => {
+            console.error('Error memantau data petugas:', error);
+            setLoadingUsers(false);
+          });
+          
+          return () => collectorUnsubscribe();
+        }, (error) => {
+          console.error('Error memantau data pengambilan:', error);
+          setLoadingUsers(false);
+        });
         
-        const collectorQuery = query(
-          collection(db, 'users'),
-          where('role', '==', 'collector'),
-          where('profile.institution', '==', userData.id)
-        );
-        
-        const customerQuery = query(
-          collection(db, 'users'),
-          where('role', '==', 'customer'),
-          where('__name__', 'in', customerIds.length ? customerIds : ['dummy'])
-        );
-        
-        const [collectorSnapshot, customerSnapshot] = await Promise.all([
-          getDocs(collectorQuery),
-          getDocs(customerQuery)
-        ]);
-        
-        const usersData = [
-          ...collectorSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })),
-          ...customerSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
-        ];
-        
-        setUsers(usersData);
+        return () => pickupsUnsubscribe();
       } catch (error) {
-        console.error('Error fetching users:', error);
+        console.error('Error saat menyiapkan listener pengguna:', error);
         Swal.fire({
           icon: 'error',
           title: 'Error',
           text: 'Gagal memuat data pengguna',
         });
-      } finally {
         setLoadingUsers(false);
+        return () => {};
       }
     };
 
-    fetchUsers();
+    usersUnsubscribe = fetchUsers();
+    
+    return () => {
+      if (usersUnsubscribe) usersUnsubscribe();
+    };
   }, [userData]);
 
   const fetchUserDetails = async (userId) => {
+    if (!userId) return;
+    
     try {
       setLoading(true);
       
-      const userDoc = await getDoc(doc(db, 'users', userId));
+      let userUnsubscribe;
+      let transactionUnsubscribe;
       
-      if (!userDoc.exists()) {
-        throw new Error('Pengguna tidak ditemukan');
-      }
-
-      const userData = userDoc.data();
-      
-      setPointsToConvert(0);
-      
-      if (userData.role === 'collector') {
-        const salaryDoc = await getDoc(doc(db, 'salaries', userId));
-        setSalaryConfig({
-          baseSalary: salaryDoc.exists() ? salaryDoc.data().config.baseSalary : 0,
-        });
-      }
-
-      const pickupsQuery = query(
-        collection(db, 'pickups'),
-        where(userData.role === 'collector' ? 'collectorId' : 'userId', '==', userId)
-      );
-
-      const pickupsSnapshot = await getDocs(pickupsQuery);
-      let totalCollections = 0;
-      let totalWasteCollected = 0;
-      let totalValue = 0;
-
-      pickupsSnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.status === 'completed') {
-          totalCollections++;
-          totalValue += data.totalValue || 0;
-          
-          if (data.wasteQuantities) {
-            Object.values(data.wasteQuantities).forEach(quantity => {
-              totalWasteCollected += Number(quantity) || 0;
-            });
-          }
+      // Using onSnapshot for user details
+      userUnsubscribe = onSnapshot(doc(db, 'users', userId), async (userDoc) => {
+        if (!userDoc.exists()) {
+          throw new Error('Pengguna tidak ditemukan');
         }
+
+        const userData = userDoc.data();
+        
+        setPointsToConvert(0);
+        
+        if (userData.role === 'collector') {
+          const salaryDoc = await getDoc(doc(db, 'salaries', userId));
+          setSalaryConfig({
+            baseSalary: salaryDoc.exists() ? salaryDoc.data().config.baseSalary : 0,
+          });
+        }
+
+        const pickupsQuery = query(
+          collection(db, 'pickups'),
+          where(userData.role === 'collector' ? 'collectorId' : 'userId', '==', userId)
+        );
+
+        // Using onSnapshot for user's pickups
+        const pickupsUnsubscribe = onSnapshot(pickupsQuery, (pickupsSnapshot) => {
+          let totalCollections = 0;
+          let totalWasteCollected = 0;
+          let totalValue = 0;
+
+          pickupsSnapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.status === 'completed') {
+              totalCollections++;
+              totalValue += data.totalValue || 0;
+              
+              if (data.wasteQuantities) {
+                Object.values(data.wasteQuantities).forEach(quantity => {
+                  totalWasteCollected += Number(quantity) || 0;
+                });
+              }
+            }
+          });
+
+          setUserStats({
+            totalCollections,
+            totalWasteCollected,
+            totalValue,
+            balance: userData.balance || 0,
+            points: userData.role === 'customer' ? userData.rewards?.points || 0 : 0,
+          });
+          
+          setLoading(false);
+        }, (error) => {
+          console.error('Error memantau data pengambilan pengguna:', error);
+          setLoading(false);
+        });
+        
+        // Fetch transaction history
+        transactionUnsubscribe = fetchTransactionHistory(userId);
+        
+        return () => {
+          pickupsUnsubscribe();
+          if (transactionUnsubscribe) transactionUnsubscribe();
+        };
+      }, (error) => {
+        console.error('Error memantau detail pengguna:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Gagal memuat detail pengguna',
+        });
+        setLoading(false);
       });
-
-      setUserStats({
-        totalCollections,
-        totalWasteCollected,
-        totalValue,
-        balance: userData.balance || 0,
-        points: userData.role === 'customer' ? userData.rewards?.points || 0 : 0,
-      });
-
-      await fetchTransactionHistory(userId);
-
+      
+      // Return the cleanup function
+      return () => {
+        if (userUnsubscribe) userUnsubscribe();
+        if (transactionUnsubscribe) transactionUnsubscribe();
+      };
     } catch (error) {
-      console.error('Error fetching user details:', error);
+      console.error('Error saat menyiapkan listener detail pengguna:', error);
       Swal.fire({
         icon: 'error',
         title: 'Error',
         text: 'Gagal memuat detail pengguna',
       });
-    } finally {
       setLoading(false);
+      return () => {};
     }
   };
 
@@ -262,7 +404,7 @@ export default function SalaryManagement() {
         text: 'Konfigurasi berhasil disimpan',
       });
     } catch (error) {
-      console.error('Error saving config:', error);
+      console.error('Error menyimpan konfigurasi:', error);
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -344,17 +486,16 @@ export default function SalaryManagement() {
         });
       });
 
-      await Promise.all([fetchUserDetails(selectedUserId), fetchWasteBankBalance(), fetchTransactionHistory(selectedUserId)]);
-
+      // Thanks to onSnapshot, we don't need to manually refresh data
       setPointsToConvert(0);
 
       Swal.fire({
         icon: 'success',
         title: 'Sukses',
-        text: `Pembayaran sebesar Rp ${paymentAmount.toLocaleString()} berhasil diproses`,
+        text: `Pembayaran sebesar Rp ${paymentAmount.toLocaleString('id-ID')} berhasil diproses`,
       });
     } catch (error) {
-      console.error('Error processing payment:', error);
+      console.error('Error memproses pembayaran:', error);
       Swal.fire({
         icon: 'error',
         title: 'Error',
@@ -434,39 +575,50 @@ export default function SalaryManagement() {
                 </p>
               </div>
             </div>
-            {/* {selectedUserId && !showIncomingTransfers && (
-              <button
-                onClick={handlePayment}
-                className="inline-flex items-center gap-2 px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
-                disabled={loading || !selectedUserId}
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <DollarSign className="w-4 h-4" />
-                )}
-                Proses Pembayaran
-              </button>
-            )} */}
+            {/* Commented out button */}
           </div>
+
+          {/* Information Card */}
+          <InfoCard title="Tentang Manajemen Gaji" icon={Info}>
+            <p>
+              Halaman ini memungkinkan Anda mengelola gaji petugas dan konversi poin pelanggan. 
+              Data ditampilkan secara real-time dan akan diperbarui otomatis saat ada perubahan.
+              Pilih pengguna dari daftar untuk melihat informasi rinci dan memproses pembayaran.
+            </p>
+          </InfoCard>
 
           <div className="grid grid-cols-1 gap-4 mb-8 sm:grid-cols-2 lg:grid-cols-4">
             <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-              <h3 className="text-sm font-medium text-gray-500">Saldo Bank Sampah</h3>
-              <p className="text-2xl font-semibold text-gray-800">Rp {wasteBankBalance.toLocaleString()}</p>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-gray-500">Saldo Bank Sampah</h3>
+                <Tooltip content="Saldo yang tersedia di rekening bank sampah Anda untuk membayar gaji petugas dan konversi poin">
+                  <HelpCircle className="w-4 h-4 text-gray-400" />
+                </Tooltip>
+              </div>
+              <p className="text-2xl font-semibold text-gray-800">Rp {wasteBankBalance.toLocaleString('id-ID')}</p>
             </div>
             {selectedUserId && !showIncomingTransfers && (
               <>
                 <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-                  <h3 className="text-sm font-medium text-gray-500">Saldo Pengguna</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-gray-500">Saldo Pengguna</h3>
+                    <Tooltip content="Jumlah uang yang dimiliki pengguna saat ini">
+                      <HelpCircle className="w-4 h-4 text-gray-400" />
+                    </Tooltip>
+                  </div>
                   {loading ? (
                     <div className="w-24 h-8 mt-1 rounded-md bg-zinc-200 animate-pulse"></div>
                   ) : (
-                    <p className="text-2xl font-semibold text-gray-800">Rp {userStats.balance.toLocaleString()}</p>
+                    <p className="text-2xl font-semibold text-gray-800">Rp {userStats.balance.toLocaleString('id-ID')}</p>
                   )}
                 </div>
                 <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-                  <h3 className="text-sm font-medium text-gray-500">Total Pengumpulan</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-gray-500">Total Pengumpulan</h3>
+                    <Tooltip content="Jumlah pengumpulan sampah yang telah diselesaikan oleh pengguna ini">
+                      <HelpCircle className="w-4 h-4 text-gray-400" />
+                    </Tooltip>
+                  </div>
                   {loading ? (
                     <div className="w-16 h-8 mt-1 rounded-md bg-zinc-200 animate-pulse"></div>
                   ) : (
@@ -474,11 +626,16 @@ export default function SalaryManagement() {
                   )}
                 </div>
                 <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-                  <h3 className="text-sm font-medium text-gray-500">Total Nilai</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-gray-500">Total Nilai</h3>
+                    <Tooltip content="Nilai total dari semua sampah yang telah dikumpulkan oleh pengguna ini">
+                      <HelpCircle className="w-4 h-4 text-gray-400" />
+                    </Tooltip>
+                  </div>
                   {loading ? (
                     <div className="w-24 h-8 mt-1 rounded-md bg-zinc-200 animate-pulse"></div>
                   ) : (
-                    <p className="text-2xl font-semibold text-gray-800">Rp {userStats.totalValue.toLocaleString()}</p>
+                    <p className="text-2xl font-semibold text-gray-800">Rp {userStats.totalValue.toLocaleString('id-ID')}</p>
                   )}
                 </div>
               </>
@@ -584,13 +741,6 @@ export default function SalaryManagement() {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={fetchIncomingTransfers}
-                        className="px-3 py-1 text-xs rounded-md text-emerald-600 bg-emerald-50 hover:bg-emerald-100"
-                        disabled={loadingIncomingTransfers}
-                      >
-                        {loadingIncomingTransfers ? 'Memuat...' : 'Segarkan'}
-                      </button>
-                      <button
                         onClick={() => setShowIncomingTransfers(false)}
                         className="px-3 py-1 text-xs rounded-md text-zinc-600 bg-zinc-50 hover:bg-zinc-100"
                       >
@@ -612,7 +762,7 @@ export default function SalaryManagement() {
                               </span>
                             </div>
                             <span className="font-semibold text-emerald-600">
-                              Rp {transfer.amount?.toLocaleString() || 0}
+                              Rp {transfer.amount?.toLocaleString('id-ID') || 0}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
@@ -691,9 +841,14 @@ export default function SalaryManagement() {
                         <div className="grid grid-cols-1 gap-6">
                           {users.find(u => u.id === selectedUserId)?.role === 'customer' ? (
                             <div>
-                              <label className="block mb-2 text-sm font-medium text-zinc-700">
-                                Poin yang Akan Dikonversi
-                              </label>
+                              <div className="flex items-center gap-2 mb-2">
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Poin yang Akan Dikonversi
+                                </label>
+                                <Tooltip content="Jumlah poin yang akan dikonversi menjadi saldo. Rate konversi: 1 poin = Rp 100">
+                                  <HelpCircle className="w-4 h-4 text-gray-400" />
+                                </Tooltip>
+                              </div>
                               <div className="relative">
                                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                                   <Calculator className="w-5 h-5 text-zinc-400" />
@@ -707,18 +862,43 @@ export default function SalaryManagement() {
                                   className="pl-10 w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                                 />
                               </div>
-                              <p className="mt-2 text-sm text-zinc-500">
-                                Jumlah yang akan diterima: Rp {(pointsToConvert * 100).toLocaleString()}
-                              </p>
-                              <p className="mt-1 text-xs text-zinc-400">
-                                Rate: 1 poin = Rp 100
-                              </p>
+                              <div className="p-3 mt-3 border border-blue-100 rounded-lg bg-blue-50">
+                                <div className="flex justify-between">
+                                  <p className="text-sm text-blue-700">
+                                    Poin tersedia:
+                                  </p>
+                                  <p className="font-medium text-blue-700">
+                                    {userStats.points} poin
+                                  </p>
+                                </div>
+                                <div className="flex justify-between mt-2">
+                                  <p className="text-sm text-blue-700">
+                                    Jumlah yang akan diterima:
+                                  </p>
+                                  <p className="font-medium text-blue-700">
+                                    Rp {(pointsToConvert * 100).toLocaleString('id-ID')}
+                                  </p>
+                                </div>
+                                <div className="flex justify-between mt-2">
+                                  <p className="text-xs text-blue-600">
+                                    Rate konversi:
+                                  </p>
+                                  <p className="text-xs text-blue-600">
+                                    1 poin = Rp 100
+                                  </p>
+                                </div>
+                              </div>
                             </div>
                           ) : (
                             <div>
-                              <label className="block mb-2 text-sm font-medium text-zinc-700">
-                                Jumlah Gaji
-                              </label>
+                              <div className="flex items-center gap-2 mb-2">
+                                <label className="text-sm font-medium text-zinc-700">
+                                  Jumlah Gaji
+                                </label>
+                                <Tooltip content="Masukkan jumlah gaji yang akan dibayarkan kepada petugas">
+                                  <HelpCircle className="w-4 h-4 text-gray-400" />
+                                </Tooltip>
+                              </div>
                               <div className="relative">
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-400">
                                   Rp
@@ -731,10 +911,16 @@ export default function SalaryManagement() {
                                     baseSalary: Number(e.target.value)
                                   }))}
                                   min={0}
-                                  step={100}
+                                  step={1000}
                                   className="pl-10 w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                                 />
                               </div>
+                              <button
+                                onClick={handleSaveSalaryConfig}
+                                className="w-full px-4 py-2 mt-3 text-sm transition-colors border rounded-lg text-emerald-700 bg-emerald-100 border-emerald-200 hover:bg-emerald-200"
+                              >
+                                Simpan Konfigurasi Gaji
+                              </button>
                             </div>
                           )}
                         </div>
@@ -766,7 +952,7 @@ export default function SalaryManagement() {
                                     : 'Transaksi'}
                               </span>
                               <span className="font-semibold text-emerald-600">
-                                Rp {transaction.amount?.toLocaleString() || 0}
+                                Rp {transaction.amount?.toLocaleString('id-ID') || 0}
                               </span>
                             </div>
                             <div className="flex items-center justify-between">
