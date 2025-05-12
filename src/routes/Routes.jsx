@@ -32,6 +32,7 @@ import CustomerMarketplace from '../pages/dashboard/customer/CustomerMarketplace
 import ProductDetails from '../pages/dashboard/customer/ProductDetails';
 import Checkout from '../pages/dashboard/customer/Checkout';
 import OrderConfirmation from '../pages/dashboard/customer/OrderConfirmation';
+import CustomerProfile from '../pages/dashboard/customer/Profile';
 import GovernmentDashboard from '../pages/dashboard/government/GovernmentDashboard';
 import WastebankReports from '../pages/dashboard/government/GovernmentReports';
 import GovernmentMonitoring from '../pages/dashboard/government/GovernmentMonitoring';
@@ -118,6 +119,7 @@ const AppRoutes = () => (
           <Route path="detect-waste" element={<DetectWaste />} />
           <Route path="history" element={<History />} />
           <Route path="rewards" element={<Rewards />} />
+          <Route path="profile" element={<CustomerProfile />} />
           <Route path="track-pickup" element={<TrackPickup />} />
           <Route path="marketplace" element={<CustomerMarketplace />} />
           <Route path="marketplace/product/:id" element={<ProductDetails />} />
