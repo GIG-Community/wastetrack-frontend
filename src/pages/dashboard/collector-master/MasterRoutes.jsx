@@ -10,9 +10,10 @@ import {
     Package,
     ArrowRight,
     Clock,
-    MapPin as RouteIcon
+    MapPin as RouteIcon,
+    Info
 } from 'lucide-react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -21,9 +22,11 @@ import 'leaflet/dist/leaflet.css';
 // Badge Component
 const Badge = ({ children, variant }) => {
   const variants = {
-    assigned: 'bg-blue-100 text-blue-700',
-    in_progress: 'bg-yellow-100 text-yellow-700',
-    completed: 'bg-emerald-100 text-emerald-700'
+    pending: "bg-yellow-100 text-yellow-700",
+    assigned: "bg-blue-100 text-blue-700",
+    in_progress: "bg-blue-100 text-blue-700",
+    completed: "bg-emerald-100 text-emerald-700",
+    cancelled: "bg-red-100 text-red-700"
   };
 
   return (
@@ -33,8 +36,8 @@ const Badge = ({ children, variant }) => {
   );
 };
 
-// Marker icons for different status
-const createMarkerIcon = (color) => {
+// Create the marker icons once outside the component
+const createCustomIcon = (color) => {
   return L.divIcon({
     className: 'custom-marker-icon',
     html: `<div class="w-8 h-8 rounded-full bg-${color}-100 border-4 border-${color}-500 flex items-center justify-center">
@@ -46,31 +49,69 @@ const createMarkerIcon = (color) => {
   });
 };
 
+// Pre-create icons outside of component render cycle
 const statusIcons = {
-  assigned: createMarkerIcon('blue'),
-  in_progress: createMarkerIcon('yellow'),
-  completed: createMarkerIcon('emerald')
+  pending: createCustomIcon('yellow'),
+  assigned: createCustomIcon('blue'),
+  in_progress: createCustomIcon('lime'),
+  completed: createCustomIcon('emerald'),
+  cancelled: createCustomIcon('red')
 };
 
+// Updated current location icon for better visibility
+const currentLocationIcon = L.divIcon({
+  className: 'custom-marker-icon',
+  html: `<div class="w-10 h-10 rounded-full flex items-center justify-center" style="background: radial-gradient(circle, rgba(16,185,129,0.7) 0%, rgba(16,185,129,0.3) 60%, transparent 70%); box-shadow: 0 0 0 2px #10B981;">
+    <div class="w-4 h-4 rounded-full bg-emerald-500 border-2 border-white animate-pulse"></div>
+  </div>`,
+  iconSize: [40, 40],
+  iconAnchor: [20, 20],
+  popupAnchor: [0, -20]
+});
+
 const statusColors = {
-  assigned: '#3B82F6',     // blue-500
-  in_progress: '#FBBF24',  // yellow-500
-  completed: '#10B981'     // emerald-500
+  pending: '#FBBF24',    // yellow-500
+  assigned: '#3B82F6',   // blue-500
+  in_progress: '#95ff00', // lime
+  completed: '#10B981',  // emerald-500
+  cancelled: '#EF4444'   // red-500
+};
+
+// Status translations in Indonesian
+const statusTranslations = {
+  pending: "Tertunda",
+  assigned: "Ditugaskan",
+  in_progress: "Dalam Proses",
+  completed: "Selesai",
+  cancelled: "Dibatalkan"
 };
 
 // Component for the legend
 const MapLegend = () => (
   <div className="absolute bottom-5 right-5 bg-white p-4 rounded-lg shadow-lg z-[1000]">
-    <h4 className="mb-2 text-sm font-medium text-gray-900">Pickup Status</h4>
+    <h4 className="mb-2 text-sm font-medium text-gray-900">Status Pengambilan</h4>
     <div className="space-y-2">
       {Object.entries(statusColors).map(([status, color]) => (
         <div key={status} className="flex items-center gap-2">
           <div className={`w-4 h-4 rounded-full`} style={{ backgroundColor: color }} />
-          <span className="text-sm text-gray-700 capitalize">
-            {status.replace('_', ' ')}
+          <span className="text-sm text-gray-700">
+            {statusTranslations[status]}
           </span>
         </div>
       ))}
+    </div>
+  </div>
+);
+
+// Help tooltip component
+const HelpTooltip = ({ title, content }) => (
+  <div className="relative group">
+    <button className="p-1 text-gray-500 bg-gray-100 rounded-full hover:bg-gray-200">
+      <Info size={16} />
+    </button>
+    <div className="absolute z-10 hidden w-64 p-2 mb-2 transform -translate-x-1/2 bg-white border border-gray-200 rounded-md shadow-lg group-hover:block bottom-full left-1/2">
+      <h4 className="mb-1 text-sm font-medium">{title}</h4>
+      <p className="text-xs text-gray-600">{content}</p>
     </div>
   </div>
 );
@@ -86,12 +127,26 @@ const MapUpdater = ({ center }) => {
   return null;
 };
 
+// Current Location Updater Component with flexible zoom
+const CurrentLocationUpdater = ({ center, active }) => {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (active && center) {
+      // Use a wider view when following location to see more surrounding pickups
+      map.setView(center, 14);
+    }
+  }, [center, active, map]);
+  
+  return null;
+};
+
 // Format duration helper
 const formatDuration = (minutes) => {
   const hours = Math.floor(minutes / 60);
   const mins = Math.round(minutes % 60);
-  if (hours === 0) return `${mins} min`;
-  return `${hours} h ${mins} min`;
+  if (hours === 0) return `${mins} menit`;
+  return `${hours} jam ${mins} menit`;
 };
 
 // Format distance helper
@@ -116,30 +171,59 @@ const MasterRoutes = () => {
     totalDuration: 0,
     segments: []
   });
+  const [followCurrentLocation, setFollowCurrentLocation] = useState(false);
 
+  // Watch current location continuously
   useEffect(() => {
-    // Get current location
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setCurrentLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        });
-      },
-      (error) => {
-        console.error('Error getting location:', error);
-        // Fallback to default location (Surabaya)
-        setCurrentLocation({
-          lat: -7.2575,
-          lng: 112.7521
-        });
+    let watchId;
+
+    const startLocationWatch = () => {
+      if (navigator.geolocation) {
+        watchId = navigator.geolocation.watchPosition(
+          (position) => {
+            const newLocation = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            };
+            setCurrentLocation(newLocation);
+            
+            // If following current location, update map center
+            if (followCurrentLocation) {
+              setMapCenter([newLocation.lat, newLocation.lng]);
+            }
+          },
+          (error) => {
+            console.error('Error getting location:', error);
+            // Fallback to default location (Surabaya)
+            if (!currentLocation) {
+              setCurrentLocation({
+                lat: -7.2575,
+                lng: 112.7521
+              });
+            }
+          },
+          { 
+            enableHighAccuracy: true,
+            maximumAge: 5000, // Shorter cache time for more frequent updates
+            timeout: 10000 // Longer timeout to allow for GPS lock
+          }
+        );
       }
-    );
-  }, []);
+    };
+
+    startLocationWatch();
+
+    // Cleanup function
+    return () => {
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [followCurrentLocation]);
 
   useEffect(() => {
     if (currentUser?.uid) {
-      fetchPickups();
+      setupPickupsListener();
     }
   }, [currentUser?.uid]);
 
@@ -147,7 +231,7 @@ const MasterRoutes = () => {
   const fetchRouteDetails = async (startLat, startLng, endLat, endLng) => {
     try {
       const response = await fetch(
-        `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&annotations=true`
+        `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&annotations=true&continue_straight=true`
       );
       const data = await response.json();
       
@@ -211,10 +295,11 @@ const MasterRoutes = () => {
     fetchAllRoutes();
   }, [currentLocation, optimalRoute]);
 
-  // Calculate optimal route
+  // Calculate optimal route without distance limitations
   useEffect(() => {
     if (currentLocation && pickups.length > 0) {
-      const activePickups = pickups.filter(p => p.status !== 'completed');
+      // Only include active pickups (not completed or cancelled)
+      const activePickups = pickups.filter(p => p.status !== 'completed' && p.status !== 'cancelled');
       if (activePickups.length > 0) {
         const route = calculateRouteOrder(
           activePickups,
@@ -246,14 +331,20 @@ const MasterRoutes = () => {
       let minDistance = Number.MAX_VALUE;
   
       unvisited.forEach((pickup, idx) => {
+        // Calculate distance without limitations
         const distance = Math.sqrt(
           Math.pow(pickup.coordinates.lat - currentLat, 2) + 
           Math.pow(pickup.coordinates.lng - currentLng, 2)
         );
         
-        // Consider weight in route optimization
-        const weightFactor = Math.min(pickup.estimatedWeight / 100, 1); // Cap at 100kg
-        const score = distance * (1 + weightFactor); // Heavier loads get priority
+        // Priority based on status (in_progress first)
+        const statusPriority = pickup.status === 'in_progress' ? 0.5 : 1;
+        
+        // Weight factor - higher weight gets higher priority but don't limit maximum
+        const weightFactor = pickup.estimatedWeight / 500; // No cap on weight
+        
+        // Final score - lower is higher priority
+        const score = distance * statusPriority * (1 - weightFactor * 0.3);
         
         if (score < minDistance) {
           minDistance = score;
@@ -271,7 +362,8 @@ const MasterRoutes = () => {
     return route;
   };
 
-  const fetchPickups = async () => {
+  // Set up real-time listener for pickups
+  const setupPickupsListener = () => {
     setLoading(true);
     try {
       const pickupsQuery = query(
@@ -279,50 +371,70 @@ const MasterRoutes = () => {
         where('collectorId', '==', currentUser.uid)
       );
       
-      const snapshot = await getDocs(pickupsQuery);
-      const allPickupsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        // Ensure waste quantities are properly mapped
-        wasteQuantities: doc.data().wasteQuantities || {},
-        userName: doc.data().wasteBankName, // Use wasteBankName as the user name
-        location: doc.data().address || doc.data().location?.address, // Handle both direct address and nested location
-        coordinates: doc.data().coordinates || doc.data().location?.coordinates // Handle both direct coordinates and nested location
-      }));
+      // Use onSnapshot instead of getDocs for real-time updates
+      const unsubscribe = onSnapshot(
+        pickupsQuery, 
+        (snapshot) => {
+          const allPickupsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
 
-      // Filter for requests with valid coordinates
-      const pickupsData = allPickupsData.filter(pickup => 
-        pickup.coordinates !== null && 
-        pickup.coordinates.lat !== undefined
+          // Filter for only pickup deliveryType and ensure coordinates exist
+          const pickupsData = allPickupsData.filter(pickup => 
+            pickup.deliveryType === 'pickup' && 
+            pickup.coordinates !== null && 
+            pickup.coordinates.lat !== undefined
+          );
+
+          setPickups(pickupsData);
+
+          if (pickupsData.length > 0 && pickupsData[0].coordinates && !followCurrentLocation) {
+            setMapCenter([
+              pickupsData[0].coordinates.lat,
+              pickupsData[0].coordinates.lng
+            ]);
+          }
+
+          setLoading(false);
+          setError(null);
+        },
+        (err) => {
+          console.error('Error fetching pickups:', err);
+          setError('Gagal memuat lokasi pengambilan');
+          setLoading(false);
+        }
       );
 
-      setPickups(pickupsData);
-
-      if (pickupsData.length > 0 && pickupsData[0].coordinates) {
-        setMapCenter([
-          pickupsData[0].coordinates.lat,
-          pickupsData[0].coordinates.lng
-        ]);
-      }
-
-      setError(null);
+      // Return the unsubscribe function for cleanup
+      return unsubscribe;
     } catch (err) {
-      console.error('Error fetching pickups:', err);
-      setError('Failed to load pickup locations');
-    } finally {
+      console.error('Error setting up listener:', err);
+      setError('Gagal memuat lokasi pengambilan');
       setLoading(false);
     }
   };
 
   const handlePickupClick = (pickup) => {
     setSelectedPickup(pickup);
+    setFollowCurrentLocation(false);
     setMapCenter([pickup.coordinates.lat, pickup.coordinates.lng]);
+  };
+
+  const handleFollowLocationToggle = () => {
+    setFollowCurrentLocation(!followCurrentLocation);
+    if (!followCurrentLocation && currentLocation) {
+      setMapCenter([currentLocation.lat, currentLocation.lng]);
+    }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 mx-auto mb-4 animate-spin text-emerald-500" />
+          <p className="text-gray-600">Memuat data pengambilan sampah...</p>
+        </div>
       </div>
     );
   }
@@ -334,10 +446,10 @@ const MasterRoutes = () => {
           <AlertCircle className="w-10 h-10 mx-auto mb-4 text-red-500" />
           <h3 className="mb-2 text-lg font-medium text-gray-900">{error}</h3>
           <button
-            onClick={fetchPickups}
+            onClick={setupPickupsListener}
             className="px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
           >
-            Try Again
+            Coba Lagi
           </button>
         </div>
       </div>
@@ -362,57 +474,81 @@ const MasterRoutes = () => {
                 <Route className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-800">Collection Routes</h1>
-                <p className="text-sm text-gray-500">Optimize your pickup routes</p>
+                <h1 className="text-2xl font-semibold text-gray-800">Rute Pengambilan</h1>
+                <p className="text-sm text-gray-500">Optimalkan rute pengambilan sampah Anda</p>
               </div>
             </div>
 
             {/* Quick Stats */}
             <div className="flex gap-4">
               <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl">
-                <p className="text-sm text-gray-500">Pending Pickups</p>
+                <p className="text-sm text-gray-500">Pengambilan Tertunda</p>
                 <p className="text-2xl font-semibold text-blue-600">
-                  {pickups.filter(p => !p.status || p.status === 'assigned').length}
+                  {pickups.filter(p => p.status === 'assigned' || p.status === 'pending').length}
                 </p>
               </div>
               <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl">
-                <p className="text-sm text-gray-500">In Progress</p>
+                <p className="text-sm text-gray-500">Dalam Proses</p>
                 <p className="text-2xl font-semibold text-yellow-600">
                   {pickups.filter(p => p.status === 'in_progress').length}
                 </p>
               </div>
               <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl">
-                <p className="text-sm text-gray-500">Completed Today</p>
+                <p className="text-sm text-gray-500">Selesai Hari Ini</p>
                 <p className="text-2xl font-semibold text-emerald-600">
                   {pickups.filter(p => {
                     if (p.status !== 'completed') return false;
                     const today = new Date();
-                    const pickupDate = p.completedAt ? new Date(p.completedAt.seconds * 1000) : null;
-                    return pickupDate && pickupDate.toDateString() === today.toDateString();
+                    const pickupDate = new Date(p.completedAt?.seconds * 1000);
+                    return pickupDate.toDateString() === today.toDateString();
                   }).length}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Route Stats Card */}
-          {routeStats.totalDistance > 0 && (
-            <div className="p-4 mb-6 bg-white border border-gray-200 rounded-xl">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-50">
-                    <RouteIcon className="w-5 h-5 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Estimated Time</p>
-                    <p className="text-lg font-semibold text-gray-900">
-                      {formatDuration(routeStats.totalDuration / 60)}
-                    </p>
-                  </div>
+          {/* Location & Route Info */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={handleFollowLocationToggle}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+                  followCurrentLocation 
+                    ? 'bg-emerald-500 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <Navigation className="w-4 h-4" />
+                {followCurrentLocation ? 'Mengikuti Lokasi Anda' : 'Ikuti Lokasi Saya'}
+              </button>
+              <HelpTooltip 
+                title="Ikuti Lokasi"
+                content="Aktifkan fitur ini untuk terus mengikuti posisi Anda saat ini pada peta. Peta akan otomatis berpindah saat Anda bergerak."
+              />
+            </div>
+
+            {/* Route Stats Card */}
+            {routeStats.totalDistance > 0 && (
+              <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
+                <div className="p-2 rounded-lg bg-blue-50">
+                  <RouteIcon className="w-5 h-5 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Estimasi Waktu Total</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {formatDuration(routeStats.totalDuration / 60)}
+                  </p>
+                </div>
+                <div className="h-10 mx-2 border-l border-gray-200"></div>
+                <div>
+                  <p className="text-sm text-gray-500">Jarak Total</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {formatDistance(routeStats.totalDistance)}
+                  </p>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Map Container */}
           <div className="overflow-hidden bg-white border border-gray-200 shadow-sm rounded-xl">
@@ -421,8 +557,10 @@ const MasterRoutes = () => {
                 center={mapCenter} 
                 zoom={13} 
                 className="w-full h-full"
+                key={`map-${mapCenter[0]}-${mapCenter[1]}`} // Add a key to force re-render when center changes
               >
                 <MapUpdater center={mapCenter} />
+                <CurrentLocationUpdater center={currentLocation ? [currentLocation.lat, currentLocation.lng] : null} active={followCurrentLocation} />
                 <TileLayer
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -431,20 +569,14 @@ const MasterRoutes = () => {
                 {/* Current Location Marker */}
                 {currentLocation && (
                   <Marker
+                    key={`current-location-${currentLocation.lat}-${currentLocation.lng}`}
                     position={[currentLocation.lat, currentLocation.lng]}
-                    icon={L.divIcon({
-                      className: 'custom-marker-icon',
-                      html: `<div class="w-8 h-8 rounded-full bg-gray-100 border-4 border-gray-500 flex items-center justify-center">
-                        <div class="w-4 h-4 rounded-full bg-gray-500 animate-ping"></div>
-                      </div>`,
-                      iconSize: [32, 32],
-                      iconAnchor: [16, 32]
-                    })}
+                    icon={currentLocationIcon}
                   >
                     <Popup>
                       <div className="text-center">
-                        <p className="font-medium">Your Location</p>
-                        <p className="text-sm text-gray-500">Current position</p>
+                        <p className="font-medium">Lokasi Anda</p>
+                        <p className="text-sm text-gray-500">Posisi saat ini</p>
                       </div>
                     </Popup>
                   </Marker>
@@ -453,9 +585,9 @@ const MasterRoutes = () => {
                 {/* Pickup Location Markers */}
                 {pickups.map((pickup) => (
                   <Marker
-                    key={pickup.id}
+                    key={`pickup-${pickup.id}-${pickup.status}`} // Add status to key to ensure re-render when status changes
                     position={[pickup.coordinates.lat, pickup.coordinates.lng]}
-                    icon={statusIcons[pickup.status]}
+                    icon={statusIcons[pickup.status] || statusIcons['assigned']} // Fallback to assigned if status not found
                     eventHandlers={{
                       click: () => handlePickupClick(pickup)
                     }}
@@ -463,7 +595,7 @@ const MasterRoutes = () => {
                     <Popup>
                       <div className="p-2">
                         <h3 className="font-medium text-gray-900">
-                          {pickup.wasteBankName}
+                          {pickup.userName}
                         </h3>
                         <p className="mt-1 text-sm text-gray-500">
                           {pickup.location}
@@ -473,26 +605,20 @@ const MasterRoutes = () => {
                             <Package className="w-4 h-4 text-gray-400" />
                             <span className="text-sm text-gray-600">
                               {Object.values(pickup.wasteQuantities || {})
-                                .reduce((sum, quantity) => sum + quantity, 0)} bags total
+                                .reduce((sum, quantity) => sum + quantity, 0)} kantong total
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-1">
-                            {Object.entries(pickup.wasteWeights || {}).map(([type, weight]) => (
+                            {Object.entries(pickup.wasteQuantities || {}).map(([type, quantity]) => (
                               <Badge key={type} variant={pickup.status}>
-                                {type}: {weight} kg
+                                {type}: {quantity}
                               </Badge>
                             ))}
                           </div>
                         </div>
-                        <div className="mt-2">
-                          <div className="text-sm text-gray-600">
-                            <div>Time: {pickup.time || 'Not specified'}</div>
-                            <div>Value: Rp {pickup.totalValue?.toLocaleString() || '0'}</div>
-                          </div>
-                        </div>
                         <div className="mt-3">
-                          <Badge variant={pickup.status || 'assigned'}>
-                            {(pickup.status || 'assigned').charAt(0).toUpperCase() + (pickup.status || 'assigned').slice(1)}
+                          <Badge variant={pickup.status}>
+                            {statusTranslations[pickup.status]}
                           </Badge>
                         </div>
                       </div>
@@ -503,6 +629,7 @@ const MasterRoutes = () => {
                 {/* Route Lines */}
                 {routeCoordinates.length > 0 && (
                   <Polyline
+                    key={`route-${routeCoordinates.length}`}
                     positions={routeCoordinates}
                     color="#10B981"
                     weight={4}
@@ -518,9 +645,15 @@ const MasterRoutes = () => {
           {/* Route Summary */}
           {optimalRoute.length > 0 && (
             <div className="p-6 mt-6 bg-white border border-gray-200 rounded-xl">
-              <h2 className="mb-4 text-lg font-semibold text-gray-800">
-                Suggested Route Order
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-800">
+                  Urutan Rute yang Disarankan
+                </h2>
+                <HelpTooltip 
+                  title="Tentang Rute yang Disarankan"
+                  content="Pengurutan rute dioptimalkan berdasarkan jarak dan jumlah sampah. Klik pada lokasi pengambilan untuk melihat detail dan berpindah ke posisi tersebut di peta."
+                />
+              </div>
               <div className="space-y-4">
                 {routeStats.segments.map((segment, index) => (
                   <div 
@@ -551,15 +684,11 @@ const MasterRoutes = () => {
                       <div className="flex items-center gap-2">
                         <Package className="w-4 h-4 text-gray-400" />
                         <span className="text-sm text-gray-600">
-                          {Object.values(segment.pickup.wasteQuantities || {})
-                            .reduce((sum, quantity) => sum + quantity, 0)} items
+                          {Object.values(segment.pickup.wasteQuantities || {}).reduce((sum, quantity) => sum + quantity, 0)} kantong
                         </span>
                       </div>
-                      <div className="text-sm text-gray-600">
-                        Rp {segment.pickup.totalValue?.toLocaleString() || '0'}
-                      </div>
-                      <Badge variant={segment.pickup.status || 'assigned'}>
-                        {(segment.pickup.status || 'assigned').charAt(0).toUpperCase() + (segment.pickup.status || 'assigned').slice(1)}
+                      <Badge variant={segment.pickup.status}>
+                        {statusTranslations[segment.pickup.status]}
                       </Badge>
                       <ArrowRight className="w-5 h-5 text-gray-400" />
                     </div>
@@ -576,13 +705,31 @@ const MasterRoutes = () => {
                 <Route className="w-8 h-8 text-gray-400" />
               </div>
               <h3 className="mb-2 text-lg font-medium text-gray-900">
-                No Active Routes
+                Tidak Ada Rute Aktif
               </h3>
               <p className="max-w-md mx-auto text-gray-500">
-                There are currently no pending pickups assigned to you. New pickups will appear here when they are assigned.
+                Saat ini tidak ada pengambilan sampah yang tertunda yang ditugaskan kepada Anda. Pengambilan baru akan muncul di sini saat ditugaskan.
               </p>
             </div>
           )}
+
+          {/* Instructions Card */}
+          <div className="p-6 mt-6 border border-blue-200 bg-blue-50 rounded-xl">
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-blue-100 rounded-full">
+                <Info className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="mb-2 font-medium text-blue-800">Panduan Penggunaan</h3>
+                <ul className="space-y-2 text-sm text-blue-700">
+                  <li>• Klik tombol "Ikuti Lokasi Saya" untuk peta mengikuti posisi Anda secara real-time</li>
+                  <li>• Titik-titik pada peta menunjukkan lokasi pengambilan sampah dengan warna sesuai statusnya</li>
+                  <li>• Klik pada titik pengambilan untuk melihat detail dan memindahkan peta ke lokasi tersebut</li>
+                  <li>• Urutan rute yang disarankan mempertimbangkan jarak dan jumlah sampah yang diambil</li>
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
     </div>
