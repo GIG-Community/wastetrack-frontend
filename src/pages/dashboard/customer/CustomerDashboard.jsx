@@ -12,10 +12,12 @@ import {
   Clock,
   Bell,
   User,
+  ShoppingBag,
   Menu,
   X,
   LogOut,
   Settings,
+  Wallet,
   ChevronDown
 } from 'lucide-react';
 
@@ -43,13 +45,12 @@ const CustomerDashboard = () => {
 
   // Navigation items configuration
   const navItems = [
-    { id: 'home', icon: Home, label: 'Home' },
-    { id: 'detect', icon: Camera, label: 'Cek Sampah' },
+    { id: 'home', icon: Home, label: 'Beranda' },
+    { id: 'detect', icon: Camera, label: 'Deteksi' },
     { id: 'schedule', icon: Calendar, label: 'Setor' },
-    { id: 'marketplace', icon: Gift, label: 'Marketplace' },
-    { id: 'history', icon: Clock, label: 'Buku Tabungan' },
-    
-    // { id: 'history', icon: Clock, label: 'History' }
+    { id: 'marketplace', icon: ShoppingBag, label: 'Toko' },
+    { id: 'history', icon: Wallet, label: 'Tabungan' },
+
   ];
 
   // Simulated notifications
@@ -212,7 +213,7 @@ const CustomerDashboard = () => {
             {/* Notifications */}
             <div className="relative notification-menu">
               <button 
-                className="relative p-2 rounded-lg hover:bg-gray-100"
+                className="bg-white relative p-2 rounded-lg hover:bg-gray-100"
                 onClick={() => setIsNotificationOpen(!isNotificationOpen)}
               >
                 <Bell className="w-5 h-5 text-gray-600" />
@@ -242,7 +243,7 @@ const CustomerDashboard = () => {
             {/* User Menu */}
             <div className="relative profile-menu">
               <button 
-                className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100"
+                className="bg-white flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100"
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
               >
                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-100">
@@ -305,19 +306,19 @@ const CustomerDashboard = () => {
        !location.pathname.includes('/checkout') && 
        !location.pathname.includes('/order-confirmation') && (
         <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100">
-          <div className="flex items-center justify-around h-16">
+          <div className="flex items-center justify-around h-14">
             {navItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => handleNavigation(item.id)}
-                className={`flex flex-col items-center p-2 min-w-[64px] transition-colors
+                className={`bg-white flex flex-col items-center p-2 min-w-[64px] transition-colors
                   ${activeTab === item.id 
                     ? 'text-emerald-500 bg-emerald-50 rounded-lg' 
                     : 'text-gray-500 hover:text-emerald-400 hover:bg-gray-50'
                   }`}
               >
-                <item.icon className="w-5 h-5" />
-                <span className="mt-1 text-xs font-medium">{item.label}</span>
+                <item.icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="mt-1 text-[11px]">{item.label}</span>
               </button>
             ))}
           </div>
