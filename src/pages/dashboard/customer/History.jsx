@@ -295,7 +295,9 @@ const History = () => {
                       className="w-full px-3 py-2 text-xs sm:text-sm  border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                     >
                       <option value="all">Semua Status</option>
-                      <option value="pending">Pending</option>
+                      <option value="assigned">Ditugaskan</option>
+                      <option value="pending">Menunggu</option>
+                      <option value="in_progress">Proses</option>
                       <option value="completed">Selesai</option>
                       <option value="cancelled">Dibatalkan</option>
                     </select>
@@ -380,12 +382,14 @@ const History = () => {
                           item.status === 'completed' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
                             item.status === 'assigned' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
                               item.status === 'cancelled' ? 'bg-red-100 text-red-800 border border-red-200' :
+                                item.status === 'in_progress' ? 'bg-orange-100 text-orange-800 border border-orange-200' :
                                 'bg-gray-100 text-gray-800 border border-gray-200'}`}>
                         {item.status === 'completed' ? 'Selesai' :
                           item.status === 'pending' ? 'Menunggu' :
-                            item.status === 'assigned' ? 'Diproses' :
+                            item.status === 'assigned' ? 'Ditugaskan' :
                               item.status === 'cancelled' ? 'Dibatalkan' :
-                                item.status}
+                                item.status === 'in_progress' ? 'Dalam Proses' :
+                                  item.status}
                       </span>
                     </div>
 
