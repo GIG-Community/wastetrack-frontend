@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, where } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -49,14 +49,14 @@ import {
 
 const COLORS = ['#10B981', '#6366F1', '#F59E0B', '#EF4444'];
 
-// Utility function to format numbers
+// Format angka untuk tampilan yang lebih baik
 const formatNumber = (num) => {
-  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + ' Juta';
+  if (num >= 1000) return (num / 1000).toFixed(1) + ' Ribu';
   return num.toFixed(1);
 };
 
-// Base Components
+// Komponen Kartu Statistik
 const StatCard = ({ icon: Icon, label, value, trend, subValue }) => (
   <div className="p-6 bg-white border border-gray-200 shadow-sm rounded-xl">
     <div className="flex items-start justify-between">
@@ -82,6 +82,7 @@ const StatCard = ({ icon: Icon, label, value, trend, subValue }) => (
   </div>
 );
 
+// Komponen Kartu Grafik
 const ChartCard = ({ title, description, children }) => (
   <div className="p-6 bg-white border border-gray-200 rounded-xl">
     <div className="flex items-start justify-between mb-6">
@@ -94,6 +95,7 @@ const ChartCard = ({ title, description, children }) => (
   </div>
 );
 
+// Komponen Kartu Peringatan
 const AlertCard = ({ type, title, description, action }) => {
   const colors = {
     warning: { bg: 'bg-amber-50', text: 'text-amber-700', icon: AlertTriangle },
@@ -140,60 +142,52 @@ const GovernmentDashboard = () => {
   });
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
+    setLoading(true);
+    
+    // Create query references
+    const wasteBankQuery = query(collection(db, 'users'), where('role', '==', 'wastebank_admin'));
+    const masterBankQuery = query(collection(db, 'users'), where('role', '==', 'wastebank_master'));
+    const pickupsQuery = query(collection(db, 'pickups'));
+    const masterRequestsQuery = query(collection(db, 'masterBankRequests'));
+    
+    // Create unsubscribe functions array to cleanup listeners
+    const unsubscribes = [];
+    
+    // Data containers
+    let wasteBankData = [];
+    let masterBankData = [];
+    let pickupsData = [];
+    let masterRequestsData = [];
+    
+    // Counter to track when all data is loaded
+    let dataLoaded = 0;
+    const totalDataSources = 4;
+    
+    const processData = () => {
+      // Only process when all data sources are loaded
+      if (dataLoaded < totalDataSources) return;
+      
       try {
-        // Fetch all data sources
-        const [
-          wasteBankSnapshot, 
-          masterBankSnapshot, 
-          pickupsSnapshot,
-          masterRequestsSnapshot
-        ] = await Promise.all([
-          getDocs(query(collection(db, 'users'), where('role', '==', 'wastebank_admin'))),
-          getDocs(query(collection(db, 'users'), where('role', '==', 'wastebank_master'))),
-          getDocs(query(collection(db, 'pickups'))),
-          getDocs(query(collection(db, 'masterBankRequests')))
-        ]);
-
         // Process wastebank data (small waste banks)
-        const wasteBankData = wasteBankSnapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data(),
-          type: 'small' 
-        }));
-
-        // Process master waste banks
-        const masterBankData = masterBankSnapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data(),
-          type: 'master' 
-        }));
-        
-        // All waste banks
         const allWasteBanks = [...wasteBankData, ...masterBankData];
-
-        // Process pickup data (small waste bank collections)
-        const pickupsData = pickupsSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(pickup => pickup.status === 'completed');
-
-        // Process master bank requests (transfers between small & master)
-        const masterRequestsData = masterRequestsSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(request => request.status === 'completed');
-
+        
+        // Filter completed pickups
+        const completedPickups = pickupsData.filter(pickup => pickup.status === 'completed');
+        
+        // Filter completed master requests
+        const completedMasterRequests = masterRequestsData.filter(request => request.status === 'completed');
+        
         // Calculate total waste volume handled
         let totalSmallBankVolume = 0;
         let totalMasterBankVolume = 0;
 
-        pickupsData.forEach(pickup => {
+        completedPickups.forEach(pickup => {
           Object.values(pickup.wastes || {}).forEach(waste => {
             totalSmallBankVolume += waste.weight || 0;
           });
         });
 
-        masterRequestsData.forEach(request => {
+        completedMasterRequests.forEach(request => {
           Object.values(request.wastes || {}).forEach(waste => {
             totalMasterBankVolume += waste.weightToReduce || waste.weight || 0;
           });
@@ -213,7 +207,7 @@ const GovernmentDashboard = () => {
           const date = new Date(currentYear, currentMonth - i, 1);
           const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
           monthlyData[monthKey] = {
-            month: date.toLocaleString('default', { month: 'short' }),
+            month: date.toLocaleString('id-ID', { month: 'short' }),
             smallBankVolume: 0,
             masterBankVolume: 0,
             pickupCount: 0,
@@ -222,7 +216,7 @@ const GovernmentDashboard = () => {
         }
         
         // Fill with pickup data
-        pickupsData.forEach(pickup => {
+        completedPickups.forEach(pickup => {
           if (!pickup.completedAt) return;
           
           const date = new Date(pickup.completedAt.seconds * 1000);
@@ -238,7 +232,7 @@ const GovernmentDashboard = () => {
         });
         
         // Fill with master bank request data
-        masterRequestsData.forEach(request => {
+        completedMasterRequests.forEach(request => {
           if (!request.completedAt) return;
           
           const date = new Date(request.completedAt.seconds * 1000);
@@ -257,7 +251,7 @@ const GovernmentDashboard = () => {
         const wasteTypeDistribution = {};
         
         // Add from pickups
-        pickupsData.forEach(pickup => {
+        completedPickups.forEach(pickup => {
           Object.entries(pickup.wastes || {}).forEach(([type, data]) => {
             if (!wasteTypeDistribution[type]) {
               wasteTypeDistribution[type] = { 
@@ -273,7 +267,7 @@ const GovernmentDashboard = () => {
         });
         
         // Add from master requests
-        masterRequestsData.forEach(request => {
+        completedMasterRequests.forEach(request => {
           Object.entries(request.wastes || {}).forEach(([type, data]) => {
             if (!wasteTypeDistribution[type]) {
               wasteTypeDistribution[type] = { 
@@ -292,7 +286,7 @@ const GovernmentDashboard = () => {
         const wasteBankToMasterFlows = [];
         const wasteBankFlowMap = {};
         
-        masterRequestsData.forEach(request => {
+        completedMasterRequests.forEach(request => {
           const smallBankId = request.wasteBankId;
           const masterBankId = request.masterBankId;
           const smallBank = wasteBankData.find(b => b.id === smallBankId);
@@ -303,8 +297,8 @@ const GovernmentDashboard = () => {
           const key = `${smallBankId}-${masterBankId}`;
           if (!wasteBankFlowMap[key]) {
             wasteBankFlowMap[key] = {
-              source: smallBank.profile?.institutionName || 'Unknown Small Bank',
-              target: masterBank.profile?.institutionName || 'Unknown Master Bank',
+              source: smallBank.profile?.institutionName || 'Bank Sampah Tidak Diketahui',
+              target: masterBank.profile?.institutionName || 'Bank Master Tidak Diketahui',
               volume: 0,
               count: 0,
               value: 0
@@ -341,9 +335,9 @@ const GovernmentDashboard = () => {
             let estimatedUsage = 0;
             if (bank.type === 'small') {
               // For small banks, look at pickups that haven't been transferred
-              const relevantPickups = pickupsData.filter(p => 
+              const relevantPickups = completedPickups.filter(p => 
                 p.wasteBankId === bank.id && 
-                !masterRequestsData.some(mr => 
+                !completedMasterRequests.some(mr => 
                   mr.wasteBankId === bank.id && 
                   mr.collectionIds?.some(c => c.id === p.id)
                 )
@@ -356,7 +350,7 @@ const GovernmentDashboard = () => {
               });
             } else {
               // For master banks, look at transfers received
-              const relevantTransfers = masterRequestsData.filter(mr => 
+              const relevantTransfers = completedMasterRequests.filter(mr => 
                 mr.masterBankId === bank.id
               );
               
@@ -372,20 +366,20 @@ const GovernmentDashboard = () => {
             
             return {
               id: bank.id,
-              name: bank.profile?.institutionName || bank.profile?.institution || 'Unnamed Facility',
+              name: bank.profile?.institutionName || bank.profile?.institution || 'Fasilitas Tanpa Nama',
               type: bank.type,
               capacity,
               usedCapacity: estimatedUsage * 0.01,
               usagePercent,
-              location: bank.location?.city || 'Unknown',
+              location: bank.location?.city || 'Lokasi Tidak Diketahui',
               dimensions
             };
           });
 
         // Calculate the number of active collectors in the system
         const activeCollectors = new Set([
-          ...pickupsData.map(p => p.collectorId),
-          ...masterRequestsData.map(r => r.collectorId)
+          ...completedPickups.map(p => p.collectorId),
+          ...completedMasterRequests.map(r => r.collectorId)
         ]).size;
 
         // Check compliance and generate alerts
@@ -394,7 +388,7 @@ const GovernmentDashboard = () => {
         
         // Check for inactive waste banks
         wasteBankData.forEach(bank => {
-          const bankPickups = pickupsData.filter(p => p.wasteBankId === bank.id);
+          const bankPickups = completedPickups.filter(p => p.wasteBankId === bank.id);
           const lastPickup = bankPickups[bankPickups.length - 1];
           
           if (lastPickup && lastPickup.completedAt) {
@@ -404,8 +398,8 @@ const GovernmentDashboard = () => {
             if (daysSinceLastPickup > 7) {
               alerts.push({
                 type: 'warning',
-                title: 'Inactive Waste Bank',
-                description: `${bank.profile?.institutionName || 'A waste bank'} hasn't processed waste in ${daysSinceLastPickup} days`,
+                title: 'Bank Sampah Tidak Aktif',
+                description: `${bank.profile?.institutionName || 'Bank sampah'} tidak memproses sampah selama ${daysSinceLastPickup} hari`,
                 wasteBankId: bank.id,
               });
             }
@@ -417,15 +411,15 @@ const GovernmentDashboard = () => {
           if (warehouse.usagePercent > 80) {
             alerts.push({
               type: 'warning',
-              title: 'Warehouse Capacity Warning',
-              description: `${warehouse.name} is at ${Math.round(warehouse.usagePercent)}% capacity`,
+              title: 'Peringatan Kapasitas Gudang',
+              description: `${warehouse.name} sudah mencapai ${Math.round(warehouse.usagePercent)}% dari kapasitas maksimal`,
               wasteBankId: warehouse.id,
             });
           }
         });
 
         // Calculate compliance rate
-        const activeWasteBanks = new Set(pickupsData.map(p => p.wasteBankId)).size;
+        const activeWasteBanks = new Set(completedPickups.map(p => p.wasteBankId)).size;
         const complianceRate = wasteBankData.length > 0 ? 
           (activeWasteBanks / wasteBankData.length) * 100 : 0;
 
@@ -444,30 +438,91 @@ const GovernmentDashboard = () => {
           wasteBanks: wasteBankData,
           masterBanks: masterBankData,
           allBanks: allWasteBanks,
-          pickups: pickupsData,
-          masterRequests: masterRequestsData,
+          pickups: completedPickups,
+          masterRequests: completedMasterRequests,
           alerts,
           monthlyTrends: Object.values(monthlyData),
           wasteTypeDistribution: Object.values(wasteTypeDistribution),
           wasteBankFlows: wasteBankToMasterFlows,
           warehouseData,
         });
-
+        setLoading(false);
       } catch (err) {
-        console.error('Error fetching data:', err);
-        setError('Failed to load dashboard data');
-      } finally {
+        console.error('Error processing data:', err);
+        setError('Gagal memproses data dashboard');
         setLoading(false);
       }
     };
 
-    fetchData();
+    // Setup real-time listeners
+    const wasteBankListener = onSnapshot(wasteBankQuery, (snapshot) => {
+      wasteBankData = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        type: 'small' 
+      }));
+      dataLoaded++;
+      processData();
+    }, error => {
+      console.error("Error fetching waste banks:", error);
+      setError('Gagal memuat data bank sampah');
+      setLoading(false);
+    });
+    
+    const masterBankListener = onSnapshot(masterBankQuery, (snapshot) => {
+      masterBankData = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        type: 'master' 
+      }));
+      dataLoaded++;
+      processData();
+    }, error => {
+      console.error("Error fetching master banks:", error);
+      setError('Gagal memuat data bank sampah master');
+      setLoading(false);
+    });
+    
+    const pickupsListener = onSnapshot(pickupsQuery, (snapshot) => {
+      pickupsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      dataLoaded++;
+      processData();
+    }, error => {
+      console.error("Error fetching pickups:", error);
+      setError('Gagal memuat data pengumpulan sampah');
+      setLoading(false);
+    });
+    
+    const masterRequestsListener = onSnapshot(masterRequestsQuery, (snapshot) => {
+      masterRequestsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      dataLoaded++;
+      processData();
+    }, error => {
+      console.error("Error fetching master requests:", error);
+      setError('Gagal memuat data permintaan bank master');
+      setLoading(false);
+    });
+    
+    // Store unsubscribe functions
+    unsubscribes.push(wasteBankListener);
+    unsubscribes.push(masterBankListener);
+    unsubscribes.push(pickupsListener);
+    unsubscribes.push(masterRequestsListener);
+    
+    // Cleanup function to unsubscribe from all listeners when component unmounts
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+    };
   }, []);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 mx-auto mb-4 animate-spin text-emerald-500" />
+          <p className="text-gray-600">Sedang memuat data...</p>
+          <p className="text-sm text-gray-500">Mohon tunggu sebentar</p>
+        </div>
       </div>
     );
   }
@@ -478,11 +533,12 @@ const GovernmentDashboard = () => {
         <div className="text-center">
           <AlertCircle className="w-10 h-10 mx-auto mb-4 text-red-500" />
           <h3 className="mb-2 text-lg font-medium text-gray-900">{error}</h3>
+          <p className="mb-4 text-gray-600">Terjadi kesalahan saat memuat data. Silakan coba lagi.</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
           >
-            Try Again
+            Coba Lagi
           </button>
         </div>
       </div>
@@ -507,14 +563,14 @@ const GovernmentDashboard = () => {
                 <Building2 className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-800">Government Dashboard</h1>
-                <p className="text-sm text-gray-500">Waste Management System Overview</p>
+                <h1 className="text-2xl font-semibold text-gray-800">Dashboard Pemerintah</h1>
+                <p className="text-sm text-gray-500">Ringkasan Sistem Pengelolaan Sampah</p>
               </div>
             </div>
 
             <button className="flex items-center gap-2 px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600">
               <Download className="w-4 h-4" />
-              Download Report
+              Unduh Laporan
             </button>
           </div>
 
@@ -522,13 +578,13 @@ const GovernmentDashboard = () => {
           <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
               icon={Building2}
-              label="Total Waste Banks"
+              label="Total Bank Sampah"
               value={data.summary.totalWasteBanks + data.summary.totalMasterBanks}
-              subValue={`${data.summary.totalWasteBanks} Small, ${data.summary.totalMasterBanks} Master`}
+              subValue={`${data.summary.totalWasteBanks} Bank Kecil, ${data.summary.totalMasterBanks} Bank Master`}
             />
             <StatCard
               icon={Scale}
-              label="Total Volume"
+              label="Total Volume Sampah"
               value={`${formatNumber(data.summary.totalVolume)} kg`}
               trend={(data.summary.totalVolume > 0 && data.monthlyTrends && data.monthlyTrends.length >= 2) ? 
                 Math.round((data.monthlyTrends[data.monthlyTrends.length-1].smallBankVolume + data.monthlyTrends[data.monthlyTrends.length-1].masterBankVolume) / 
@@ -536,22 +592,23 @@ const GovernmentDashboard = () => {
             />
             <StatCard
               icon={Banknote}
-              label="Total Balance"
+              label="Total Saldo"
               value={`Rp ${formatNumber(data.summary.totalBalance)}`}
-              subValue="Across all waste banks"
+              subValue="Dari seluruh bank sampah"
             />
             <StatCard
               icon={Users}
-              label="Active Collectors"
+              label="Kolektor Aktif"
               value={data.summary.activeCollectors}
-              subValue="Last 30 days"
+              subValue="Dalam 30 hari terakhir"
             />
           </div>
 
           {/* Alerts Section */}
           {data.alerts?.length > 0 && (
             <div className="mb-8">
-              <h2 className="mb-4 text-lg font-semibold text-gray-800">Alerts & Notifications</h2>
+              <h2 className="mb-2 text-lg font-semibold text-gray-800">Peringatan & Notifikasi</h2>
+              <p className="mb-4 text-sm text-gray-600">Informasi penting yang memerlukan perhatian Anda</p>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {data.alerts.map((alert, index) => (
                   <AlertCard
@@ -568,7 +625,10 @@ const GovernmentDashboard = () => {
 
           {/* Waste Bank Hierarchy */}
           <div className="mb-8">
-            <h2 className="mb-4 text-lg font-semibold text-gray-800">Waste Bank Structure</h2>
+            <h2 className="mb-2 text-lg font-semibold text-gray-800">Struktur Bank Sampah</h2>
+            <p className="mb-4 text-sm text-gray-600">
+              Hubungan antara Bank Sampah Kecil (mengumpulkan dari masyarakat) dan Bank Sampah Master (mengelola dalam skala besar)
+            </p>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               {/* Master Bank Card */}
               {data.masterBanks?.length > 0 && data.masterBanks.map((masterBank, idx) => (
@@ -579,32 +639,32 @@ const GovernmentDashboard = () => {
                         <Warehouse className="w-5 h-5 text-indigo-600" />
                       </div>
                       <div>
-                        <h3 className="font-medium text-gray-900">{masterBank.profile?.institutionName || 'Master Waste Bank'}</h3>
-                        <p className="text-sm text-gray-500">{masterBank.location?.city || 'Unknown Location'}</p>
+                        <h3 className="font-medium text-gray-900">{masterBank.profile?.institutionName || 'Bank Sampah Master'}</h3>
+                        <p className="text-sm text-gray-500">{masterBank.location?.city || 'Lokasi Tidak Diketahui'}</p>
                       </div>
                     </div>
                     <div className="px-2 py-1 text-xs font-medium text-indigo-700 rounded-full bg-indigo-50">
-                      Master Bank
+                      Bank Master
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="p-3 rounded-lg bg-gray-50">
-                      <p className="text-xs text-gray-500">Balance</p>
+                      <p className="text-xs text-gray-500">Saldo</p>
                       <p className="text-lg font-medium text-gray-900">Rp {formatNumber(masterBank.balance || 0)}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-gray-50">
-                      <p className="text-xs text-gray-500">Warehouse</p>
+                      <p className="text-xs text-gray-500">Gudang</p>
                       <p className="text-lg font-medium text-gray-900">
                         {masterBank.warehouseDimensions ? 
                           `${masterBank.warehouseDimensions.length}x${masterBank.warehouseDimensions.width}x${masterBank.warehouseDimensions.height}m` : 
-                          'Not set'}
+                          'Belum diatur'}
                       </p>
                     </div>
                   </div>
                   
                   <div className="mt-4">
-                    <h4 className="mb-2 text-sm font-medium text-gray-700">Connected Waste Banks</h4>
+                    <h4 className="mb-2 text-sm font-medium text-gray-700">Bank Sampah Terhubung</h4>
                     <div className="pr-2 space-y-2 overflow-y-auto max-h-32">
                       {data.wasteBankFlows
                         .filter(flow => flow.target === masterBank.profile?.institutionName)
@@ -620,7 +680,7 @@ const GovernmentDashboard = () => {
                           </div>
                         ))}
                       {data.wasteBankFlows.filter(flow => flow.target === masterBank.profile?.institutionName).length === 0 && (
-                        <p className="text-sm italic text-gray-500">No connected waste banks</p>
+                        <p className="text-sm italic text-gray-500">Tidak ada bank sampah terhubung</p>
                       )}
                     </div>
                   </div>
@@ -635,32 +695,32 @@ const GovernmentDashboard = () => {
                         <Building2 className="w-5 h-5 text-emerald-600" />
                       </div>
                       <div>
-                        <h3 className="font-medium text-gray-900">{bank.profile?.institutionName || bank.profile?.institution || 'Small Waste Bank'}</h3>
-                        <p className="text-sm text-gray-500">{bank.location?.city || 'Unknown Location'}</p>
+                        <h3 className="font-medium text-gray-900">{bank.profile?.institutionName || bank.profile?.institution || 'Bank Sampah Kecil'}</h3>
+                        <p className="text-sm text-gray-500">{bank.location?.city || 'Lokasi Tidak Diketahui'}</p>
                       </div>
                     </div>
                     <div className="px-2 py-1 text-xs font-medium rounded-full bg-emerald-50 text-emerald-700">
-                      Local Bank
+                      Bank Lokal
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="p-3 rounded-lg bg-gray-50">
-                      <p className="text-xs text-gray-500">Balance</p>
+                      <p className="text-xs text-gray-500">Saldo</p>
                       <p className="text-lg font-medium text-gray-900">Rp {formatNumber(bank.balance || 0)}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-gray-50">
-                      <p className="text-xs text-gray-500">Warehouse</p>
+                      <p className="text-xs text-gray-500">Gudang</p>
                       <p className="text-lg font-medium text-gray-900">
                         {bank.warehouseDimensions ? 
                           `${bank.warehouseDimensions.length}x${bank.warehouseDimensions.width}x${bank.warehouseDimensions.height}m` : 
-                          'Not set'}
+                          'Belum diatur'}
                       </p>
                     </div>
                   </div>
 
                   <div className="mt-4">
-                    <h4 className="mb-2 text-sm font-medium text-gray-700">Transfer Activity</h4>
+                    <h4 className="mb-2 text-sm font-medium text-gray-700">Aktivitas Transfer</h4>
                     {data.wasteBankFlows
                       .filter(flow => flow.source === bank.profile?.institutionName)
                       .map((flow, idx) => (
@@ -673,7 +733,7 @@ const GovernmentDashboard = () => {
                         </div>
                       ))}
                     {data.wasteBankFlows.filter(flow => flow.source === bank.profile?.institutionName).length === 0 && (
-                      <p className="text-sm italic text-gray-500">No transfer activity</p>
+                      <p className="text-sm italic text-gray-500">Belum ada aktivitas transfer</p>
                     )}
                   </div>
                 </div>
@@ -685,9 +745,14 @@ const GovernmentDashboard = () => {
           <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-2">
             {/* Monthly Collection Trends */}
             <ChartCard
-              title="Collection Trends"
-              description="Monthly waste volume by bank type"
+              title="Tren Pengumpulan Sampah"
+              description="Volume sampah bulanan berdasarkan jenis bank sampah"
             >
+              <p className="p-2 mb-4 text-sm text-blue-700 rounded-md bg-blue-50">
+                <strong>Cara Membaca Grafik:</strong> Grafik ini menunjukkan jumlah sampah yang dikelola 
+                setiap bulan (dalam kg). Semakin tinggi grafik, semakin banyak sampah yang berhasil dikelola.
+                Area hijau menunjukkan pengelolaan oleh bank sampah kecil, area ungu oleh bank sampah master.
+              </p>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={data.monthlyTrends}>
@@ -706,7 +771,7 @@ const GovernmentDashboard = () => {
                       stroke="#10B981"
                       fill="#10B981"
                       fillOpacity={0.2}
-                      name="Small Waste Banks"
+                      name="Bank Sampah Kecil"
                       stackId="1"
                     />
                     <Area
@@ -715,7 +780,7 @@ const GovernmentDashboard = () => {
                       stroke="#6366F1"
                       fill="#6366F1"
                       fillOpacity={0.2}
-                      name="Master Waste Banks"
+                      name="Bank Sampah Master"
                       stackId="1"
                     />
                   </AreaChart>
@@ -725,22 +790,39 @@ const GovernmentDashboard = () => {
 
             {/* Waste Type Distribution */}
             <ChartCard
-              title="Waste Type Distribution"
-              description="Volume by waste category and bank type"
+              title="Distribusi Jenis Sampah"
+              description="Volume berdasarkan kategori sampah dan jenis bank"
             >
+              <p className="p-2 mb-4 text-sm text-blue-700 rounded-md bg-blue-50">
+                <strong>Cara Membaca Grafik:</strong> Grafik batang ini menunjukkan jenis sampah mana yang paling 
+                banyak dikumpulkan. Setiap batang dibagi menjadi bagian hijau (dikelola bank kecil) dan 
+                ungu (dikelola bank master). Semakin tinggi batang, semakin banyak volume sampah tersebut.
+              </p>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={data.wasteTypeDistribution}
+                    data={data.wasteTypeDistribution.map(item => ({
+                      ...item,
+                      type: item.type === 'organic' ? 'Organik' :
+                            item.type === 'plastic' ? 'Plastik' :
+                            item.type === 'paper' ? 'Kertas' :
+                            item.type === 'metal' ? 'Logam' :
+                            item.type === 'glass' ? 'Kaca' :
+                            item.type === 'electronic' ? 'Elektronik' :
+                            item.type
+                    }))}
                     margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="type" />
                     <YAxis tickFormatter={(value) => `${formatNumber(value)} kg`} />
-                    <Tooltip formatter={(value) => `${formatNumber(value)} kg`} />
+                    <Tooltip 
+                      formatter={(value) => `${formatNumber(value)} kg`} 
+                      labelFormatter={(value) => `Jenis Sampah: ${value}`}
+                    />
                     <Legend />
-                    <Bar dataKey="smallBankVolume" stackId="a" name="Small Banks" fill="#10B981" />
-                    <Bar dataKey="masterBankVolume" stackId="a" name="Master Banks" fill="#6366F1" />
+                    <Bar dataKey="smallBankVolume" stackId="a" name="Bank Sampah Kecil" fill="#10B981" />
+                    <Bar dataKey="masterBankVolume" stackId="a" name="Bank Sampah Master" fill="#6366F1" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -751,9 +833,15 @@ const GovernmentDashboard = () => {
           <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-2">
             {/* Transaction Activity */}
             <ChartCard
-              title="Transaction Activity"
-              description="Monthly transaction count by type"
+              title="Aktivitas Transaksi"
+              description="Jumlah transaksi bulanan berdasarkan jenis"
             >
+              <p className="p-2 mb-4 text-sm text-blue-700 rounded-md bg-blue-50">
+                <strong>Cara Membaca Grafik:</strong> Grafik ini menunjukkan berapa kali transaksi 
+                terjadi setiap bulan. Batang hijau menunjukkan jumlah pengumpulan dari nasabah, 
+                sementara batang ungu menunjukkan transfer ke bank master. Semakin tinggi batang, 
+                semakin banyak aktivitas.
+              </p>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={data.monthlyTrends}>
@@ -769,14 +857,14 @@ const GovernmentDashboard = () => {
                     <Bar
                       yAxisId="left"
                       dataKey="pickupCount"
-                      name="Customer Collections"
+                      name="Pengumpulan Nasabah"
                       fill="#10B981"
                       barSize={20}
                     />
                     <Bar
                       yAxisId="left"
                       dataKey="transferCount"
-                      name="Master Transfers"
+                      name="Transfer ke Master"
                       fill="#6366F1"
                       barSize={20}
                     />
@@ -796,9 +884,15 @@ const GovernmentDashboard = () => {
 
             {/* Warehouse Capacity */}
             <ChartCard
-              title="Warehouse Utilization"
-              description="Current capacity utilization by facility"
+              title="Penggunaan Gudang"
+              description="Persentase kapasitas gudang yang terpakai"
             >
+              <p className="p-2 mb-4 text-sm text-blue-700 rounded-md bg-blue-50">
+                <strong>Cara Membaca Grafik:</strong> Grafik ini menunjukkan seberapa penuh gudang 
+                di setiap bank sampah. Semakin panjang batang ke kanan (mendekati 100%), 
+                semakin penuh gudang tersebut. Batang berwarna hijau untuk bank kecil dan 
+                ungu untuk bank master.
+              </p>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
@@ -809,11 +903,14 @@ const GovernmentDashboard = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" domain={[0, 100]} tickFormatter={(val) => `${val}%`} />
                     <YAxis type="category" dataKey="name" width={150} />
-                    <Tooltip formatter={(value) => `${Math.round(value)}%`} />
-                    <Legend />
+                    <Tooltip 
+                      formatter={(value) => `${Math.round(value)}%`} 
+                      labelFormatter={(value) => `Kapasitas Terpakai: ${value}`}
+                    />
+                    <Legend formatter={(value) => 'Kapasitas Terpakai'} />
                     <Bar 
                       dataKey="usagePercent" 
-                      name="Used Capacity"
+                      name="Kapasitas Terpakai"
                       fill={(entry) => entry.type === 'master' ? '#6366F1' : '#10B981'}
                     />
                   </BarChart>
@@ -824,16 +921,19 @@ const GovernmentDashboard = () => {
 
           {/* Facilities Table */}
           <div className="p-6 bg-white border border-gray-200 rounded-xl">
-            <h2 className="mb-4 text-lg font-semibold text-gray-800">Facilities Overview</h2>
+            <h2 className="mb-2 text-lg font-semibold text-gray-800">Ringkasan Fasilitas</h2>
+            <p className="mb-4 text-sm text-gray-600">
+              Daftar seluruh bank sampah dalam sistem beserta informasi utama mereka
+            </p>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Facility</th>
-                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Type</th>
-                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Location</th>
-                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Balance</th>
-                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Warehouse Size</th>
+                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Nama Fasilitas</th>
+                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Jenis</th>
+                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Lokasi</th>
+                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Saldo</th>
+                    <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Ukuran Gudang</th>
                     <th className="px-4 py-3 text-sm font-medium text-left text-gray-500">Status</th>
                   </tr>
                 </thead>
@@ -849,18 +949,18 @@ const GovernmentDashboard = () => {
                             }
                           </div>
                           <span className="font-medium text-gray-900">
-                            {bank.profile?.institutionName || bank.profile?.institution || 'Unnamed Facility'}
+                            {bank.profile?.institutionName || bank.profile?.institution || 'Fasilitas Tanpa Nama'}
                           </span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-medium 
                           ${bank.type === 'master' ? 'bg-indigo-50 text-indigo-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                          {bank.type === 'master' ? 'Master Bank' : 'Local Bank'}
+                          {bank.type === 'master' ? 'Bank Master' : 'Bank Lokal'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-600">
-                        {bank.location?.city || 'Unknown Location'}
+                        {bank.location?.city || 'Lokasi Tidak Diketahui'}
                       </td>
                       <td className="px-4 py-3 text-gray-600">
                         Rp {formatNumber(bank.balance || 0)}
@@ -868,18 +968,23 @@ const GovernmentDashboard = () => {
                       <td className="px-4 py-3 text-gray-600">
                         {bank.warehouseDimensions ? 
                           `${bank.warehouseDimensions.length}x${bank.warehouseDimensions.width}x${bank.warehouseDimensions.height}m` : 
-                          'Not set'}
+                          'Belum diatur'}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${bank.status === 'active' ? 
                           'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                          {bank.status || 'Active'}
+                          {bank.status === 'active' ? 'Aktif' : bank.status || 'Aktif'}
                         </span>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="mt-4 text-center">
+              <p className="text-sm text-gray-500">
+                Menampilkan 5 dari {data.allBanks?.length} bank sampah
+              </p>
             </div>
           </div>
         </div>

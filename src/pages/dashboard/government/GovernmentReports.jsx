@@ -15,7 +15,7 @@ import {
   Scale,
   HelpCircle
 } from 'lucide-react';
-import { collection, query, getDocs, where } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -207,67 +207,144 @@ const WastebankReports = () => {
 
   // Fetch data
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Fetch waste banks (small banks)
-        const wasteBankQuery = query(
-          collection(db, 'users'),
-          where('role', '==', 'wastebank_admin')
-        );
-        const wasteBankSnapshot = await getDocs(wasteBankQuery);
-        const wasteBankData = wasteBankSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+    setLoading(true);
+    
+    try {
+      // Create query references
+      const wasteBankQuery = query(
+        collection(db, 'users'),
+        where('role', '==', 'wastebank_admin')
+      );
+      const masterBankQuery = query(
+        collection(db, 'users'),
+        where('role', '==', 'wastebank_master')
+      );
+      const pickupsQuery = query(collection(db, 'pickups'));
+      const masterRequestsQuery = query(collection(db, 'masterBankRequests'));
+      
+      // Create unsubscribe functions array for cleanup
+      const unsubscribes = [];
+      
+      // Data containers
+      let wasteBankData = [];
+      let masterBankData = [];
+      let pickupsData = [];
+      let masterRequestsData = [];
+      
+      // Counter to track when all data sources are loaded
+      let dataSourcesLoaded = 0;
+      const totalDataSources = 4;
+      
+      // Process data once all sources are loaded
+      const processData = () => {
+        if (dataSourcesLoaded < totalDataSources) return;
+        
+        // Filter completed pickups
+        const completedPickups = pickupsData.filter(pickup => pickup.status === 'completed');
+        
+        // Filter completed master requests
+        const completedMasterRequests = masterRequestsData.filter(request => request.status === 'completed');
+        
+        // Set the data states
         setWasteBanks(wasteBankData);
-
-        // Fetch master waste banks
-        const masterBankQuery = query(
-          collection(db, 'users'),
-          where('role', '==', 'wastebank_master')
-        );
-        const masterBankSnapshot = await getDocs(masterBankQuery);
-        const masterBankData = masterBankSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
         setMasterBanks(masterBankData);
-
-        // Fetch pickups for small waste banks
-        const pickupsQuery = query(collection(db, 'pickups'));
-        const pickupsSnapshot = await getDocs(pickupsQuery);
-        const pickupsData = pickupsSnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
-          .filter(pickup => pickup.status === 'completed');
-        setPickupData(pickupsData);
-
-        // Fetch master bank requests
-        const masterRequestsQuery = query(collection(db, 'masterBankRequests'));
-        const masterRequestsSnapshot = await getDocs(masterRequestsQuery);
-        const masterRequestsData = masterRequestsSnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
-          .filter(request => request.status === 'completed');
-        setMasterRequests(masterRequestsData);
-
-        // Calculate statistics with all data
-        calculateStatistics(wasteBankData, masterBankData, pickupsData, masterRequestsData);
-
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError('Failed to load data');
-      } finally {
+        setPickupData(completedPickups);
+        setMasterRequests(completedMasterRequests);
+        
+        // Process statistics with all data
+        calculateStatistics(wasteBankData, masterBankData, completedPickups, completedMasterRequests);
+        
         setLoading(false);
-      }
-    };
-
-    fetchData();
+      };
+      
+      // Set up real-time listeners
+      
+      // Listen for waste banks
+      const wasteBankUnsubscribe = onSnapshot(
+        wasteBankQuery,
+        (snapshot) => {
+          wasteBankData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          dataSourcesLoaded++;
+          processData();
+        },
+        (error) => {
+          console.error('Error fetching waste banks:', error);
+          setError('Failed to load waste bank data');
+          setLoading(false);
+        }
+      );
+      unsubscribes.push(wasteBankUnsubscribe);
+      
+      // Listen for master banks
+      const masterBankUnsubscribe = onSnapshot(
+        masterBankQuery,
+        (snapshot) => {
+          masterBankData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          dataSourcesLoaded++;
+          processData();
+        },
+        (error) => {
+          console.error('Error fetching master banks:', error);
+          setError('Failed to load master bank data');
+          setLoading(false);
+        }
+      );
+      unsubscribes.push(masterBankUnsubscribe);
+      
+      // Listen for pickups
+      const pickupsUnsubscribe = onSnapshot(
+        pickupsQuery,
+        (snapshot) => {
+          pickupsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          dataSourcesLoaded++;
+          processData();
+        },
+        (error) => {
+          console.error('Error fetching pickups:', error);
+          setError('Failed to load pickup data');
+          setLoading(false);
+        }
+      );
+      unsubscribes.push(pickupsUnsubscribe);
+      
+      // Listen for master requests
+      const masterRequestsUnsubscribe = onSnapshot(
+        masterRequestsQuery,
+        (snapshot) => {
+          masterRequestsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          dataSourcesLoaded++;
+          processData();
+        },
+        (error) => {
+          console.error('Error fetching master requests:', error);
+          setError('Failed to load master request data');
+          setLoading(false);
+        }
+      );
+      unsubscribes.push(masterRequestsUnsubscribe);
+      
+      // Cleanup function to unsubscribe from all listeners when component unmounts
+      return () => {
+        unsubscribes.forEach(unsubscribe => unsubscribe());
+      };
+      
+    } catch (err) {
+      console.error('Error setting up data listeners:', err);
+      setError('Failed to load data');
+      setLoading(false);
+    }
   }, [dateRange]);
 
   // Calculate statistics with enhanced analytics
@@ -607,16 +684,16 @@ const WastebankReports = () => {
 
       <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         <div className="p-8">
-          {/* Enhanced Header with Carbon Offset Focus */}
+          {/* Header with Indonesian Language */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
               <div className="p-2 bg-white border border-gray-200 shadow-sm rounded-xl">
                 <LeafyGreen className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-800">Carbon Offset & Environmental Impact</h1>
+                <h1 className="text-2xl font-semibold text-gray-800">Laporan Dampak Lingkungan</h1>
                 <p className="text-sm text-gray-500">
-                  Comprehensive analysis of waste management and carbon reduction
+                  Analisis lengkap pengelolaan sampah dan pengurangan emisi karbon
                 </p>
               </div>
             </div>
@@ -627,102 +704,117 @@ const WastebankReports = () => {
                 onChange={(e) => setDateRange(e.target.value)}
                 className="w-44"
               >
-                <option value="month">Last Month</option>
-                <option value="quarter">Last Quarter</option>
-                <option value="year">Last Year</option>
-                <option value="all">All Time</option>
+                <option value="month">Bulan Ini</option>
+                <option value="quarter">3 Bulan Terakhir</option>
+                <option value="year">Tahun Ini</option>
+                <option value="all">Semua Waktu</option>
               </Select>
             </div>
           </div>
 
-          {/* Carbon Offset Overview */}
+          {/* Explanation Panel for Users */}
+          <div className="p-4 mb-6 text-blue-700 border border-blue-100 rounded-lg bg-blue-50">
+            <h3 className="mb-2 text-lg font-medium">Panduan Membaca Laporan:</h3>
+            <ul className="ml-4 text-sm list-disc">
+              <li className="mb-1">Laporan ini menampilkan dampak positif dari pengelolaan sampah terhadap lingkungan</li>
+              <li className="mb-1">Karbon (CO₂e): Jumlah gas rumah kaca yang berhasil dikurangi</li>
+              <li className="mb-1">1 ton karbon ≈ Emisi dari 1 mobil selama 3 bulan</li>
+              <li className="mb-1">Klik pada grafik untuk melihat detail lebih lanjut</li>
+            </ul>
+          </div>
+
+          {/* Carbon Offset Overview in Indonesian */}
           <div className="grid grid-cols-1 gap-4 mb-8 lg:grid-cols-4">
             <div className="p-6 text-white bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl">
               <div className="flex items-center gap-3 mb-4">
                 <Recycle className="w-6 h-6" />
-                <h3 className="text-lg font-semibold">Total Carbon Offset</h3>
+                <h3 className="text-lg font-semibold">Total Pengurangan Karbon</h3>
               </div>
               <p className="mb-2 text-3xl font-bold">
-                {Math.round(carbonStats.totalOffset)} tons CO₂e
+                {Math.round(carbonStats.totalOffset)} ton CO₂e
               </p>
               <p className="text-emerald-100">
-                Equivalent to {Math.round(carbonStats.totalOffset * 0.2)} cars off the road
+                Setara dengan {Math.round(carbonStats.totalOffset * 0.2)} mobil tidak beroperasi
               </p>
             </div>
 
             <div className="p-6 bg-white border border-gray-200 rounded-xl">
               <div className="flex items-center gap-3 mb-4">
                 <Package className="w-6 h-6 text-emerald-600" />
-                <h3 className="text-lg font-semibold text-gray-800">Carbon Credits</h3>
+                <h3 className="text-lg font-semibold text-gray-800">Kredit Karbon</h3>
               </div>
               <p className="mb-2 text-3xl font-bold text-gray-900">
-                {carbonStats.potentialCredits.toFixed(1)} credits
+                {carbonStats.potentialCredits.toFixed(1)} kredit
               </p>
               <p className="text-sm text-gray-500">
-                Potential carbon credit value
+                Potensi nilai kredit karbon yang bisa dijual
               </p>
             </div>
 
             <div className="p-6 bg-white border border-gray-200 rounded-xl">
               <div className="flex items-center gap-3 mb-4">
                 <Scale className="w-6 h-6 text-emerald-600" />
-                <h3 className="text-lg font-semibold text-gray-800">Carbon Efficiency</h3>
+                <h3 className="text-lg font-semibold text-gray-800">Efisiensi Karbon</h3>
               </div>
               <p className="mb-2 text-3xl font-bold text-gray-900">
                 {carbonStats.carbonEfficiency.toFixed(2)}
               </p>
               <p className="text-sm text-gray-500">
-                Tons CO₂e offset per ton of waste
+                Ton CO₂e per ton sampah yang dikelola
               </p>
             </div>
 
             <div className="p-6 bg-white border border-gray-200 rounded-xl">
               <div className="flex items-center gap-3 mb-4">
                 <Calendar className="w-6 h-6 text-emerald-600" />
-                <h3 className="text-lg font-semibold text-gray-800">Projected Annual</h3>
+                <h3 className="text-lg font-semibold text-gray-800">Proyeksi Tahunan</h3>
               </div>
               <p className="mb-2 text-3xl font-bold text-gray-900">
-                {Math.round(carbonStats.projectedSavings)} tons
+                {Math.round(carbonStats.projectedSavings)} ton
               </p>
               <p className="text-sm text-gray-500">
-                Estimated annual carbon offset
+                Perkiraan pengurangan karbon per tahun
               </p>
             </div>
           </div>
 
-          {/* Stats Grid */}
+          {/* Stats Grid in Indonesian */}
           <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
               icon={Recycle}
-              label="Carbon Impact"
+              label="Dampak Karbon"
               value={`${Math.round(stats.totalImpact.carbon)} kg CO₂e`}
-              subValue="Total emissions prevented"
+              subValue="Total emisi yang berhasil dicegah"
             />
             <StatCard
               icon={TreesIcon}
-              label="Trees Preserved"
-              value={`${Math.round(stats.totalImpact.trees)} trees`}
-              subValue="Equivalent preservation"
+              label="Pohon Terselamatkan"
+              value={`${Math.round(stats.totalImpact.trees)} pohon`}
+              subValue="Setara pohon yang tidak ditebang"
             />
             <StatCard
               icon={DropletIcon}
-              label="Water Saved"
+              label="Air Terhemat"
               value={`${Math.round(stats.totalImpact.water / 1000)} m³`}
-              subValue="Water conservation impact"
+              subValue="Air yang berhasil dihemat"
             />
             <StatCard
               icon={Building2}
-              label="Active Waste Banks"
+              label="Bank Sampah Aktif"
               value={wasteBanks.length}
-              subValue={`${pickupData.length} total pickups processed`}
+              subValue={`${pickupData.length} total pengambilan sampah`}
             />
           </div>
 
-          {/* Map and Charts Grid */}
+          {/* Map and Charts Grid in Indonesian */}
           <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-3">
-            {/* Map Container */}
+            {/* Map Container with Instructions */}
             <div className="overflow-hidden bg-white border border-gray-200 shadow-sm lg:col-span-2 rounded-xl">
-              <div className="relative h-[500px]">
+              <div className="p-4 border-b border-gray-100 bg-gray-50">
+                <h3 className="font-medium text-gray-800">Peta Sebaran Bank Sampah</h3>
+                <p className="text-xs text-gray-500">Lingkaran menunjukkan volume sampah yang telah dikumpulkan. Klik pada titik untuk melihat detail.</p>
+              </div>
+              <div className="relative h-[450px]">
                 <MapContainer 
                   center={mapCenter} 
                   zoom={13} 
@@ -770,13 +862,13 @@ const WastebankReports = () => {
                               </p>
                               <div className="pt-2 mt-2 border-t border-gray-200">
                                 <p className="text-sm font-medium text-emerald-600">
-                                  {Math.round(location.stats.totalValue)} currency value
+                                  Rp {Math.round(location.stats.totalValue).toLocaleString('id')} nilai ekonomi
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {location.stats.totalWeight.toFixed(1)} kg waste collected
+                                  {location.stats.totalWeight.toFixed(1)} kg sampah terkumpul
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {location.stats.transactions} transactions completed
+                                  {location.stats.transactions} transaksi selesai
                                 </p>
                               </div>
                             </div>
@@ -789,12 +881,15 @@ const WastebankReports = () => {
               </div>
             </div>
 
-            {/* Top Performers List */}
+            {/* Top Performers List in Indonesian */}
             <div className="p-6 bg-white border border-gray-200 rounded-xl">
               <h2 className="mb-4 text-lg font-semibold text-gray-800">
-                Top Performing Locations
+                Bank Sampah Terbaik
               </h2>
-              <div className="space-y-4">
+              <p className="mb-4 text-xs text-gray-500">
+                Daftar bank sampah dengan kinerja terbaik berdasarkan nilai ekonomi yang dihasilkan
+              </p>
+              <div className="space-y-4 overflow-y-auto max-h-[300px]">
                 {stats.bankPerformance.small.topPerformers
                   .concat(stats.bankPerformance.master.topPerformers)
                   .sort((a, b) => b.totalValue - a.totalValue)
@@ -819,10 +914,10 @@ const WastebankReports = () => {
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-medium text-emerald-600">
-                          {Math.round(location.totalValue)} currency value
+                          Rp {Math.round(location.totalValue).toLocaleString('id')}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {location.transactions} transactions
+                          {location.transactions} transaksi
                         </p>
                       </div>
                     </div>
@@ -831,13 +926,21 @@ const WastebankReports = () => {
             </div>
           </div>
 
-          {/* Charts Row */}
+          {/* Charts Row in Indonesian */}
           <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-2">
             {/* Monthly Trends */}
             <ChartCard 
-              title="Monthly Impact Trends" 
-              description="Weight collected and carbon impact by month"
+              title="Tren Dampak Bulanan" 
+              description="Berat sampah terkumpul dan dampak karbon per bulan"
             >
+              <div className="p-4 mb-2 text-xs text-gray-600 rounded-lg bg-gray-50">
+                <p className="font-medium">Cara Membaca Grafik ini:</p>
+                <ul className="mt-1 ml-4 list-disc">
+                  <li>Batang hijau: Berat sampah yang dikumpulkan (kg)</li>
+                  <li>Batang ungu: Jumlah karbon yang dikurangi (kg CO₂e)</li>
+                  <li>Semakin tinggi batang, semakin besar dampak positifnya</li>
+                </ul>
+              </div>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={stats.monthlyTrends}>
@@ -862,8 +965,8 @@ const WastebankReports = () => {
                     />
                     <Tooltip 
                       formatter={(value, name) => {
-                        if (name === 'weight') return [`${value.toFixed(1)} kg`, 'Weight'];
-                        return [`${value.toFixed(1)} kg CO₂e`, 'Carbon Impact'];
+                        if (name === 'weight') return [`${value.toFixed(1)} kg`, 'Berat Sampah'];
+                        return [`${value.toFixed(1)} kg CO₂e`, 'Dampak Karbon'];
                       }}
                     />
                     <Bar yAxisId="left" dataKey="weight" fill="#10B981" name="weight" />
@@ -873,12 +976,20 @@ const WastebankReports = () => {
               </div>
             </ChartCard>
 
-            {/* Waste Type Distribution */}
+            {/* Waste Type Distribution with Scrollable List */}
             <ChartCard 
-              title="Impact by Waste Type" 
-              description="Carbon offset contribution by material type"
+              title="Dampak per Jenis Sampah" 
+              description="Kontribusi pengurangan karbon berdasarkan jenis sampah"
             >
-              <div className="h-[300px]">
+              <div className="p-4 mb-2 text-xs text-gray-600 rounded-lg bg-gray-50">
+                <p className="font-medium">Cara Membaca Grafik ini:</p>
+                <ul className="mt-1 ml-4 list-disc">
+                  <li>Grafik menunjukkan persentase kontribusi masing-masing jenis sampah</li>
+                  <li>Semakin besar bagian, semakin besar kontribusi terhadap pengurangan karbon</li>
+                  <li>Daftar di bawah grafik menunjukkan detail nilai untuk setiap jenis sampah</li>
+                </ul>
+              </div>
+              <div className="h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -902,85 +1013,98 @@ const WastebankReports = () => {
                 </ResponsiveContainer>
               </div>
 
-              <div className="mt-6 space-y-3">
-                {stats.wasteTypes.map((type, index) => (
-                  <div key={type.name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div 
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                      />
-                      <span className="text-sm font-medium text-gray-700">{type.name}</span>
+              <div className="mt-4 overflow-y-auto max-h-[150px] pr-2">
+                <p className="mb-2 text-sm font-medium text-gray-700">Rincian per Jenis Sampah:</p>
+                <div className="space-y-3">
+                  {stats.wasteTypes.map((type, index) => (
+                    <div key={type.name} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                        />
+                        <span className="text-sm font-medium text-gray-700">{type.name}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-800">
+                          {Math.round(type.impact)} kg CO₂e
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {type.weight.toFixed(1)} kg terkumpul
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-800">
-                        {Math.round(type.impact)} kg CO₂e
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {type.weight.toFixed(1)} kg collected
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </ChartCard>
           </div>
 
-          {/* Environmental Impact Summary */}
+          {/* Environmental Impact Summary in Indonesian */}
           <div className="p-6 border bg-emerald-50 rounded-xl border-emerald-200">
             <div className="flex items-start gap-4">
               <div className="p-2 rounded-lg bg-emerald-100">
                 <TreesIcon className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-emerald-800">Environmental Impact Summary</h3>
+                <h3 className="text-lg font-semibold text-emerald-800">Ringkasan Dampak Lingkungan</h3>
                 <p className="mt-1 text-sm text-emerald-700">
-                  Total environmental impact from waste management activities:
+                  Total dampak lingkungan positif dari kegiatan pengelolaan sampah:
                 </p>
                 <div className="grid grid-cols-1 gap-4 mt-4 md:grid-cols-4">
                   <div className="p-4 rounded-lg bg-white/50">
                     <div className="flex items-center gap-2 mb-2">
                       <Recycle className="w-5 h-5 text-emerald-600" />
-                      <span className="text-sm font-medium text-emerald-800">Carbon Offset</span>
+                      <span className="text-sm font-medium text-emerald-800">Pengurangan Karbon</span>
                     </div>
                     <p className="text-lg font-semibold text-emerald-900">
                       {Math.round(stats.totalImpact.carbon)} kg CO₂e
                     </p>
-                    <p className="mt-1 text-xs text-emerald-700">emissions prevented</p>
+                    <p className="mt-1 text-xs text-emerald-700">emisi yang tercegah</p>
                   </div>
                   
                   <div className="p-4 rounded-lg bg-white/50">
                     <div className="flex items-center gap-2 mb-2">
                       <TreesIcon className="w-5 h-5 text-emerald-600" />
-                      <span className="text-sm font-medium text-emerald-800">Trees Preserved</span>
+                      <span className="text-sm font-medium text-emerald-800">Pohon Terselamatkan</span>
                     </div>
                     <p className="text-lg font-semibold text-emerald-900">
-                      {Math.round(stats.totalImpact.trees)} trees
+                      {Math.round(stats.totalImpact.trees)} pohon
                     </p>
-                    <p className="mt-1 text-xs text-emerald-700">equivalent preserved</p>
+                    <p className="mt-1 text-xs text-emerald-700">setara pohon yang dilindungi</p>
                   </div>
 
                   <div className="p-4 rounded-lg bg-white/50">
                     <div className="flex items-center gap-2 mb-2">
                       <DropletIcon className="w-5 h-5 text-emerald-600" />
-                      <span className="text-sm font-medium text-emerald-800">Water Saved</span>
+                      <span className="text-sm font-medium text-emerald-800">Air Terhemat</span>
                     </div>
                     <p className="text-lg font-semibold text-emerald-900">
                       {Math.round(stats.totalImpact.water / 1000)} m³
                     </p>
-                    <p className="mt-1 text-xs text-emerald-700">water preserved</p>
+                    <p className="mt-1 text-xs text-emerald-700">air yang dihemat</p>
                   </div>
 
                   <div className="p-4 rounded-lg bg-white/50">
                     <div className="flex items-center gap-2 mb-2">
                       <Package className="w-5 h-5 text-emerald-600" />
-                      <span className="text-sm font-medium text-emerald-800">Landfill Reduced</span>
+                      <span className="text-sm font-medium text-emerald-800">Tempat Pembuangan</span>
                     </div>
                     <p className="text-lg font-semibold text-emerald-900">
                       {stats.totalImpact.landfill.toFixed(1)} m³
                     </p>
-                    <p className="mt-1 text-xs text-emerald-700">landfill space saved</p>
+                    <p className="mt-1 text-xs text-emerald-700">ruang TPA yang dihemat</p>
                   </div>
+                </div>
+
+                <div className="p-4 mt-4 border rounded-lg border-emerald-200 bg-white/70">
+                  <h4 className="font-medium text-emerald-800">Apa artinya angka-angka ini?</h4>
+                  <ul className="mt-2 ml-4 text-sm list-disc text-emerald-700">
+                    <li>Pengurangan {Math.round(stats.totalImpact.carbon)} kg CO₂e setara dengan {Math.round(stats.totalImpact.carbon/150)} orang tidak menggunakan kendaraan bermotor selama sebulan</li>
+                    <li>{Math.round(stats.totalImpact.trees)} pohon yang terselamatkan dapat menyerap polusi untuk sekitar {Math.round(stats.totalImpact.trees*5)} orang</li>
+                    <li>Air yang dihemat ({Math.round(stats.totalImpact.water / 1000)} m³) setara dengan kebutuhan {Math.round((stats.totalImpact.water / 1000) / 0.15)} orang untuk mandi selama sebulan</li>
+                    <li>Ruang TPA yang dihemat ({stats.totalImpact.landfill.toFixed(1)} m³) setara dengan volume {Math.round(stats.totalImpact.landfill / 0.5)} mobil</li>
+                  </ul>
                 </div>
               </div>
             </div>
