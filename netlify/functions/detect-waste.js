@@ -38,7 +38,7 @@ exports.handler = async (event, context) => {
     // Initialize Gemini
     const genAI = new GoogleGenerativeAI(apiKey);
     // Using the newer gemini-1.5-flash model
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // Define waste types with their details including prices
     const wasteTypes = [
@@ -141,6 +141,11 @@ exports.handler = async (event, context) => {
       - Untuk sampah botol plastik/PET, selalu berikan saran untuk memisahkan tutupnya karena tutup botol (tutup-amdk/tutup-galon) memiliki nilai jual tersendiri yang lebih tinggi.
       - Untuk sampah kertas, sarankan untuk memastikan tetap kering dan tidak tercampur minyak.
       - Berikan rekomendasi spesifik untuk memaksimalkan nilai jual dan kebersihan sampah.
+      - Jika ada jenis sampah yang tidak terdaftar, gunakan "unknown" sebagai wasteTypeId.
+      - Jangan gunakan angka pada tips penanganan, jika ada koma tetap gunakan koma.
+      - Pisahkan dengan titik antar kalimat, bukan koma antar kalimat.
+      - Berikan rekomendasi yang sesuai dengan jenis sampah yang terdeteksi dan penjelasan yang mudah dipahami pengguna
+      - Jangan hapus koma agar lebih mudah dibaca
       
       Berikut daftar jenis sampah beserta harganya (Rp/kg) dan kategorinya:
       ${JSON.stringify(wasteTypes, null, 2)}
@@ -165,7 +170,7 @@ exports.handler = async (event, context) => {
         }
       ],
       generationConfig: {
-        temperature: 0.1,
+        temperature: 0.4,
         maxOutputTokens: 800,
       }
     });
