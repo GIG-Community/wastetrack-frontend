@@ -11,7 +11,7 @@ import Users from '../pages/dashboard/super-admin/Users';
 import WasteBanks from '../pages/dashboard/super-admin/WasteBanks';
 import SystemSettings from '../pages/dashboard/super-admin/SystemSettings';
 import WastebankAdminDashboard from '../pages/dashboard/wastebank/WastebankDashboard';
-import BankSettings from '../pages/dashboard/wastebank/BankSettings';
+import Warehouse from '../pages/dashboard/wastebank/Warehouse';
 import Employees from '../pages/dashboard/wastebank/Collector';
 import Reports from '../pages/dashboard/wastebank/Reports';
 import Transactions from '../pages/dashboard/wastebank/Transaction';
@@ -85,7 +85,7 @@ const AppRoutes = () => (
       <ProtectedRoute allowedRoles={['wastebank_admin']}>
         <Routes>
           <Route path="/" element={<WastebankAdminDashboard />} />
-          <Route path="warehouse-storage" element={<BankSettings />} />
+          <Route path="warehouse-storage" element={<Warehouse />} />
           <Route path="employees" element={<Employees />} />
           <Route path="reports" element={<Reports />} />
           <Route path="transactions" element={<Transactions />} />
