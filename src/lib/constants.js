@@ -255,33 +255,40 @@ export const WASTE_CATEGORIES = {
 
 // Environmental impact multipliers per category
 export const WASTE_IMPACT_MULTIPLIERS = {
-  metal: {
-    carbonPerKg: 5,
-    waterPerKg: 100,
-    landfillPerKg: 0.3
-  },
-  plastic: {
-    carbonPerKg: 2.5,
-    waterPerKg: 50,
-    landfillPerKg: 0.2,
-    treesPerKg: 0.1
-  },
-  paper: {
-    carbonPerKg: 1.5,
-    waterPerKg: 30,
-    landfillPerKg: 0.15,
-    treesPerKg: 0.2
-  },
-  organic: {
-    carbonPerKg: 0.5,
-    waterPerKg: 10, 
-    landfillPerKg: 0.1
-  },
-  other: {
-    carbonPerKg: 1,
-    waterPerKg: 20,
-    landfillPerKg: 0.1
-  }
+  plastic: { carbon: 2.5, water: 3.0, energy: 2.0 },
+  paper: { carbon: 1.8, water: 2.5, energy: 1.5 },
+  metal: { carbon: 3.0, water: 2.0, energy: 3.5 },
+  glass: { carbon: 2.0, water: 1.5, energy: 2.5 },
+  organic: { carbon: 1.2, water: 1.0, energy: 1.0 },
+  default: { carbon: 1.5, water: 1.5, energy: 1.5 }
+};
+
+// Emission factors for waste types and categories
+export const EMISSION_FACTORS = {
+  // Basic waste types
+  organic: 0.627,  // Landfill emission factor for food waste
+  plastic: 2.5,    // Average for plastic waste
+  paper: 1.1,      // Paper/cardboard waste
+  metal: 4.0,      // Metal waste
+  glass: 0.9,      // Glass waste
+  
+  // Specific waste types
+  'kabel': 0.5,        // CO2 eq/kg
+  'kardus-bagus': 0.25 // CO2 eq/kg
+};
+
+// Recycling factors for waste categories
+export const RECYCLING_FACTORS = {
+  plastic: 1.5,   // Recycling plastic saves vs new production
+  paper: 0.8,     // Paper recycling benefit
+  metal: 3.3,     // Metal recycling benefit
+  glass: 0.6      // Glass recycling benefit
+};
+
+// Transport constants
+export const TRANSPORT = {
+  EMISSION_FACTOR: 0.2,    // kg CO2 eq/km
+  VEHICLE_CAPACITY: 1000   // kg
 };
 
 // Available time slots for pickups
@@ -314,7 +321,8 @@ export const getCurrentTier = (points) => {
 
 // Helper function to calculate points
 export const calculatePoints = (totalValue) => {
-  return Math.floor(totalValue / POINTS_CONVERSION_RATE);
+  if (typeof totalValue !== 'number' || totalValue < 0) return 0;
+  return Math.floor(totalValue / POINTS_CONVERSION_RATE); 
 };
 
 // Helper function to get waste details by ID
@@ -343,21 +351,19 @@ export const calculateEnvironmentalImpact = (pickups) => {
     if (pickup.wastes) {
       Object.entries(pickup.wastes).forEach(([wasteType, data]) => {
         const category = WASTE_CATEGORIES[wasteType];
-        if (category && WASTE_IMPACT_MULTIPLIERS[category]) {
-          const multipliers = WASTE_IMPACT_MULTIPLIERS[category];
-          const weightInKg = data.weight || 0;
-          
-          // Add to total waste bags (assume average 1kg per item for most types)
-          impact.waste.total += Math.ceil(weightInKg);
-          
-          // Calculate environmental impact based on category multipliers
-          impact.impact.carbonReduced += multipliers.carbonPerKg * weightInKg;
-          impact.impact.waterSaved += multipliers.waterPerKg * weightInKg;
-          impact.impact.landfillSpaceSaved += multipliers.landfillPerKg * weightInKg;
-          
-          if (multipliers.treesPerKg) {
-            impact.impact.treesPreserved += multipliers.treesPerKg * weightInKg;
-          }
+        const multipliers = WASTE_IMPACT_MULTIPLIERS[category] || WASTE_IMPACT_MULTIPLIERS.default;
+        const weightInKg = data?.weight || 0;
+        
+        // Add to total waste bags (assume average 1kg per item for most types)
+        impact.waste.total += Math.ceil(weightInKg);
+        
+        // Calculate environmental impact based on category multipliers
+        impact.impact.carbonReduced += multipliers?.carbon * weightInKg;
+        impact.impact.waterSaved += multipliers?.water * weightInKg;
+        impact.impact.landfillSpaceSaved += multipliers?.landfillPerKg || 0;
+        
+        if (multipliers?.treesPerKg) {
+          impact.impact.treesPreserved += multipliers.treesPerKg * weightInKg;
         }
       });
     }
