@@ -6,7 +6,7 @@ import {
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 
 // Membuat context untuk autentikasi
@@ -45,18 +45,10 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // Fungsi login: masuk dengan email dan password, kemudian ambil data tambahan dari Firestore
+  // Fungsi login: masuk dengan email dan password
   async function login(email, password) {
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
-      const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-      if (userDoc.exists()) {
-        const data = {
-          id: result.user.uid,  // Menambahkan id ke data user
-          ...userDoc.data()
-        };
-        setUserData(data);
-      }
       return result;
     } catch (error) {
       console.error("Error in login:", error);
@@ -77,12 +69,41 @@ export function AuthProvider({ children }) {
   }
 
   // Fungsi untuk mengambil data pengguna dari Firestore berdasarkan UID
+  // Mengembalikan fungsi unsubscribe untuk membersihkan listener
+  function getUserDataRealtime(uid, callback) {
+    try {
+      const userDocRef = doc(db, 'users', uid);
+      // Set up real-time listener
+      const unsubscribe = onSnapshot(userDocRef, (docSnapshot) => {
+        if (docSnapshot.exists()) {
+          const data = {
+            id: uid,
+            ...docSnapshot.data()
+          };
+          callback(data);
+        } else {
+          callback(null);
+        }
+      }, (error) => {
+        console.error("Error getting real-time user data:", error);
+        callback(null);
+      });
+      
+      return unsubscribe;
+    } catch (error) {
+      console.error("Error setting up real-time user data:", error);
+      callback(null);
+      return () => {}; // Return empty function as fallback
+    }
+  }
+
+  // Keep the old getUserData for compatibility with existing code
   async function getUserData(uid) {
     try {
       const userDoc = await getDoc(doc(db, 'users', uid));
       if (userDoc.exists()) {
         return {
-          id: uid,  // Menambahkan id ke data user
+          id: uid,
           ...userDoc.data()
         };
       }
@@ -95,24 +116,41 @@ export function AuthProvider({ children }) {
 
   // Listener otentikasi: perbarui currentUser dan userData saat status otentikasi berubah
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    let userDataUnsubscribe = null;
+    
+    const authUnsubscribe = onAuthStateChanged(auth, async (user) => {
       console.log('Auth state changed - user:', user?.uid);
+      
+      // Clean up previous listener if exists
+      if (userDataUnsubscribe) {
+        userDataUnsubscribe();
+        userDataUnsubscribe = null;
+      }
+      
       if (user) {
-        const data = await getUserData(user.uid);
-        console.log('User data fetched:', data);
-        const updatedUserData = {
-          id: user.uid,
-          ...data
-        };
-        console.log('Setting userData to:', updatedUserData);
-        setUserData(updatedUserData);
+        // Set up real-time listener for user data
+        userDataUnsubscribe = getUserDataRealtime(user.uid, (data) => {
+          console.log('User data updated:', data);
+          if (data) {
+            setUserData(data);
+          } else {
+            setUserData(null);
+          }
+        });
       } else {
         setUserData(null);
       }
+      
       setCurrentUser(user);
       setLoading(false);
     });
-    return () => unsubscribe();
+    
+    return () => {
+      authUnsubscribe();
+      if (userDataUnsubscribe) {
+        userDataUnsubscribe();
+      }
+    };
   }, []);
 
   const value = {
@@ -121,7 +159,7 @@ export function AuthProvider({ children }) {
     signup,
     login,
     logout,
-    getUserData
+    getUserData // Keep original method for backward compatibility
   };
 
   return (
