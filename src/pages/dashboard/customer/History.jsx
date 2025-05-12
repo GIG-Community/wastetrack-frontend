@@ -21,6 +21,7 @@ import {
 import { collection, query, where, getDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { calculatePoints, calculateTotalValue } from '../../../lib/constants';
+import '../../../styles/animation.css'; 
 
 const History = () => {
   const { currentUser, userData } = useAuth();
@@ -36,7 +37,36 @@ const History = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
+  // Temporary filter states that are only applied when "Simpan" is clicked
+  const [tempFilterStatus, setTempFilterStatus] = useState('all');
+  const [tempFilterType, setTempFilterType] = useState('all');
+  const [tempSortOrder, setTempSortOrder] = useState('desc');
+
   const filterRef = useRef(null);
+
+  // Initialize temporary filters when the filter modal opens
+  useEffect(() => {
+    if (isFilterOpen) {
+      setTempFilterStatus(filterStatus);
+      setTempFilterType(filterType);
+      setTempSortOrder(sortOrder);
+    }
+  }, [isFilterOpen]);
+
+  // Apply filters when "Simpan" is clicked
+  const applyFilters = () => {
+    setFilterStatus(tempFilterStatus);
+    setFilterType(tempFilterType);
+    setSortOrder(tempSortOrder);
+    setIsFilterOpen(false);
+  };
+
+  // Reset temporary filters
+  const resetFilters = () => {
+    setTempFilterStatus('all');
+    setTempFilterType('all');
+    setTempSortOrder('desc');
+  };
 
   const toggleCard = (id) => {
     setExpandedCards(prev => ({
@@ -191,6 +221,40 @@ const History = () => {
     };
   }, []);
 
+  // Prevent body scrolling when filter modal is open
+  useEffect(() => {
+    if (isFilterOpen) {
+      // Save current scroll position
+      const scrollY = window.scrollY;
+      
+      // Add styles to body to prevent scrolling
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflowY = 'hidden';
+    } else {
+      // Restore scrolling when modal closes
+      const scrollY = document.body.style.top;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflowY = '';
+      
+      // Restore scroll position
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0', 10) * -1);
+      }
+    }
+    
+    return () => {
+      // Cleanup in case component unmounts while modal is open
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflowY = '';
+    };
+  }, [isFilterOpen]);
+
   return (
     <div className="sm:px-4 sm:py-4 mx-auto max-w-7xl sm:px-6 sm:py-6">
       {/* Hero Section - New Design */}
@@ -200,7 +264,7 @@ const History = () => {
           <div className="p-6 relative text-white">
             <h1 className="mb-2 text-lg sm:text-2xl font-bold">Buku Tabungan</h1>
             <p className="text-sm sm:text-md text-emerald-50">
-              Lacak perjalanan kontribusi sampah Anda
+              Lacak kontribusi sampah Anda
             </p>
           </div>
         </div>
@@ -248,102 +312,96 @@ const History = () => {
           </div>
 
           {/* Filter Button */}
-          <div className="relative" ref={filterRef}>
-            <button
-              onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className="p-2 sm:p-2.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors flex items-center gap-2 border border-emerald-200"
-              aria-label="Open filters"
-            >
-              <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="hidden sm:inline text-sm">Filter</span>
-            </button>
-
-            {/* Filter Dropdown */}
-            {isFilterOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-xs sm:shadow-lg border border-gray-200 z-10 p-3">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-medium">Filter</h3>
-                  <button
-                    onClick={() => setIsFilterOpen(false)}
-                    className="bg-white text-gray-500 hover:text-gray-700"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {/* Filter Type */}
-                  <div>
-                    <label className="block text-xs sm:text-sm text-gray-700 mb-1">Jenis Transaksi</label>
-                    <select
-                      value={filterType}
-                      onChange={(e) => setFilterType(e.target.value)}
-                      className="w-full px-3 py-2 text-xs sm:text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                    >
-                      <option value="all">Semua Transaksi</option>
-                      <option value="pickup">Penambahan Poin</option>
-                      <option value="transaction">Penukaran Poin</option>
-                    </select>
-                  </div>
-
-                  {/* Filter Status */}
-                  <div>
-                    <label className="block text-xs sm:text-sm  text-gray-700 mb-1">Status</label>
-                    <select
-                      value={filterStatus}
-                      onChange={(e) => setFilterStatus(e.target.value)}
-                      className="w-full px-3 py-2 text-xs sm:text-sm  border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                    >
-                      <option value="all">Semua Status</option>
-                      <option value="assigned">Ditugaskan</option>
-                      <option value="pending">Menunggu</option>
-                      <option value="in_progress">Proses</option>
-                      <option value="completed">Selesai</option>
-                      <option value="cancelled">Dibatalkan</option>
-                    </select>
-                  </div>
-
-                  {/* Sort Order */}
-                  <div>
-                    <label className="block text-xs sm:text-sm text-gray-700 mb-1">Urutan</label>
-                    <button
-                      onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-                      className="text-xs sm:text-sm  w-full px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors flex items-center justify-between border border-emerald-200"
-                    >
-                      <span>{sortOrder === 'desc' ? 'Terbaru' : 'Terlama'}</span>
-                      {sortOrder === 'desc' ? (
-                        <SortDesc className="w-4 h-4" />
-                      ) : (
-                        <SortAsc className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Apply and Reset Buttons */}
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      onClick={() => {
-                        setFilterType('all');
-                        setFilterStatus('all');
-                        setSortOrder('desc');
-                      }}
-                      className="text-thin bg-white flex-1 py-3 px-3 sm:py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 text-xs"
-                    >
-                      Reset
-                    </button>
-                    <button
-                      onClick={() => setIsFilterOpen(false)}
-                      className="flex-1 px-3 sm:py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs"
-                    >
-                      Simpan
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={() => setIsFilterOpen(true)}
+            className="p-2 sm:p-2.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors flex items-center gap-2 border border-emerald-200"
+            aria-label="Open filters"
+          >
+            <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="hidden sm:inline text-sm">Filter</span>
+          </button>
         </div>
       </div>
+
+      {/* Bottom Filter Modal */}
+        {isFilterOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end justify-center animate-fadeIn" style={{ animationDuration: '0.2s' }}>
+            <div 
+          className={`bg-white w-full max-h-[90vh] overflow-y-auto rounded-t-3xl ${isFilterOpen ? 'animate-slideUp' : 'animate-slideDown'}`} 
+          style={{ animationDuration: '0.3s' }}
+          ref={filterRef}
+            >
+          <div className="p-6">
+            {/* Modal Header with Title */}
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold">Filter</h2>
+              <button 
+            onClick={() => {
+              setIsFilterOpen(false);
+            }}
+            className="p-2 text-gray-500"
+              >
+            <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Filter Status */}
+              <div className="mb-4">
+                <h3 className="text-left mb-2 text-sm sm:text-lg font-medium">Status</h3>
+                <select
+                  value={tempFilterStatus}
+                  onChange={(e) => setTempFilterStatus(e.target.value)}
+                  className="text-sm w-full px-4 py-2 am:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                >
+                  <option value="all">Semua</option>
+                  <option value="completed">Selesai</option>
+                  <option value="pending">Menunggu</option>
+                  <option value="assigned">Ditugaskan</option>
+                  <option value="in_progress">Dalam Proses</option>
+                  <option value="cancelled">Dibatalkan</option>
+                </select>
+              </div>
+
+              {/* Filter Type */}
+              <div className="mb-4">
+                <h3 className="text-left mb-2 text-sm sm:text-lg font-medium">Jenis Transaksi</h3>
+                <select
+                  value={tempFilterType}
+                  onChange={(e) => setTempFilterType(e.target.value)}
+                  className="text-sm w-full px-4 py-2 am:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                >
+                  <option value="all">Semua Transaksi</option>
+                  <option value="pickup">Penambahan Poin</option>
+                  <option value="transaction">Penukaran Poin</option>
+                </select>
+              </div>
+
+              {/* Sort Order */}
+              <div className="mb-4">
+                <h3 className="text-left mb-2 text-sm sm:text-lg font-medium">Urutan</h3>
+                <select
+                  value={tempSortOrder}
+                  onChange={(e) => setTempSortOrder(e.target.value)}
+                  className="text-sm w-full px-4 py-2 sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                >
+                  <option value="desc">Terbaru</option>
+                  <option value="asc">Terlama</option>
+                </select>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-3 pt-4 border-t border-gray-100">
+                <button
+                  onClick={applyFilters}
+                  className="w-full py-3 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                  Simpan
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Combined List with Collapsible Cards */}
       {loading ? (
@@ -434,6 +492,22 @@ const History = () => {
                       <div className="flex flex-col gap-3 sm:gap-4">
                         {/* Pickup Transaction Details Grid */}
                         <div className="grid text-left grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
+                          {/* Added Completion Date for completed items */}
+                          {item.status === 'completed' && item.completedAt && (
+                            <div className="space-y-0.5 sm:space-y-1">
+                              <p className="text-xs text-gray-500">Waktu Selesai</p>
+                              <p className="text-xs font-medium sm:text-base">
+                                {new Date(item.completedAt.seconds * 1000).toLocaleString('id-ID', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </p>
+                            </div>
+                          )}
+
                           <div className="space-y-0.5 sm:space-y-1">
                             <p className="text-xs text-gray-500">Waktu Penjemputan</p>
                             <p className="text-xs font-medium sm:text-base">{item.time}</p>
@@ -500,13 +574,35 @@ const History = () => {
                           <div className="space-y-0.5 sm:space-y-1">
                             <p className="text-xs text-gray-500">Waktu Transaksi</p>
                             <p className="text-xs font-medium sm:text-base">
-                              {new Date(item.createdAt.seconds * 1000).toLocaleTimeString('id-ID')}
+                              {new Date(item.createdAt.seconds * 1000).toLocaleTimeString('id-ID', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
                             </p>
                           </div>
                           <div className="space-y-0.5 sm:space-y-1">
                             <p className="text-xs text-gray-500">Bank Sampah</p>
                             <p className="text-xs font-medium sm:text-base">{item.wasteBankName}</p>
                           </div>
+                          
+                          {/* Added Completion Date for completed items */}
+                          {item.status === 'completed' && item.completedAt && (
+                            <div className="space-y-0.5 sm:space-y-1">
+                              <p className="text-xs text-gray-500">Waktu Selesai</p>
+                              <p className="text-xs font-medium sm:text-base">
+                                {new Date(item.completedAt.seconds * 1000).toLocaleString('id-ID', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </p>
+                            </div>
+                          )}
                         </div>
 
                         {/* Transaction Summary */}
@@ -623,5 +719,6 @@ const History = () => {
     </div>
   );
 };
+
 
 export default History;

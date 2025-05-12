@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { collection, addDoc, Timestamp, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
+import getCurrentLocation from '../../../lib/utils/getCurrentLocation';
 import Swal from 'sweetalert2';
 
 const SchedulePickup = () => {
@@ -37,7 +38,6 @@ const SchedulePickup = () => {
   const [gettingLocation, setGettingLocation] = useState(false);
   const [wasteBanks, setWasteBanks] = useState([]);
   const [loadingWasteBanks, setLoadingWasteBanks] = useState(true);
-
   // Form data
   const [formData, setFormData] = useState({
     deliveryType: '', // 'pickup' or 'self-delivery'
@@ -45,9 +45,9 @@ const SchedulePickup = () => {
     time: '',
     wasteTypes: [],
     wasteQuantities: {}, // Store quantities per waste type
-    location: userData?.profile?.address || '',
-    phone: '',
-    coordinates: null,
+    location: userData?.profile?.location?.address || '', // Use existing address from profile
+    phone: userData?.profile?.phone || '', // Use existing phone from profile
+    coordinates: userData?.profile?.location?.coordinates || null, // Use existing coordinates
     wasteBankId: '',
     wasteBankName: '',
     notes: '',
@@ -264,37 +264,52 @@ const SchedulePickup = () => {
     { time: '13:00-15:00', available: true },
     { time: '15:00-17:00', available: true }
   ];
-
-  // Get current location
-  const getCurrentLocation = () => {
+  // Fixed handleGetLocation function for SchedulePickup.jsx
+  const handleGetLocation = () => {
     setGettingLocation(true);
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          try {
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-            );
-            const data = await response.json();
-            setFormData(prev => ({
-              ...prev,
-              location: data.display_name,
-              coordinates: { lat: latitude, lng: longitude }
-            }));
-          } catch (error) {
-            console.error('Error getting address:', error);
-          } finally {
-            setGettingLocation(false);
-          }
-        },
-        (error) => {
-          console.error('Error:', error);
-          setGettingLocation(false);
+    getCurrentLocation({
+      onSuccess: (locationData) => {
+        // The locationData object contains parsed coordinates as strings
+        // Make sure we're setting the coordinates with proper lat/lng structure
+        if (locationData.coordinates) {
+          setFormData(prev => ({
+            ...prev,
+            coordinates: {
+              lat: parseFloat(locationData.coordinates.lat),
+              lng: parseFloat(locationData.coordinates.lng)
+            },
+            // Update address fields with data from reverse geocoding if available
+            location: locationData.address || prev.location,
+            // Keep phone number from user profile (don't overwrite)
+            city: locationData.city || prev.city,
+            province: locationData.province || prev.province
+          }));
         }
-      );
-    }
-  };
+        setGettingLocation(false);
+      },
+      onLoading: (loading) => {
+        setGettingLocation(loading);
+      },
+      onError: (error) => {
+        console.error('Error getting location:', error);
+        setGettingLocation(false);
+        // Display error to user using Swal
+        Swal.fire({
+          title: 'Error',
+          text: 'Gagal mendapatkan lokasi. Silakan coba lagi.',
+          icon: 'error',
+          confirmButtonColor: '#10B981',
+          customClass: {
+            popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+            title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+            htmlContainer: 'text-sm sm:text-base text-gray-600',
+            confirmButton: 'text-sm sm:text-base'
+          }
+        });
+      },
+      includeAddress: true
+    });
+};
 
   // Handle waste quantity change
   const handleQuantityChange = (typeId, change) => {
@@ -449,7 +464,7 @@ const SchedulePickup = () => {
     <div className="max-w-3xl mx-auto">
       <div className="p-4 mb-8 text-white bg-gradient-to-r from-emerald-500 to-emerald-700 rounded-2xl">
         <h1 className="mb-2 text-lg sm:text-2xl font-bold">Setor Sampah</h1>
-        <p className="text-sm sm:text-md text-emerald-50">Mari kami bantu mengelola sampah Anda secara berkelanjutan</p>
+        <p className="text-sm sm:text-md text-emerald-50">Bantu kelola sampah Anda dengan berkelanjutan</p>
       </div>
 
       {/* Steps indicator with progress bar */}
@@ -642,12 +657,12 @@ const SchedulePickup = () => {
                                 </p>
                               </div>
                               <div className="items-center gap-4 mt-2">
-                                {bank.distance !== null && (
+                                {/* {bank.distance !== null && (
                                   <div className="flex items-center text-sm text-gray-600">
                                     <Navigation className="w-4 h-4 mr-1 text-blue-500" />
                                     <span>{bank.distance.toFixed(1)} km</span>
                                   </div>
-                                )}
+                                )} */}
                                 <div className="flex gap-2">
                                   <div className="flex items-center px-3 text-[8px] sm:text-sm text-emerald-700 bg-emerald-100 rounded-full">
                                     <Trees className="w-3 h-3 sm:w-4 sm:h-4 mr-1 text-emerald-500" />
@@ -955,7 +970,7 @@ const SchedulePickup = () => {
                   />
                   <button
                     type="button"
-                    onClick={getCurrentLocation}
+                    onClick={handleGetLocation}
                     className="flex items-center flex-shrink-0 gap-2 px-4 py-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 text-sm"
                   >
                     {gettingLocation ? (
