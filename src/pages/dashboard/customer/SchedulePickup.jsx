@@ -24,7 +24,7 @@ import {
   Timer,
   Trees
 } from 'lucide-react';
-import { collection, addDoc, Timestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import Swal from 'sweetalert2';
 
@@ -73,52 +73,68 @@ const SchedulePickup = () => {
 
   // Fetch waste banks - Menggunakan perhitungan jarak
   useEffect(() => {
-    const fetchWasteBanks = async () => {
+    let unsubscribe = null;
+
+    const fetchWasteBanks = () => {
       try {
+        setLoadingWasteBanks(true);
         const q = query(
           collection(db, 'users'),
           where('role', '==', 'wastebank_admin')
         );
-        const snapshot = await getDocs(q);
-        let wasteBankData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          distance: null // Tambahkan properti distance
-        }));
         
-        // Jika ada koordinat pengguna, hitung jarak untuk setiap bank sampah
-        if (formData.coordinates) {
-          wasteBankData = wasteBankData.map(bank => {
-            const bankCoords = bank.profile?.location?.coordinates;
-            if (bankCoords) {
-              const distance = calculateDistance(
-                formData.coordinates.lat,
-                formData.coordinates.lng,
-                bankCoords.lat,
-                bankCoords.lng
-              );
-              return { ...bank, distance };
-            }
-            return bank;
-          });
+        // Replace getDocs with onSnapshot
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          let wasteBankData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            distance: null // Tambahkan properti distance
+          }));
+          
+          // Jika ada koordinat pengguna, hitung jarak untuk setiap bank sampah
+          if (formData.coordinates) {
+            wasteBankData = wasteBankData.map(bank => {
+              const bankCoords = bank.profile?.location?.coordinates;
+              if (bankCoords) {
+                const distance = calculateDistance(
+                  formData.coordinates.lat,
+                  formData.coordinates.lng,
+                  bankCoords.lat,
+                  bankCoords.lng
+                );
+                return { ...bank, distance };
+              }
+              return bank;
+            });
 
-          // Urutkan bank sampah berdasarkan jarak
-          wasteBankData.sort((a, b) => {
-            if (a.distance === null) return 1;
-            if (b.distance === null) return -1;
-            return a.distance - b.distance;
-          });
-        }
-        
-        setWasteBanks(wasteBankData);
+            // Urutkan bank sampah berdasarkan jarak
+            wasteBankData.sort((a, b) => {
+              if (a.distance === null) return 1;
+              if (b.distance === null) return -1;
+              return a.distance - b.distance;
+            });
+          }
+          
+          setWasteBanks(wasteBankData);
+          setLoadingWasteBanks(false);
+        }, (error) => {
+          console.error('Error fetching waste banks:', error);
+          setLoadingWasteBanks(false);
+        });
       } catch (error) {
-        console.error('Error fetching waste banks:', error);
-      } finally {
+        console.error('Error setting up waste banks listener:', error);
         setLoadingWasteBanks(false);
       }
     };
 
     fetchWasteBanks();
+
+    // Clean up the subscription when component unmounts or dependencies change
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [formData.coordinates]); // Tambahkan coordinates sebagai dependency
 
   // Available waste types with detailed categories
