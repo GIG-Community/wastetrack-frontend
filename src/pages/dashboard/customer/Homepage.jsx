@@ -2,12 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import { 
-  Camera, 
-  Calendar, 
-  Award, 
-  Trash2, 
-  Recycle, 
+import {
+  Camera,
+  Calendar,
+  Award,
+  Trash2,
+  Recycle,
   Lightbulb,
   Droplet,
   ChevronRight,
@@ -18,9 +18,9 @@ import {
 } from 'lucide-react';
 import { collection, query, where, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { 
-  calculatePoints, 
-  calculateTotalValue, 
+import {
+  calculatePoints,
+  calculateTotalValue,
   calculateEnvironmentalImpact,
   TIER_THRESHOLDS,
   getCurrentTier
@@ -41,13 +41,14 @@ const HomePage = () => {
     points: 0
   });
   const [loading, setLoading] = useState(true);
-
-  const navigate = useNavigate();
+  
   // Hanya tampilkan 3 data pickup terbaru
   const displayedPickups = recentPickups.slice(0, 3);
+
   // Function untuk navigasi ke halaman semua pickup
   const handleViewAllPickups = () => {
-    navigate('/dashboard/customer/history'); // Ini masih erorr ehe, navbar e gak metu :v @RayyanFv
+    const event = new CustomEvent('setActiveTab', { detail: 'history' });
+    window.dispatchEvent(event);
   };
 
   const calculateNextTier = () => {
@@ -72,13 +73,13 @@ const HomePage = () => {
   useEffect(() => {
     if (!currentUser) return;
 
-    let userUnsubscribe = () => {};
-    let pickupsUnsubscribe = () => {};
-    
+    let userUnsubscribe = () => { };
+    let pickupsUnsubscribe = () => { };
+
     const setupListeners = async () => {
       try {
         setLoading(true);
-        
+
         // Real-time listener untuk user data untuk mendapatkan point terbaru
         userUnsubscribe = onSnapshot(doc(db, 'users', currentUser.uid), (userDoc) => {
           if (userDoc.exists()) {
@@ -89,13 +90,13 @@ const HomePage = () => {
             }));
           }
         });
-        
+
         // Real-time listener untuk pickups
         const pickupsQuery = query(
           collection(db, 'pickups'),
           where('userId', '==', currentUser.uid)
         );
-        
+
         pickupsUnsubscribe = onSnapshot(pickupsQuery, (snapshot) => {
           const pickupData = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -109,9 +110,9 @@ const HomePage = () => {
               date: data.date || { seconds: Date.now() / 1000 }
             };
           });
-          
+
           // Sort by date for recent pickups
-          const sortedPickups = pickupData.sort((a, b) => 
+          const sortedPickups = pickupData.sort((a, b) =>
             (b.date?.seconds || 0) - (a.date?.seconds || 0)
           );
 
@@ -158,14 +159,14 @@ const HomePage = () => {
   return (
     <div className="space-y-6">
       {/* Hero Section */}
-      <div className="relative p-4 sm:p-6 overflow-hidden text-white rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-700">
+      <div className="relative p-4 sm:p-6 overflow-hidden text-white rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-700">
         <div className="relative z-10">
-        <h1 className="text-left sm:text-center text-sm sm:text-2xl font-thin">
-          Selamat datang kembali,
-        </h1>
-        <p className="mb-4 text-left sm:text-center text-lg sm:text-2xl font-semibold">
-          {userData?.profile?.fullName || 'Pengguna'}
-        </p>
+          <h1 className="text-left sm:text-center text-sm sm:text-2xl font-thin">
+            Selamat datang kembali,
+          </h1>
+          <p className="mb-4 text-left sm:text-center text-lg sm:text-2xl font-semibold">
+            {userData?.profile?.fullName || 'Pengguna'}
+          </p>
           {/* <p className="mb-4 text-xs text-left sm:text-sm sm:text-center text-emerald-200">
             Perjalanan ramah lingkungan Anda berlanjut di sini
           </p> */}
@@ -191,7 +192,7 @@ const HomePage = () => {
                 <span>{calculateNextTier().nextTier.toUpperCase()}</span>
               </div>
               <div className="w-full h-2 overflow-hidden rounded-full bg-emerald-200/30">
-                <div 
+                <div
                   className="h-full transition-all duration-500 bg-emerald-300"
                   style={{ width: `${calculateNextTier().progress}%` }}
                 />
@@ -209,10 +210,10 @@ const HomePage = () => {
       </div>
 
       {/* Environmental Impact Grid */}
-      <div className="sm:p-4 sm:bg-white sm:shadow-sm rounded-xl">
-        <h2 className="mb-3 text-lg font-semibold text-gray-700">Dampak Lingkungan</h2>
+      <div className="sm:p-4 sm:bg-white sm:shadow-sm rounded-xl ">
+        <h2 className="mb-2 text-lg font-semibold text-gray-700">Dampak Lingkungan</h2>
         <div className="text-left grid grid-cols-2 gap-3">
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-white sm:bg-emerald-50">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-white sm:bg-emerald-50 border border-emerald-200">
             <Recycle className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
             <div>
               <p className="text-xs text-emerald-500 sm:text-emerald-600">CO₂ Berkurang</p>
@@ -222,7 +223,7 @@ const HomePage = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-white sm:bg-emerald-50">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-white sm:bg-emerald-50 border border-emerald-200">
             <Droplet className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
             <div>
               <p className="text-xs text-emerald-500 sm:text-emerald-600">Air Terhemat</p>
@@ -232,7 +233,7 @@ const HomePage = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-white sm:bg-emerald-50">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-white sm:bg-emerald-50 border border-emerald-200">
             <TreesIcon className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
             <div>
               <p className="text-xs text-emerald-500 sm:text-emerald-600">Pohon</p>
@@ -242,7 +243,7 @@ const HomePage = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-white sm:bg-emerald-50">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-white sm:bg-emerald-50 border border-emerald-200">
             <Package className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
             <div>
               <p className="text-xs text-emerald-500 sm:text-emerald-600">Sampah</p>
@@ -255,20 +256,18 @@ const HomePage = () => {
       </div>
 
       {/* Recent Pickups */}
-      <div className="pt-4 sm:p-4 sm:bg-white sm:shadow-sm rounded-xl">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-800">Pengambilan Terbaru</h2>
-          {stats.pickups.pending > 0 && (
-            <span className="px-2 py-1 text-xs text-yellow-600 rounded-full bg-yellow-50">
-              {stats.pickups.pending} menunggu
-            </span>
-          )}
-        </div>
+      <div className="pt-4 sm:p-4 sm:bg-white sm:shadow-sm sm:rounded-xl">
+        <h2 className="mb-2 text-lg font-semibold text-gray-800">Pengambilan Terbaru</h2>
+        {stats.pickups.pending > 0 && (
+          <span className="px-2 py-1 text-xs text-yellow-600 rounded-full bg-yellow-50">
+            {stats.pickups.pending} menunggu
+          </span>
+        )}
         {displayedPickups.length > 0 ? (
           <div className="space-y-2">
             {displayedPickups.map((pickup) => (
-              <div 
-                key={pickup.id} 
+              <div
+                key={pickup.id}
                 className="flex items-center justify-between p-3 rounded-lg bg-white shadow-xs sm:shadow-sm border border-gray-50 hover:border-emerald-100 transition-colors"
               >
                 <div className="flex gap-3">
@@ -277,11 +276,11 @@ const HomePage = () => {
                   </div>
                   <div>
                     <p className="text-sm text-left font-medium text-gray-800">
-                      {pickup.wasteQuantities ? 
+                      {pickup.wasteQuantities ?
                         Object.values(pickup.wasteQuantities).reduce((total, qty) => total + qty, 0)
                         : pickup.quantity || 0} kantong
 
-                        {/* • {
+                      {/* • {
                         pickup.wastes ? 
                           Object.keys(pickup.wastes).join(', ') :
                           pickup.wasteTypes.join(', ')
@@ -296,19 +295,19 @@ const HomePage = () => {
                   </div>
                 </div>
                 <span className={`px-2 py-1 rounded-full text-xs capitalize
-                  ${pickup.status === 'pending' ? 'bg-yellow-50 text-yellow-600' : 
+                  ${pickup.status === 'pending' ? 'bg-yellow-50 text-yellow-600' :
                     pickup.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
-                    pickup.status === 'in_progress' ? 'bg-blue-50 text-blue-600' :
-                    pickup.status === 'assigned' ? 'bg-orange-50 text-orange-600' :
-                    pickup.status === 'canceled' ? 'bg-red-50 text-red-600' :
-                    'bg-gray-50 text-gray-600'}`}
+                      pickup.status === 'in_progress' ? 'bg-blue-50 text-blue-600' :
+                        pickup.status === 'assigned' ? 'bg-orange-50 text-orange-600' :
+                          pickup.status === 'canceled' ? 'bg-red-50 text-red-600' :
+                            'bg-gray-50 text-gray-600'}`}
                 >
-                  {pickup.status === 'pending' ? 'Menunggu' : 
-                  pickup.status === 'completed' ? 'Selesai' : 
-                  pickup.status === 'canceled' ? 'Dibatalkan' :
-                  pickup.status === 'in_progress' ? 'Perjalanan' :
-                  pickup.status === 'assigned' ? 'Proses' :
-                  pickup.status}
+                  {pickup.status === 'pending' ? 'Menunggu' :
+                    pickup.status === 'completed' ? 'Selesai' :
+                      pickup.status === 'canceled' ? 'Dibatalkan' :
+                        pickup.status === 'in_progress' ? 'Perjalanan' :
+                          pickup.status === 'assigned' ? 'Proses' :
+                            pickup.status}
                 </span>
               </div>
             ))}
@@ -318,10 +317,10 @@ const HomePage = () => {
             <p className="text-sm text-gray-500">Belum ada pengambilan yang dijadwalkan</p>
           </div>
         )}
-        
+
         {recentPickups.length > 3 && (
           <div className="text-center p-2">
-            <button 
+            <button
               onClick={handleViewAllPickups}
               className="bg-transparent text-xs text-emerald-600 hover:text-emerald-700 inline-flex items-center"
             >
@@ -383,8 +382,8 @@ const HomePage = () => {
             <div>
               <h2 className="text-md text-left font-semibold text-gray-800">Tips Ramah Lingkungan</h2>
               <p className="text-xs text-left text-gray-500">
-              Dengan memilah sampah secara tepat, Anda membantu proses daur ulang menjadi lebih efisien
-              dan turut mengurangi jejak karbon, demi menciptakan lingkungan yang lebih sehat bagi bumi.
+                Dengan memilah sampah secara tepat, Anda membantu proses daur ulang menjadi lebih efisien
+                dan turut mengurangi jejak karbon, demi menciptakan lingkungan yang lebih sehat bagi bumi.
               </p>
             </div>
           </div>
