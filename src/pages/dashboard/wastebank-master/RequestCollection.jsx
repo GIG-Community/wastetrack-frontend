@@ -290,7 +290,7 @@ const MasterRequestCollection = () => {
 
           const batch = writeBatch(db);
           for (const collection of completionCallback.collectionIds) {
-            const pickupRef = doc(db, 'pickups', collection.id);
+            const pickupRef = doc(db, 'masterBankRequests', collection.id);
             const pickupDoc = await getDoc(pickupRef);
             if (!pickupDoc.exists()) {
               console.log(`Pickup ${collection.id} not found`);

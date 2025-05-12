@@ -12,9 +12,12 @@ import {
   PhoneCall,
   Mail,
   MapPin,
-  Plus
+  Plus,
+  Info,
+  AlarmClock,
+  HelpCircle
 } from 'lucide-react';
-import { collection, query, getDocs, updateDoc, doc, where, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, updateDoc, doc, where, orderBy } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -66,11 +69,43 @@ const Badge = ({ variant = "default", children, className = "", ...props }) => {
   );
 };
 
-const StatCard = ({ icon: Icon, label, value, trend, className = "" }) => (
+// Tooltip component for providing additional information
+const Tooltip = ({ children, content }) => (
+  <div className="relative flex items-center group">
+    {children}
+    <div className="absolute z-50 invisible w-48 p-2 mb-2 text-xs text-white transition-all duration-200 transform -translate-x-1/2 rounded-lg opacity-0 bottom-full left-1/2 bg-zinc-800 group-hover:opacity-100 group-hover:visible">
+      {content}
+      <div className="absolute transform -translate-x-1/2 border-4 border-transparent top-full left-1/2 border-t-zinc-800"></div>
+    </div>
+  </div>
+);
+
+const InfoCard = ({ title, children }) => (
+  <div className="p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+    <div className="flex items-start gap-3">
+      <Info className="h-5 w-5 text-blue-500 mt-0.5" />
+      <div>
+        <h4 className="mb-1 font-medium text-blue-800">{title}</h4>
+        <div className="text-sm text-blue-700">
+          {children}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const StatCard = ({ icon: Icon, label, value, trend, className = "", tooltip = "" }) => (
   <div className={`bg-white rounded-xl p-4 border border-zinc-200 ${className}`}>
     <div className="flex items-start justify-between">
       <div>
-        <p className="text-sm font-medium text-zinc-600">{label}</p>
+        <div className="flex items-center gap-1">
+          <p className="text-sm font-medium text-zinc-600">{label}</p>
+          {tooltip && (
+            <Tooltip content={tooltip}>
+              <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
+            </Tooltip>
+          )}
+        </div>
         <p className="mt-1 text-2xl font-semibold text-zinc-800">{value}</p>
       </div>
       <div className="p-2 rounded-lg bg-emerald-50">
@@ -101,22 +136,30 @@ const MasterCollector = () => {
   });
 
   useEffect(() => {
+    let unsubscribe;
     if (userData && userData.id) {
-      console.log('userData available:', userData); // Debug log
-      fetchCollectors();
+      console.log('userData tersedia:', userData); // Debug log
+      unsubscribe = setupCollectorsListener();
     }
+    
+    // Cleanup function
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [userData]); // Tambahkan userData sebagai dependency
 
-  const fetchCollectors = async () => {
+  const setupCollectorsListener = () => {
     setLoading(true);
     try {
       if (!userData?.id) {
-        console.error('User data not available - userData:', userData);
+        console.error('Data pengguna tidak tersedia - userData:', userData);
         return;
       }
 
-      console.log('Fetching collectors for wastebank:', userData.id);
-      console.log('Current user role:', userData.role);
+      console.log('Mengambil data petugas untuk bank sampah:', userData.id);
+      console.log('Peran pengguna saat ini:', userData.role);
 
       const collectorsQuery = query(
         collection(db, 'users'),
@@ -124,37 +167,53 @@ const MasterCollector = () => {
         where('profile.institution', '==', userData.id)
       );
       
-      const snapshot = await getDocs(collectorsQuery);
-      console.log('Query snapshot size:', snapshot.size); // Debug log
-      
-      const collectorsData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        console.log('Collector data:', data); // Debug individual collector data
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate(),
-          updatedAt: data.updatedAt?.toDate()
-        };
-      });
+      // Replace getDocs with onSnapshot for real-time updates
+      const unsubscribe = onSnapshot(
+        collectorsQuery,
+        (snapshot) => {
+          console.log('Ukuran snapshot kueri:', snapshot.size); // Debug log
+          
+          const collectorsData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            console.log('Data petugas:', data); // Debug individual collector data
+            return {
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt?.toDate(),
+              updatedAt: data.updatedAt?.toDate()
+            };
+          });
 
-      console.log('Processed collectors data:', collectorsData);
-      setCollectors(collectorsData);
+          console.log('Data petugas yang diproses:', collectorsData);
+          setCollectors(collectorsData);
+          
+          const activeCount = collectorsData.filter(c => c.status === 'active').length;
+          setStats({
+            totalCollectors: collectorsData.length,
+            activeCollectors: activeCount,
+            totalPickups: 0,
+            avgRating: 0
+          });
+          
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Error mengambil data petugas:', error);
+          console.error('Detail error:', error.message);
+          console.error('Stack error:', error.stack);
+          setCollectors([]);
+          setLoading(false);
+        }
+      );
       
-      const activeCount = collectorsData.filter(c => c.status === 'active').length;
-      setStats({
-        totalCollectors: collectorsData.length,
-        activeCollectors: activeCount,
-        totalPickups: 0,
-        avgRating: 0
-      });
+      return unsubscribe;
     } catch (error) {
-      console.error('Error fetching collectors:', error);
-      console.error('Error details:', error.message);
-      console.error('Error stack:', error.stack);
+      console.error('Error menyiapkan listener:', error);
+      console.error('Detail error:', error.message);
+      console.error('Stack error:', error.stack);
       setCollectors([]);
-    } finally {
       setLoading(false);
+      return () => {};
     }
   };
 
@@ -165,9 +224,9 @@ const MasterCollector = () => {
         status: newStatus,
         updatedAt: new Date()
       });
-      await fetchCollectors(); // Refresh the list
+      // No need to refresh the list as onSnapshot will handle it
     } catch (error) {
-      console.error('Error updating collector status:', error);
+      console.error('Error memperbarui status petugas:', error);
     }
   };
 
@@ -180,6 +239,15 @@ const MasterCollector = () => {
     
     return matchesStatus && matchesSearch;
   });
+
+  const formatDate = (date) => {
+    if (!date) return '-';
+    return new Intl.DateTimeFormat('id-ID', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    }).format(date);
+  };
 
   return (
     <div className="flex min-h-screen bg-zinc-50/50">
@@ -200,51 +268,64 @@ const MasterCollector = () => {
               </div>
               <div>
                 <h1 className="text-2xl font-semibold text-zinc-800">
-                  Collector Management
+                  Manajemen Petugas
                 </h1>
                 <p className="text-sm text-zinc-500">
-                  Monitor and manage waste collectors
+                  Pantau dan kelola petugas pengumpul sampah
                 </p>
               </div>
             </div>
             <button className="inline-flex items-center gap-2 px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600">
               <Plus className="w-5 h-5" />
-              Add Collector
+              Tambah Petugas
             </button>
           </div>
 
-          {/* Stats Overview - Made more compact on mobile */}
+          {/* Information Card */}
+          <InfoCard title="Tentang Manajemen Petugas">
+            <p>
+              Halaman ini memungkinkan Anda untuk melihat dan mengelola semua petugas pengumpul sampah yang terdaftar di
+              bank sampah Anda. Anda dapat mengaktifkan atau menonaktifkan petugas, serta melihat informasi kontak dan 
+              lokasi mereka. Data ditampilkan secara real-time dan akan diperbarui otomatis ketika terjadi perubahan.
+            </p>
+          </InfoCard>
+
+          {/* Stats Overview */}
           <div className="grid grid-cols-2 gap-4 mb-8 lg:grid-cols-4">
             <StatCard
               icon={Users}
-              label="Total Collectors"
+              label="Total Petugas"
               value={stats.totalCollectors}
-              trend={`${Math.round((stats.activeCollectors/stats.totalCollectors) * 100) || 0}% Active`}
+              trend={`${Math.round((stats.activeCollectors/stats.totalCollectors) * 100) || 0}% Aktif`}
+              tooltip="Jumlah total petugas yang terdaftar di bank sampah Anda"
             />
             <StatCard
               icon={UserCheck}
-              label="Active Collectors"
+              label="Petugas Aktif"
               value={stats.activeCollectors}
+              tooltip="Jumlah petugas yang saat ini berstatus aktif dan dapat melakukan pengumpulan"
             />
             <StatCard
               icon={Package}
-              label="Total Pickups"
+              label="Total Pengumpulan"
               value={stats.totalPickups || 0}
+              tooltip="Jumlah total pengumpulan sampah yang telah dilakukan oleh semua petugas"
             />
             <StatCard
               icon={Star}
-              label="Average Rating"
+              label="Rata-rata Rating"
               value={stats.avgRating || '0.0'}
+              tooltip="Nilai rata-rata rating yang diberikan kepada petugas oleh nasabah"
             />
           </div>
 
-          {/* Search and Filters - Stack on mobile */}
+          {/* Search and Filters */}
           <div className="flex flex-col gap-4 mb-6 sm:flex-row">
             <div className="relative flex-1">
               <Search className="absolute w-5 h-5 -translate-y-1/2 left-3 top-1/2 text-zinc-400" />
               <Input
                 type="text"
-                placeholder="Search collectors..."
+                placeholder="Cari petugas berdasarkan nama, email, atau telepon..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -255,31 +336,34 @@ const MasterCollector = () => {
               onChange={(e) => setFilterStatus(e.target.value)}
               className="w-full sm:w-48"
             >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="all">Semua Status</option>
+              <option value="active">Aktif</option>
+              <option value="inactive">Tidak Aktif</option>
             </Select>
           </div>
 
           {/* Collectors List */}
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+              <div className="text-center">
+                <Loader2 className="w-8 h-8 mx-auto mb-4 animate-spin text-emerald-500" />
+                <p className="text-zinc-500">Memuat data petugas...</p>
+              </div>
             </div>
           ) : filteredCollectors.length === 0 ? (
             <div className="py-12 text-center bg-white border rounded-xl border-zinc-200">
               <UserX className="w-12 h-12 mx-auto mb-4 text-zinc-400" />
               <h3 className="mb-1 text-lg font-medium text-zinc-800">
-                No collectors found
+                Tidak ada petugas ditemukan
               </h3>
               <p className="max-w-sm mx-auto text-zinc-500">
                 {searchTerm || filterStatus !== 'all' 
-                  ? 'Try adjusting your filters or search terms'
-                  : 'Start by adding your first collector'}
+                  ? 'Coba sesuaikan filter atau kata kunci pencarian Anda'
+                  : 'Mulai dengan menambahkan petugas pertama untuk bank sampah Anda'}
               </p>
               <button className="inline-flex items-center gap-2 px-4 py-2 mt-4 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600">
                 <Plus className="w-5 h-5" />
-                Add Collector
+                Tambah Petugas
               </button>
             </div>
           ) : (
@@ -297,7 +381,7 @@ const MasterCollector = () => {
                       </div>
                       <div>
                         <h3 className="font-medium text-zinc-800 line-clamp-1">
-                          {collector.profile?.fullName || 'Unnamed Collector'}
+                          {collector.profile?.fullName || 'Petugas Tanpa Nama'}
                         </h3>
                         <p className="text-sm text-zinc-500 line-clamp-1">{collector.email}</p>
                       </div>
@@ -306,7 +390,7 @@ const MasterCollector = () => {
                       variant={collector.status === 'active' ? 'success' : 'warning'}
                       className="flex-shrink-0"
                     >
-                      {collector.status || 'inactive'}
+                      {collector.status === 'active' ? 'Aktif' : 'Tidak Aktif'}
                     </Badge>
                   </div>
 
@@ -316,15 +400,15 @@ const MasterCollector = () => {
                     <div className="flex items-start gap-3">
                       <MapPin className="flex-shrink-0 w-5 h-5 mt-1 text-zinc-400" />
                       <div>
-                        <p className="text-sm font-medium text-zinc-600">Location</p>
+                        <p className="text-sm font-medium text-zinc-600">Lokasi</p>
                         <p className="text-sm text-zinc-800 line-clamp-2">
-                          {collector.profile?.location?.address || 'No address provided'}
+                          {collector.profile?.location?.address || 'Alamat belum diisi'}
                         </p>
                         <p className="text-sm text-zinc-500">
                           {[
                             collector.profile?.location?.city,
                             collector.profile?.location?.province
-                          ].filter(Boolean).join(', ') || 'Location not specified'}
+                          ].filter(Boolean).join(', ') || 'Lokasi belum ditentukan'}
                         </p>
                       </div>
                     </div>
@@ -333,52 +417,67 @@ const MasterCollector = () => {
                     <div className="flex items-start gap-3">
                       <PhoneCall className="flex-shrink-0 w-5 h-5 mt-1 text-zinc-400" />
                       <div>
-                        <p className="text-sm font-medium text-zinc-600">Contact</p>
-                        <p className="text-sm text-zinc-800">{collector.profile?.phone || 'No phone number'}</p>
+                        <p className="text-sm font-medium text-zinc-600">Kontak</p>
+                        <p className="text-sm text-zinc-800">{collector.profile?.phone || 'Belum ada nomor telepon'}</p>
+                      </div>
+                    </div>
+
+                    {/* Joined Date */}
+                    <div className="flex items-start gap-3">
+                      <AlarmClock className="flex-shrink-0 w-5 h-5 mt-1 text-zinc-400" />
+                      <div>
+                        <p className="text-sm font-medium text-zinc-600">Bergabung Sejak</p>
+                        <p className="text-sm text-zinc-800">{formatDate(collector.createdAt)}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex flex-wrap gap-2 pt-4 mt-6 border-t border-zinc-200">
-                    <button
-                      onClick={() => collector.profile?.phone ? window.location.href = `tel:${collector.profile.phone}` : null}
-                      className="flex items-center justify-center flex-1 gap-2 px-4 py-2 text-sm transition-colors rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!collector.profile?.phone}
-                    >
-                      <PhoneCall className="w-4 h-4" />
-                      Call
-                    </button>
-                    <button
-                      onClick={() => collector.email ? window.location.href = `mailto:${collector.email}` : null}
-                      className="flex items-center justify-center flex-1 gap-2 px-4 py-2 text-sm transition-colors rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                    >
-                      <Mail className="w-4 h-4" />
-                      Email
-                    </button>
-                    <button
-                      onClick={() => updateCollectorStatus(
-                        collector.id, 
-                        collector.status === 'active' ? 'inactive' : 'active'
-                      )}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm w-full justify-center ${
-                        collector.status === 'active' 
-                          ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
-                          : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                      } transition-colors`}
-                    >
-                      {collector.status === 'active' ? (
-                        <>
-                          <UserX className="w-4 h-4" />
-                          Set Inactive
-                        </>
-                      ) : (
-                        <>
-                          <UserCheck className="w-4 h-4" />
-                          Set Active
-                        </>
-                      )}
-                    </button>
+                    <Tooltip content="Hubungi petugas melalui nomor telepon yang terdaftar">
+                      <button
+                        onClick={() => collector.profile?.phone ? window.location.href = `tel:${collector.profile.phone}` : null}
+                        className="flex items-center justify-center flex-1 gap-2 px-4 py-2 text-sm transition-colors rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={!collector.profile?.phone}
+                      >
+                        <PhoneCall className="w-4 h-4" />
+                        Hubungi
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="Kirim email kepada petugas">
+                      <button
+                        onClick={() => collector.email ? window.location.href = `mailto:${collector.email}` : null}
+                        className="flex items-center justify-center flex-1 gap-2 px-4 py-2 text-sm transition-colors rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      >
+                        <Mail className="w-4 h-4" />
+                        Email
+                      </button>
+                    </Tooltip>
+                    <Tooltip content={collector.status === 'active' ? 'Nonaktifkan petugas agar tidak dapat melakukan pengambilan' : 'Aktifkan petugas agar dapat melakukan pengambilan'}>
+                      <button
+                        onClick={() => updateCollectorStatus(
+                          collector.id, 
+                          collector.status === 'active' ? 'inactive' : 'active'
+                        )}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm w-full justify-center ${
+                          collector.status === 'active' 
+                            ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+                            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                        } transition-colors`}
+                      >
+                        {collector.status === 'active' ? (
+                          <>
+                            <UserX className="w-4 h-4" />
+                            Non-aktifkan
+                          </>
+                        ) : (
+                          <>
+                            <UserCheck className="w-4 h-4" />
+                            Aktifkan
+                          </>
+                        )}
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
               ))}

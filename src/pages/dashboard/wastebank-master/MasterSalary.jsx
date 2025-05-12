@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, setDoc, getDoc, runTransaction, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, doc, setDoc, getDoc, runTransaction, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { Search, AlertCircle, UserCheck, User, Users, Filter, Wallet, Calculator, Clock } from 'lucide-react';
+import { Search, AlertCircle, UserCheck, User, Users, Filter, Wallet, Calculator, Clock, Info } from 'lucide-react';
 import Swal from 'sweetalert2';
 import Sidebar from '../../../components/Sidebar';
 import { useAuth } from '../../../hooks/useAuth';
@@ -29,32 +29,62 @@ export default function MasterSalaryManagement() {
   const [wasteBankBalance, setWasteBankBalance] = useState(0);
   const [transactions, setTransactions] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [unsubscribes, setUnsubscribes] = useState([]);
+
+  useEffect(() => {
+    return () => {
+      unsubscribes.forEach(unsubscribe => {
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
+        }
+      });
+    };
+  }, [unsubscribes]);
 
   const fetchTransactionHistory = async (userId) => {
     if (!userId) return;
     
     try {
       setLoadingTransactions(true);
+      
+      const currentUnsubscribes = [...unsubscribes];
+      const transactionsUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'transactions');
+      if (transactionsUnsubscribeIndex !== -1 && typeof currentUnsubscribes[transactionsUnsubscribeIndex].fn === 'function') {
+        currentUnsubscribes[transactionsUnsubscribeIndex].fn();
+        currentUnsubscribes.splice(transactionsUnsubscribeIndex, 1);
+      }
+      
       const transactionsQuery = query(
         collection(db, 'transactions'),
         where('userId', '==', userId)
       );
       
-      const transactionsSnapshot = await getDocs(transactionsQuery);
-      const transactionsData = transactionsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date()
-      }));
+      const unsubscribe = onSnapshot(
+        transactionsQuery,
+        (snapshot) => {
+          const transactionsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date()
+          }));
+          
+          const sortedTransactions = transactionsData.sort((a, b) => 
+            b.createdAt.getTime() - a.createdAt.getTime()
+          ).slice(0, 10);
+          
+          setTransactions(sortedTransactions);
+          setLoadingTransactions(false);
+        },
+        (error) => {
+          console.error('Error memantau riwayat transaksi:', error);
+          setLoadingTransactions(false);
+        }
+      );
       
-      const sortedTransactions = transactionsData.sort((a, b) => 
-        b.createdAt.getTime() - a.createdAt.getTime()
-      ).slice(0, 10);
+      setUnsubscribes([...currentUnsubscribes, { name: 'transactions', fn: unsubscribe }]);
       
-      setTransactions(sortedTransactions);
     } catch (error) {
-      console.error('Error fetching transaction history:', error);
-    } finally {
+      console.error('Error memantau riwayat transaksi:', error);
       setLoadingTransactions(false);
     }
   };
@@ -63,12 +93,25 @@ export default function MasterSalaryManagement() {
     if (!userData?.id) return;
     
     try {
-      const wasteBankDoc = await getDoc(doc(db, 'users', userData.id));
-      if (wasteBankDoc.exists()) {
-        setWasteBankBalance(wasteBankDoc.data().balance || 0);
-      }
+      const unsubscribe = onSnapshot(
+        doc(db, 'users', userData.id),
+        (snapshot) => {
+          if (snapshot.exists()) {
+            setWasteBankBalance(snapshot.data().balance || 0);
+          }
+        },
+        (error) => {
+          console.error('Error memantau saldo bank sampah:', error);
+        }
+      );
+      
+      setUnsubscribes(prev => {
+        const filtered = prev.filter(u => u.name !== 'wastebank');
+        return [...filtered, { name: 'wastebank', fn: unsubscribe }];
+      });
+      
     } catch (error) {
-      console.error('Error fetching waste bank balance:', error);
+      console.error('Error memantau saldo bank sampah:', error);
     }
   };
 
@@ -83,23 +126,70 @@ export default function MasterSalaryManagement() {
       try {
         setLoadingUsers(true);
         
+        const currentUnsubscribes = [...unsubscribes];
+        const pickupsUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'pickups');
+        const collectorsUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'collectors');
+        const wastebanksUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'wastebanks');
+        const customersUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'customers');
+        
+        if (pickupsUnsubscribeIndex !== -1 && typeof currentUnsubscribes[pickupsUnsubscribeIndex].fn === 'function') {
+          currentUnsubscribes[pickupsUnsubscribeIndex].fn();
+          currentUnsubscribes.splice(pickupsUnsubscribeIndex, 1);
+        }
+        
+        if (collectorsUnsubscribeIndex !== -1 && typeof currentUnsubscribes[collectorsUnsubscribeIndex].fn === 'function') {
+          currentUnsubscribes[collectorsUnsubscribeIndex].fn();
+          currentUnsubscribes.splice(collectorsUnsubscribeIndex, 1);
+        }
+        
+        if (wastebanksUnsubscribeIndex !== -1 && typeof currentUnsubscribes[wastebanksUnsubscribeIndex].fn === 'function') {
+          currentUnsubscribes[wastebanksUnsubscribeIndex].fn();
+          currentUnsubscribes.splice(wastebanksUnsubscribeIndex, 1);
+        }
+        
+        if (customersUnsubscribeIndex !== -1 && typeof currentUnsubscribes[customersUnsubscribeIndex].fn === 'function') {
+          currentUnsubscribes[customersUnsubscribeIndex].fn();
+          currentUnsubscribes.splice(customersUnsubscribeIndex, 1);
+        }
+        
+        const newUnsubscribes = [...currentUnsubscribes];
+        
         const pickupsQuery = query(
           collection(db, 'masterBankRequests'),
           where('masterBankId', '==', userData.id)
         );
         
-        let pickupsSnapshot;
-        try {
-          pickupsSnapshot = await getDocs(pickupsQuery);
-        } catch (error) {
-          console.error('Error fetching pickups:', error);
-          pickupsSnapshot = { docs: [] };
-        }
+        const pickupsUnsubscribe = onSnapshot(
+          pickupsQuery,
+          (snapshot) => {
+            const customerIds = [...new Set(
+              snapshot.docs.map(doc => doc.data().userId)
+            )].filter(Boolean);
+            
+            fetchRelatedUsers(customerIds, newUnsubscribes);
+          },
+          (error) => {
+            console.error('Error memantau permintaan:', error);
+            fetchRelatedUsers([], newUnsubscribes);
+          }
+        );
         
-        const customerIds = [...new Set(
-          pickupsSnapshot.docs.map(doc => doc.data().userId)
-        )].filter(Boolean);
+        newUnsubscribes.push({ name: 'pickups', fn: pickupsUnsubscribe });
+        setUnsubscribes(newUnsubscribes);
         
+      } catch (error) {
+        console.error('Error menyiapkan pantauan pengguna:', error);
+        setLoadingUsers(false);
+        Swal.fire({
+          icon: 'error',
+          title: 'Kesalahan',
+          text: 'Gagal memuat data pengguna',
+        });
+      }
+    };
+    
+    const fetchRelatedUsers = (customerIds, currentUnsubscribes) => {
+      try {
         const collectorQuery = query(
           collection(db, 'users'),
           where('role', '==', 'wastebank_master_collector'),
@@ -111,35 +201,67 @@ export default function MasterSalaryManagement() {
           where('role', '==', 'wastebank_admin')
         );
         
-        let collectorSnapshot, wasteBankSnapshot, customerSnapshot;
-        
-        try {
-          [collectorSnapshot, wasteBankSnapshot] = await Promise.all([
-            getDocs(collectorQuery),
-            getDocs(wasteBankQuery)
-          ]);
-        } catch (error) {
-          console.error('Error fetching collectors or waste banks:', error);
-          collectorSnapshot = { docs: [] };
-          wasteBankSnapshot = { docs: [] };
-        }
-        
-        if (customerIds.length > 0) {
-          try {
-            const customerQuery = query(
-              collection(db, 'users'),
-              where('role', '==', 'customer'),
-              where('__name__', 'in', customerIds)
+        const collectorUnsubscribe = onSnapshot(
+          collectorQuery,
+          (collectorSnapshot) => {
+            const wasteBankUnsubscribe = onSnapshot(
+              wasteBankQuery,
+              async (wasteBankSnapshot) => {
+                let customerSnapshot = { docs: [] };
+                
+                if (customerIds.length > 0) {
+                  try {
+                    const customerQuery = query(
+                      collection(db, 'users'),
+                      where('role', '==', 'customer'),
+                      where('__name__', 'in', customerIds)
+                    );
+                    
+                    const customerUnsubscribe = onSnapshot(
+                      customerQuery,
+                      (snapshot) => {
+                        processAllUserData(collectorSnapshot, wasteBankSnapshot, snapshot);
+                      },
+                      (error) => {
+                        console.error('Error memantau pelanggan:', error);
+                        processAllUserData(collectorSnapshot, wasteBankSnapshot, { docs: [] });
+                      }
+                    );
+                    
+                    currentUnsubscribes.push({ name: 'customers', fn: customerUnsubscribe });
+                  } catch (error) {
+                    console.error('Error menyiapkan pantauan pelanggan:', error);
+                    processAllUserData(collectorSnapshot, wasteBankSnapshot, { docs: [] });
+                  }
+                } else {
+                  processAllUserData(collectorSnapshot, wasteBankSnapshot, { docs: [] });
+                }
+              },
+              (error) => {
+                console.error('Error memantau bank sampah:', error);
+                processAllUserData(collectorSnapshot, { docs: [] }, { docs: [] });
+              }
             );
-            customerSnapshot = await getDocs(customerQuery);
-          } catch (error) {
-            console.error('Error fetching customers:', error);
-            customerSnapshot = { docs: [] };
+            
+            currentUnsubscribes.push({ name: 'wastebanks', fn: wasteBankUnsubscribe });
+          },
+          (error) => {
+            console.error('Error memantau kolektor:', error);
+            setLoadingUsers(false);
           }
-        } else {
-          customerSnapshot = { docs: [] };
-        }
+        );
         
+        currentUnsubscribes.push({ name: 'collectors', fn: collectorUnsubscribe });
+        setUnsubscribes(currentUnsubscribes);
+        
+      } catch (error) {
+        console.error('Error menyiapkan pantauan pengguna terkait:', error);
+        setLoadingUsers(false);
+      }
+    };
+    
+    const processAllUserData = (collectorSnapshot, wasteBankSnapshot, customerSnapshot) => {
+      try {
         const usersData = [
           ...collectorSnapshot.docs.map(doc => ({
             id: doc.id,
@@ -156,14 +278,9 @@ export default function MasterSalaryManagement() {
         ];
         
         setUsers(usersData);
+        setLoadingUsers(false);
       } catch (error) {
-        console.error('Error fetching users:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Failed to load users data',
-        });
-      } finally {
+        console.error('Error memproses data pengguna:', error);
         setLoadingUsers(false);
       }
     };
@@ -175,65 +292,125 @@ export default function MasterSalaryManagement() {
     try {
       setLoading(true);
       
-      const userDoc = await getDoc(doc(db, 'users', userId));
+      // Create a safe copy of unsubscribe functions
+      const currentUnsubscribes = [...unsubscribes];
       
-      if (!userDoc.exists()) {
-        throw new Error('User not found');
-      }
-
-      const userData = userDoc.data();
-      
-      setPointsToConvert(0);
-      
-      if (userData.role === 'collector') {
-        const salaryDoc = await getDoc(doc(db, 'salaries', userId));
-        setSalaryConfig({
-          baseSalary: salaryDoc.exists() ? salaryDoc.data().config.baseSalary : 0,
-        });
-      }
-
-      const pickupsQuery = query(
-        collection(db, 'pickups'),
-        where(userData.role === 'collector' ? 'collectorId' : 'userId', '==', userId)
-      );
-
-      const pickupsSnapshot = await getDocs(pickupsQuery);
-      let totalCollections = 0;
-      let totalWasteCollected = 0;
-      let totalValue = 0;
-
-      pickupsSnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.status === 'completed') {
-          totalCollections++;
-          totalValue += data.totalValue || 0;
-          
-          if (data.wasteQuantities) {
-            Object.values(data.wasteQuantities).forEach(quantity => {
-              totalWasteCollected += Number(quantity) || 0;
-            });
-          }
+      // Clean up previous listeners more safely
+      currentUnsubscribes.forEach((unsubscribe, index) => {
+        if (unsubscribe && 
+           (unsubscribe.name === 'userDetails' || unsubscribe.name === 'userPickups') && 
+           typeof unsubscribe.fn === 'function') {
+          unsubscribe.fn();
+          currentUnsubscribes.splice(index, 1);
         }
       });
+      
+      // Set up new listener for user details
+      const userUnsubscribe = onSnapshot(
+        doc(db, 'users', userId),
+        async (userDoc) => {
+          if (!userDoc.exists()) {
+            throw new Error('Pengguna tidak ditemukan');
+          }
 
-      setUserStats({
-        totalCollections,
-        totalWasteCollected,
-        totalValue,
-        balance: userData.balance || 0,
-        points: userData.role === 'customer' ? userData.rewards?.points || 0 : 0,
-      });
+          const userData = userDoc.data();
+          
+          setPointsToConvert(0);
+          
+          if (userData.role === 'collector') {
+            try {
+              const salaryDoc = await getDoc(doc(db, 'salaries', userId));
+              setSalaryConfig({
+                baseSalary: salaryDoc.exists() ? salaryDoc.data().config.baseSalary : 0,
+              });
+            } catch (error) {
+              console.error('Error fetching salary config:', error);
+              setSalaryConfig({ baseSalary: 0 });
+            }
+          } else {
+            // Set default salary for non-collectors
+            setSalaryConfig({ baseSalary: 0 });
+          }
+
+          // Determine correct collection and field name based on user role
+          const collectionName = userData.role === 'wastebank_admin' ? 'masterBankRequests' : 'pickups';
+          const fieldName = userData.role === 'collector' ? 'collectorId' : 'userId';
+
+          // Set up listener for user's pickups or requests
+          const pickupsQuery = query(
+            collection(db, collectionName), 
+            where(fieldName, '==', userId)
+          );
+
+          const pickupsUnsubscribe = onSnapshot(
+            pickupsQuery,
+            (pickupsSnapshot) => {
+              let totalCollections = 0;
+              let totalWasteCollected = 0;
+              let totalValue = 0;
+
+              pickupsSnapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data.status === 'completed') {
+                  totalCollections++;
+                  totalValue += data.totalValue || 0;
+                  
+                  // Support different waste data formats
+                  if (data.wastes) {
+                    Object.values(data.wastes).forEach(waste => {
+                      totalWasteCollected += Number(waste.weight) || 0;
+                    });
+                  } else if (data.wasteWeights) {
+                    Object.values(data.wasteWeights).forEach(weight => {
+                      totalWasteCollected += Number(weight) || 0;
+                    });
+                  } else if (data.wasteQuantities) {
+                    Object.values(data.wasteQuantities).forEach(quantity => {
+                      totalWasteCollected += Number(quantity) || 0;
+                    });
+                  }
+                }
+              });
+
+              setUserStats({
+                totalCollections,
+                totalWasteCollected,
+                totalValue,
+                balance: userData.balance || 0,
+                points: userData.role === 'customer' ? userData.rewards?.points || 0 : 0,
+              });
+
+              setLoading(false);
+            },
+            (error) => {
+              console.error('Error memantau pengambilan sampah:', error);
+              setLoading(false);
+            }
+          );
+          
+          // Update unsubscribes array with new functions using a safer approach
+          const newUnsubscribes = [
+            ...currentUnsubscribes,
+            { name: 'userDetails', fn: userUnsubscribe },
+            { name: 'userPickups', fn: pickupsUnsubscribe }
+          ];
+          setUnsubscribes(newUnsubscribes);
+        },
+        (error) => {
+          console.error('Error memantau data pengguna:', error);
+          setLoading(false);
+        }
+      );
 
       await fetchTransactionHistory(userId);
 
     } catch (error) {
-      console.error('Error fetching user details:', error);
+      console.error('Error memuat detail pengguna:', error);
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: 'Failed to load user details',
+        title: 'Kesalahan',
+        text: 'Gagal memuat detail pengguna',
       });
-    } finally {
       setLoading(false);
     }
   };
@@ -257,7 +434,7 @@ export default function MasterSalaryManagement() {
       if (isCustomer) {
         const pointsRequested = Number(pointsToConvert);
         if (pointsRequested <= 0 || pointsRequested > userStats.points) {
-          throw new Error('Invalid points amount');
+          throw new Error('Jumlah poin tidak valid');
         }
         paymentAmount = pointsRequested * 100;
       } else {
@@ -265,11 +442,11 @@ export default function MasterSalaryManagement() {
       }
       
       if (paymentAmount <= 0) {
-        throw new Error('Invalid payment amount');
+        throw new Error('Jumlah pembayaran tidak valid');
       }
 
       if (wasteBankBalance < paymentAmount) {
-        throw new Error('Insufficient waste bank balance');
+        throw new Error('Saldo bank sampah tidak mencukupi');
       }
 
       await runTransaction(db, async (transaction) => {
@@ -280,7 +457,7 @@ export default function MasterSalaryManagement() {
         const currentBalance = wasteBankDoc.data().balance || 0;
         
         if (currentBalance < paymentAmount) {
-          throw new Error('Insufficient waste bank balance');
+          throw new Error('Saldo bank sampah tidak mencukupi');
         }
         
         transaction.update(wasteBankRef, {
@@ -313,25 +490,19 @@ export default function MasterSalaryManagement() {
         });
       });
 
-      await Promise.all([
-        fetchUserDetails(selectedUserId),
-        fetchWasteBankBalance(),
-        fetchTransactionHistory(selectedUserId)
-      ]);
-
       setPointsToConvert(0);
 
       Swal.fire({
         icon: 'success',
-        title: 'Success',
-        text: `Payment of Rp ${paymentAmount.toLocaleString()} has been processed successfully`,
+        title: 'Berhasil',
+        text: `Pembayaran sebesar Rp ${paymentAmount.toLocaleString()} telah diproses dengan sukses`,
       });
     } catch (error) {
-      console.error('Error processing payment:', error);
+      console.error('Error memproses pembayaran:', error);
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: error.message || 'Failed to process payment',
+        title: 'Kesalahan',
+        text: error.message || 'Gagal memproses pembayaran',
       });
     } finally {
       setLoading(false);
@@ -412,15 +583,28 @@ export default function MasterSalaryManagement() {
                 <Users className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-zinc-800">Payment Management</h1>
-                <p className="text-sm text-zinc-500">Manage payments for waste banks and collectors</p>
+                <h1 className="text-2xl font-semibold text-zinc-800">Manajemen Pembayaran</h1>
+                <p className="text-sm text-zinc-500">Kelola pembayaran untuk bank sampah dan kolektor</p>
               </div>
             </div>
             <div className="flex items-center gap-2 px-4 py-2 bg-white border rounded-lg border-zinc-200">
               <Wallet className="w-5 h-5 text-emerald-500" />
               <div>
-                <p className="text-sm text-zinc-500">Available Balance</p>
+                <p className="text-sm text-zinc-500">Saldo Tersedia</p>
                 <p className="font-semibold text-zinc-800">Rp {wasteBankBalance.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 mb-6 border border-blue-200 rounded-lg bg-blue-50">
+            <div className="flex gap-3">
+              <Info className="flex-shrink-0 w-5 h-5 mt-0.5 text-blue-500" />
+              <div>
+                <h3 className="font-medium text-blue-800">Data Realtime</h3>
+                <p className="text-sm text-blue-600">
+                  Halaman ini menampilkan data secara realtime. Perubahan pada pengguna, transaksi atau saldo
+                  akan segera terlihat tanpa perlu memuat ulang halaman.
+                </p>
               </div>
             </div>
           </div>
@@ -439,16 +623,19 @@ export default function MasterSalaryManagement() {
               ) : (
                 <>
                   <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-                    <h3 className="text-sm font-medium text-zinc-500">Current Balance</h3>
+                    <h3 className="text-sm font-medium text-zinc-500">Saldo Saat Ini</h3>
                     <p className="text-2xl font-semibold text-zinc-800">Rp {userStats.balance.toLocaleString()}</p>
+                    <p className="mt-1 text-xs text-zinc-500">Jumlah dana yang tersedia di akun pengguna</p>
                   </div>
                   <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-                    <h3 className="text-sm font-medium text-zinc-500">Total Collections</h3>
+                    <h3 className="text-sm font-medium text-zinc-500">Total Pengumpulan</h3>
                     <p className="text-2xl font-semibold text-zinc-800">{userStats.totalCollections}</p>
+                    <p className="mt-1 text-xs text-zinc-500">Jumlah pengumpulan sampah yang telah diselesaikan</p>
                   </div>
                   <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-                    <h3 className="text-sm font-medium text-zinc-500">Total Value</h3>
+                    <h3 className="text-sm font-medium text-zinc-500">Total Nilai</h3>
                     <p className="text-2xl font-semibold text-zinc-800">Rp {userStats.totalValue.toLocaleString()}</p>
+                    <p className="mt-1 text-xs text-zinc-500">Nilai total dari semua sampah yang dikumpulkan</p>
                   </div>
                 </>
               )}
@@ -462,7 +649,7 @@ export default function MasterSalaryManagement() {
                   <Search className="absolute w-5 h-5 left-3 top-3 text-zinc-400" />
                   <input
                     type="text"
-                    placeholder="Search users..."
+                    placeholder="Cari pengguna..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
@@ -476,9 +663,9 @@ export default function MasterSalaryManagement() {
                     onChange={(e) => setSelectedRole(e.target.value)}
                     className="flex-1 px-3 py-2 border rounded-lg bg-zinc-50 border-zinc-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   >
-                    <option value="all">All Users</option>
-                    <option value="wastebank_master_collector">Collectors</option>
-                    <option value="wastebank_admin">Waste Banks</option>
+                    <option value="all">Semua Pengguna</option>
+                    <option value="wastebank_master_collector">Kolektor</option>
+                    <option value="wastebank_admin">Bank Sampah</option>
                   </select>
                 </div>
               </div>
@@ -503,7 +690,7 @@ export default function MasterSalaryManagement() {
                             <User className="w-5 h-5 mr-2 text-zinc-500" />
                             <div>
                               <div className="font-medium text-zinc-800">
-                                {user.profile?.fullName || 'Unnamed User'}
+                                {user.profile?.fullName || 'Pengguna Tanpa Nama'}
                               </div>
                               <div className="text-sm text-zinc-500">{user.email}</div>
                             </div>
@@ -513,7 +700,7 @@ export default function MasterSalaryManagement() {
                               ? 'bg-emerald-100 text-emerald-700'
                               : 'bg-blue-100 text-blue-700'
                           }`}>
-                            {user.role === 'wastebank_master_collector' ? 'Collector' : 'Waste Bank'}
+                            {user.role === 'wastebank_master_collector' ? 'Kolektor' : 'Bank Sampah'}
                           </span>
                         </div>
                       </button>
@@ -522,7 +709,7 @@ export default function MasterSalaryManagement() {
                     {filteredUsers.length === 0 && (
                       <div className="py-4 text-center">
                         <AlertCircle className="w-5 h-5 mx-auto mb-2 text-zinc-400" />
-                        <p className="text-zinc-500">No users found</p>
+                        <p className="text-zinc-500">Tidak ada pengguna ditemukan</p>
                       </div>
                     )}
                   </>
@@ -540,15 +727,15 @@ export default function MasterSalaryManagement() {
                       <div className="flex items-center justify-between mb-6">
                         <h2 className="text-xl font-semibold text-zinc-800">
                           {users.find(u => u.id === selectedUserId)?.role === 'wastebank_admin'
-                            ? 'Waste Bank Payment' 
-                            : 'Collector Salary'}
+                            ? 'Pembayaran Bank Sampah' 
+                            : 'Gaji Kolektor'}
                         </h2>
                         <button
                           onClick={handlePayment}
                           disabled={loading || !salaryConfig.baseSalary || wasteBankBalance < salaryConfig.baseSalary}
                           className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {loading ? 'Processing...' : 'Process Payment'}
+                          {loading ? 'Memproses...' : 'Proses Pembayaran'}
                         </button>
                       </div>
 
@@ -556,8 +743,8 @@ export default function MasterSalaryManagement() {
                         <div>
                           <label className="block mb-2 text-sm font-medium text-zinc-700">
                             {users.find(u => u.id === selectedUserId)?.role === 'wastebank_admin'
-                              ? 'Payment Amount'
-                              : 'Salary Amount'}
+                              ? 'Jumlah Pembayaran'
+                              : 'Jumlah Gaji'}
                           </label>
                           <div className="relative">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-400">
@@ -575,9 +762,12 @@ export default function MasterSalaryManagement() {
                               className="pl-10 w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                             />
                           </div>
+                          <p className="mt-2 text-xs text-zinc-500">
+                            Masukkan jumlah pembayaran yang akan diberikan kepada pengguna ini
+                          </p>
                           {wasteBankBalance < salaryConfig.baseSalary && (
                             <p className="mt-2 text-sm text-red-500">
-                              Insufficient balance to process this payment
+                              Saldo tidak mencukupi untuk memproses pembayaran ini
                             </p>
                           )}
                         </div>
@@ -588,14 +778,14 @@ export default function MasterSalaryManagement() {
               ) : (
                 <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed bg-zinc-50 rounded-xl border-zinc-200 text-zinc-500">
                   <UserCheck className="w-12 h-12 mb-3" />
-                  <p>Select a user to view and configure their payment details</p>
+                  <p>Pilih pengguna untuk melihat dan mengonfigurasi detail pembayaran mereka</p>
                 </div>
               )}
               
               {selectedUserId && (
                 <div className="p-6 bg-white border shadow-sm rounded-xl border-zinc-200">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-semibold text-zinc-800">Transaction History</h2>
+                    <h2 className="text-xl font-semibold text-zinc-800">Riwayat Transaksi</h2>
                     <Clock className="w-5 h-5 text-zinc-500" />
                   </div>
 
@@ -608,10 +798,10 @@ export default function MasterSalaryManagement() {
                           <div className="flex items-center justify-between mb-1">
                             <span className="font-medium text-zinc-800">
                               {transaction.type === 'salary_payment' 
-                                ? 'Salary Payment' 
+                                ? 'Pembayaran Gaji' 
                                 : transaction.type === 'points_conversion' 
-                                  ? 'Points Conversion' 
-                                  : 'Transaction'}
+                                  ? 'Konversi Poin' 
+                                  : 'Transaksi'}
                             </span>
                             <span className="font-semibold text-emerald-600">
                               Rp {transaction.amount?.toLocaleString() || 0}
@@ -632,7 +822,7 @@ export default function MasterSalaryManagement() {
                                 ? 'bg-green-100 text-green-700'
                                 : 'bg-yellow-100 text-yellow-700'
                             }`}>
-                              {transaction.status === 'completed' ? 'Completed' : 'Pending'}
+                              {transaction.status === 'completed' ? 'Selesai' : 'Tertunda'}
                             </span>
                           </div>
                         </div>
@@ -640,7 +830,7 @@ export default function MasterSalaryManagement() {
                     ) : (
                       <div className="py-6 text-center">
                         <AlertCircle className="w-5 h-5 mx-auto mb-2 text-zinc-400" />
-                        <p className="text-zinc-500">No transaction history found</p>
+                        <p className="text-zinc-500">Tidak ada riwayat transaksi ditemukan</p>
                       </div>
                     )}
                   </div>

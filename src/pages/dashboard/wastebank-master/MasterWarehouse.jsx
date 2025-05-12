@@ -11,7 +11,7 @@ import {
   AlertOctagon,
   Info
 } from 'lucide-react';
-import { collection, doc, query, where, getDocs, getDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, query, where, getDocs, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -109,12 +109,20 @@ const MasterWarehouse = () => {
     recentPickups: [],
     wasteDetails: {} // Will store dates and weights
   });
+  const [unsubscribes, setUnsubscribes] = useState([]);
 
   const [inputErrors, setInputErrors] = useState({
     length: '',
     width: '',
     height: ''
   });
+
+  // Membersihkan subscription saat komponen unmount
+  useEffect(() => {
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+    };
+  }, [unsubscribes]);
 
   useEffect(() => {
     if (currentUser?.uid) {
@@ -180,7 +188,7 @@ const MasterWarehouse = () => {
       setInputErrors({});
       setIsEditingDimensions(false);
     } catch (err) {
-      setError('Failed to update warehouse dimensions');
+      setError('Gagal memperbarui dimensi gudang');
       console.error(err);
     }
   };
@@ -189,21 +197,50 @@ const MasterWarehouse = () => {
     try {
       setLoading(true);
       if (!currentUser?.uid) {
-        throw new Error('No user ID found');
+        throw new Error('ID Pengguna tidak ditemukan');
       }
+
+      // Bersihkan subscription sebelumnya jika ada
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+      const newUnsubscribes = [];
 
       const pickupsQuery = query(
         collection(db, 'masterBankRequests'),
-        where('masterBankId', '==', currentUser.uid),
+        where('wasteBankId', '==', currentUser.uid),
         where('status', '==', 'completed')
       );
       
-      const snapshot = await getDocs(pickupsQuery);
-      const pickupsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      // Menggunakan onSnapshot untuk data realtime
+      const unsubscribePickups = onSnapshot(
+        pickupsQuery, 
+        (snapshot) => {
+          const pickupsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
 
+          processWarehouseData(pickupsData);
+        },
+        (error) => {
+          console.error('Error listening to pickups:', error);
+          setError('Gagal memuat data pengambilan secara realtime');
+          setLoading(false);
+        }
+      );
+
+      newUnsubscribes.push(unsubscribePickups);
+      setUnsubscribes(newUnsubscribes);
+
+    } catch (err) {
+      console.error('Error fetching warehouse stats:', err);
+      setError(err.message || 'Gagal memuat statistik gudang');
+      setLoading(false);
+    }
+  };
+
+  // Fungsi untuk memproses data gudang
+  const processWarehouseData = (pickupsData) => {
+    try {
       const wasteTypes = {};
       const wasteDetails = {};
       let totalWeight = 0;
@@ -221,7 +258,7 @@ const MasterWarehouse = () => {
             wasteTypes[type] += weight;
             totalWeight += weight;
             
-            const pickupDate = pickup.completedAt?.toDate() || new Date();
+            const pickupDate = pickup.completedAt?.toDate ? pickup.completedAt.toDate() : new Date(pickup.completedAt?.seconds * 1000 || 0);
             wasteDetails[type].push({
               weight: weight,
               date: pickupDate,
@@ -249,10 +286,10 @@ const MasterWarehouse = () => {
       });
 
       setError(null);
+      setLoading(false);
     } catch (err) {
-      console.error('Error fetching warehouse stats:', err);
-      setError(err.message || 'Failed to load warehouse statistics');
-    } finally {
+      console.error('Error processing warehouse data:', err);
+      setError('Gagal memproses data gudang');
       setLoading(false);
     }
   };
@@ -266,7 +303,10 @@ const MasterWarehouse = () => {
         />
         <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
           <div className="flex items-center justify-center h-screen">
-            <div className="w-12 h-12 border-b-2 rounded-full animate-spin border-emerald-500" />
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-12 h-12 border-b-2 rounded-full animate-spin border-emerald-500" />
+              <p className="text-zinc-600">Memuat data gudang...</p>
+            </div>
           </div>
         </main>
       </div>
@@ -288,25 +328,42 @@ const MasterWarehouse = () => {
               <Building2 className="w-6 h-6 text-emerald-500" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-zinc-800">Warehouse Monitoring</h1>
-              <p className="text-sm text-zinc-500">Track your waste storage capacity and inventory</p>
+              <h1 className="text-2xl font-semibold text-zinc-800">Pemantauan Gudang</h1>
+              <p className="text-sm text-zinc-500">Pantau kapasitas penyimpanan dan inventaris sampah Anda</p>
             </div>
           </div>
 
-          <div className="max-w-5xl space-y-6">
+          {/* Info Banner */}
+          <div className="p-4 mb-6 border border-blue-200 rounded-lg bg-blue-50">
+            <div className="flex gap-3">
+              <Info className="flex-shrink-0 w-5 h-5 mt-0.5 text-blue-500" />
+              <div>
+                <h3 className="font-medium text-blue-800">Data Realtime</h3>
+                <p className="text-sm text-blue-600">
+                  Halaman ini menampilkan data gudang secara realtime. Perubahan pada data pengambilan atau dimensi gudang
+                  akan segera terlihat tanpa perlu memuat ulang halaman.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full mx-auto space-y-6 max-w-7xl">
             {/* Quick Stats */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card className="p-6">
                 <h3 className="mb-2 text-sm font-medium text-zinc-500">Total Kapasitas</h3>
                 <p className="text-2xl font-semibold text-zinc-800">{formatNumber(warehouseStats.totalCapacity)} m³</p>
+                <p className="mt-1 text-xs text-zinc-500">Kapasitas maksimal gudang berdasarkan dimensi</p>
               </Card>
               <Card className="p-6">
                 <h3 className="mb-2 text-sm font-medium text-zinc-500">Penyimpanan Saat Ini</h3>
                 <p className="text-2xl font-semibold text-zinc-800">{formatNumber(warehouseStats.currentStorage.toFixed(1))} m³</p>
+                <p className="mt-1 text-xs text-zinc-500">Volume sampah yang saat ini disimpan di gudang</p>
               </Card>
               <Card className="p-6">
                 <h3 className="mb-2 text-sm font-medium text-zinc-500">Penggunaan</h3>
                 <p className="text-2xl font-semibold text-zinc-800">{warehouseStats.usagePercentage.toFixed(1)}%</p>
+                <p className="mt-1 text-xs text-zinc-500">Persentase kapasitas gudang yang telah terpakai</p>
               </Card>
             </div>
 
@@ -376,6 +433,9 @@ const MasterWarehouse = () => {
                     {formatNumber((dimensions.length * dimensions.width * dimensions.height).toFixed(1))} m³
                   </span>
                 </div>
+                <p className="mt-2 text-xs text-zinc-500">
+                  Volume dihitung dari perkalian panjang × lebar × tinggi gudang. Semakin besar volume, semakin banyak sampah yang dapat disimpan.
+                </p>
                 {isEditingDimensions && Object.values(dimensions).some(v => !v || v <= 0) && (
                   <p className="mt-2 text-xs text-amber-600">
                     Catatan: Nilai dimensi harus lebih besar dari 0 untuk dapat disimpan
@@ -385,225 +445,281 @@ const MasterWarehouse = () => {
             </Card>
 
             {/* Storage Overview with 3D Visualization */}
-            <Card className="p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <PackageOpen className="w-5 h-5 text-zinc-600" />
-                <div>
-                  <h2 className="text-lg font-semibold text-zinc-800">Visualisasi Penyimpanan</h2>
-                  <p className="text-sm text-zinc-500">Lihat penggunaan ruang gudang dalam tampilan 3D</p>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                {/* Storage usage bar with enhanced styling */}
-                {/* <div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm font-medium text-zinc-700">
-                      Penggunaan: {formatNumber(warehouseStats.currentStorage.toFixed(1))} m³
-                    </span>
-                    <span className="text-sm text-zinc-500">
-                      dari {formatNumber(warehouseStats.totalCapacity)} m³
-                    </span>
-                  </div>
-                  <div className="h-4 overflow-hidden rounded-full bg-zinc-100">
-                    <div 
-                      className={`h-full rounded-full transition-all ${
-                        warehouseStats.usagePercentage >= 100 ? 'bg-red-600' :
-                        warehouseStats.usagePercentage >= 90 ? 'bg-rose-500' :
-                        warehouseStats.usagePercentage >= 75 ? 'bg-amber-500' :
-                        warehouseStats.usagePercentage >= 60 ? 'bg-blue-500' :
-                        'bg-emerald-500'
-                      }`}
-                      style={{ width: `${Math.min(warehouseStats.usagePercentage, 100)}%` }}
-                    />
-                  </div>
-                </div> */}
-
-                {/* 3D Visualization component */}
-                <Suspense fallback={
-                  <div className="w-full h-[500px] flex items-center justify-center bg-zinc-50 rounded-xl">
-                    <div className="w-12 h-12 border-b-2 rounded-full animate-spin border-emerald-500" />
-                  </div>
-                }>
-                  <WarehouseVisualization3D 
-                    wasteTypes={Object.entries(warehouseStats.wasteTypes).reduce((acc, [type, weight]) => ({
-                      ...acc,
-                      [type]: weight * VOLUME_CONVERSION_FACTOR
-                    }), {})}
-                    totalCapacity={warehouseStats.totalCapacity}
-                    currentStorage={warehouseStats.currentStorage}
-                    dimensions={dimensions}
-                    wasteDetails={warehouseStats.wasteDetails}
-                  />
-                </Suspense>
-                <div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-sm font-medium text-zinc-700">
-                      Penggunaan: {formatNumber(warehouseStats.currentStorage.toFixed(1))} m³
-                    </span>
-                    <span className="text-sm text-zinc-500">
-                      dari {formatNumber(warehouseStats.totalCapacity)} m³
-                    </span>
-                  </div>
-                  <div className="h-4 overflow-hidden rounded-full bg-zinc-100">
-                    <div 
-                      className={`h-full rounded-full transition-all ${
-                        warehouseStats.usagePercentage >= 90 ? 'bg-red-500' :
-                        warehouseStats.usagePercentage >= 70 ? 'bg-amber-500' :
-                        'bg-emerald-500'
-                      }`}
-                      style={{ width: `${Math.min(warehouseStats.usagePercentage, 100)}%` }}
-                    />
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <Card className="p-6 lg:col-span-2">
+                <div className="flex items-center gap-2 mb-6">
+                  <PackageOpen className="w-5 h-5 text-zinc-600" />
+                  <div>
+                    <h2 className="text-lg font-semibold text-zinc-800">Visualisasi Penyimpanan</h2>
+                    <p className="text-sm text-zinc-500">Lihat penggunaan ruang gudang dalam tampilan 3D</p>
                   </div>
                 </div>
 
-                {/* Enhanced Storage Alert System */}
-                {warehouseStats.usagePercentage >= 60 && (() => {
-                  const alert = getStorageAlert(warehouseStats.usagePercentage);
-                  const AlertIcon = alert.icon;
-                  
-                  return (
-                    <div className={`p-4 rounded-lg border ${
-                      alert.type === 'critical' ? 'bg-red-50 border-red-200' :
-                      alert.type === 'urgent' ? 'bg-rose-50 border-rose-200' :
-                      alert.type === 'warning' ? 'bg-amber-50 border-amber-200' :
-                      'bg-blue-50 border-blue-200'
-                    }`}>
-                      <div className="flex items-start gap-3">
-                        <AlertIcon className={`h-5 w-5 flex-shrink-0 text-${alert.color}-500 mt-0.5`} />
-                        <div className="space-y-1">
-                          <p className={`font-medium text-${alert.color}-700`}>
-                            {alert.title}
-                          </p>
-                          <p className={`text-sm text-${alert.color}-600`}>
-                            {alert.message}
-                          </p>
-                          <ul className={`text-sm text-${alert.color}-600 mt-2 space-y-1`}>
-                            {alert.suggestions.map((suggestion, index) => (
-                              <li key={index} className="flex items-start gap-2">
-                                <span className="select-none">•</span>
-                                <span>{suggestion}</span>
-                              </li>
-                            ))}
-                          </ul>
-                          {alert.type === 'critical' && (
-                            <div className="flex items-center gap-2 mt-3">
-                              <button className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors">
-                                Hubungi Bank Sampah Induk
-                              </button>
-                              <button className="px-3 py-1.5 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors">
-                                Jadwalkan Transfer
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                <div className="space-y-6">
+                  {/* 3D Visualization component */}
+                  <Suspense fallback={
+                    <div className="w-full h-[500px] flex items-center justify-center bg-zinc-50 rounded-xl">
+                      <div className="w-12 h-12 border-b-2 rounded-full animate-spin border-emerald-500" />
                     </div>
-                  );
-                })()}
-              </div>
-            </Card>
+                  }>
+                    <WarehouseVisualization3D 
+                      wasteTypes={Object.entries(warehouseStats.wasteTypes).reduce((acc, [type, weight]) => ({
+                        ...acc,
+                        [type]: weight * VOLUME_CONVERSION_FACTOR
+                      }), {})}
+                      totalCapacity={warehouseStats.totalCapacity}
+                      currentStorage={warehouseStats.currentStorage}
+                      dimensions={dimensions}
+                      wasteDetails={warehouseStats.wasteDetails}
+                    />
+                  </Suspense>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-sm font-medium text-zinc-700">
+                        Penggunaan: {formatNumber(warehouseStats.currentStorage.toFixed(1))} m³
+                      </span>
+                      <span className="text-sm text-zinc-500">
+                        dari {formatNumber(warehouseStats.totalCapacity)} m³
+                      </span>
+                    </div>
+                    <div className="h-4 overflow-hidden rounded-full bg-zinc-100">
+                      <div 
+                        className={`h-full rounded-full transition-all ${
+                          warehouseStats.usagePercentage >= 90 ? 'bg-red-500' :
+                          warehouseStats.usagePercentage >= 70 ? 'bg-amber-500' :
+                          'bg-emerald-500'
+                        }`}
+                        style={{ width: `${Math.min(warehouseStats.usagePercentage, 100)}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-zinc-500">
+                      Visualisasi di atas menunjukkan berapa banyak ruang gudang yang terpakai berdasarkan jenis sampah. Warna yang berbeda mewakili jenis sampah yang berbeda.
+                    </p>
+                  </div>
 
-            {/* Waste Distribution */}
-            <Card className="p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <Scale className="w-5 h-5 text-zinc-600" />
-                <div>
-                  <h2 className="text-lg font-semibold text-zinc-800">Distribusi Sampah</h2>
-                  <p className="text-sm text-zinc-500">Rincian jenis sampah yang disimpan</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {Object.entries(warehouseStats.wasteTypes).map(([type, weight]) => {
-                  const volume = weight * VOLUME_CONVERSION_FACTOR;
-                  const details = warehouseStats.wasteDetails[type] || [];
-                  const oldestDate = details.length > 0 ? 
-                    new Date(Math.min(...details.map(d => d.date))) : null;
-                  const percentage = (volume / warehouseStats.currentStorage) * 100;
-
-                  return (
-                    <div key={type} className="pb-4 border-b border-zinc-200">
-                      <div className="flex justify-between mb-2">
-                        <div>
-                          <span className="text-sm font-medium text-zinc-700">
-                            {type.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                          </span>
-                          {oldestDate && (
-                            <div className="mt-1 text-xs text-zinc-400">
-                              Batch tertua: {oldestDate.toLocaleDateString()}
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-medium text-zinc-700">
-                            {formatNumber(volume.toFixed(1))} m³
-                          </div>
-                          <div className="text-xs text-zinc-500">
-                            {formatNumber(weight.toFixed(1))} kg ({percentage.toFixed(1)}%)
+                  {/* Enhanced Storage Alert System */}
+                  {warehouseStats.usagePercentage >= 60 && (() => {
+                    const alert = getStorageAlert(warehouseStats.usagePercentage);
+                    const AlertIcon = alert.icon;
+                    
+                    return (
+                      <div className={`p-4 rounded-lg border ${
+                        alert.type === 'critical' ? 'bg-red-50 border-red-200' :
+                        alert.type === 'urgent' ? 'bg-rose-50 border-rose-200' :
+                        alert.type === 'warning' ? 'bg-amber-50 border-amber-200' :
+                        'bg-blue-50 border-blue-200'
+                      }`}>
+                        <div className="flex items-start gap-3">
+                          <AlertIcon className={`h-5 w-5 flex-shrink-0 text-${alert.color}-500 mt-0.5`} />
+                          <div className="space-y-1">
+                            <p className={`font-medium text-${alert.color}-700`}>
+                              {alert.title}
+                            </p>
+                            <p className={`text-sm text-${alert.color}-600`}>
+                              {alert.message}
+                            </p>
+                            <ul className={`text-sm text-${alert.color}-600 mt-2 space-y-1`}>
+                              {alert.suggestions.map((suggestion, index) => (
+                                <li key={index} className="flex items-start gap-2">
+                                  <span className="select-none">•</span>
+                                  <span>{suggestion}</span>
+                                </li>
+                              ))}
+                            </ul>
+                            {alert.type === 'critical' && (
+                              <div className="flex items-center gap-2 mt-3">
+                                <button className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors">
+                                  Hubungi Bank Sampah Induk
+                                </button>
+                                <button className="px-3 py-1.5 bg-red-50 text-red-700 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors">
+                                  Jadwalkan Transfer
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
-                        <div 
-                          className="h-full rounded-full bg-emerald-500"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
+                    );
+                  })()}
+                </div>
+              </Card>
+
+              {/* Waste Distribution - Updated to sort by volume */}
+              <Card className="p-6">
+                <div className="flex items-center gap-2 mb-6">
+                  <Scale className="w-5 h-5 text-zinc-600" />
+                  <div>
+                    <h2 className="text-lg font-semibold text-zinc-800">Distribusi Sampah</h2>
+                    <p className="text-sm text-zinc-500">Rincian jenis sampah yang disimpan di gudang</p>
+                  </div>
+                </div>
+
+                <div className="p-3 mb-4 text-sm text-blue-700 border border-blue-100 rounded-lg bg-blue-50">
+                  <p>
+                    <strong>Cara Membaca:</strong> Tabel ini menunjukkan jenis sampah berdasarkan volume terbanyak ke terkecil.
+                    Persentase menunjukkan proporsi dari total sampah yang ada.
+                  </p>
+                </div>
+
+                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                  {Object.entries(warehouseStats.wasteTypes).length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-8 bg-zinc-50 rounded-xl">
+                      <PackageOpen className="w-12 h-12 mb-2 text-zinc-300" />
+                      <p className="text-zinc-600">Belum ada data sampah yang tersimpan</p>
                     </div>
-                  );
-                })}
-              </div>
-            </Card>
+                  ) : (
+                    Object.entries(warehouseStats.wasteTypes)
+                      .map(([type, weight]) => {
+                        const volume = weight * VOLUME_CONVERSION_FACTOR;
+                        const details = warehouseStats.wasteDetails[type] || [];
+                        const oldestDate = details.length > 0 ? 
+                          new Date(Math.min(...details.map(d => d.date))) : null;
+                        const percentage = (volume / warehouseStats.currentStorage) * 100;
+
+                        // Terjemahkan nama jenis sampah
+                        const translateWasteType = (type) => {
+                          const translations = {
+                            'plastic': 'Plastik',
+                            'paper': 'Kertas',
+                            'organic': 'Organik',
+                            'metal': 'Logam',
+                            'glass': 'Kaca',
+                            'electronic': 'Elektronik',
+                            'fabric': 'Kain',
+                            'others': 'Lainnya'
+                          };
+                          
+                          const lowerType = type.toLowerCase();
+                          return translations[lowerType] || type.split('-').map(word => 
+                            word.charAt(0).toUpperCase() + word.slice(1)
+                          ).join(' ');
+                        };
+
+                        return {
+                          type,
+                          translatedType: translateWasteType(type),
+                          weight,
+                          volume,
+                          oldestDate,
+                          percentage
+                        };
+                      })
+                      // Sort by volume (largest to smallest)
+                      .sort((a, b) => b.volume - a.volume)
+                      .map(item => (
+                        <div key={item.type} className="pb-4 border-b border-zinc-200">
+                          <div className="flex justify-between mb-2">
+                            <div>
+                              <span className="text-sm font-medium text-zinc-700">
+                                {item.translatedType}
+                              </span>
+                              {item.oldestDate && (
+                                <div className="mt-1 text-xs text-zinc-400">
+                                  Batch terlama: {item.oldestDate.toLocaleDateString('id-ID', {
+                                    day: 'numeric',
+                                    month: 'long',
+                                    year: 'numeric'
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-medium text-zinc-700">
+                                {formatNumber(item.volume.toFixed(1))} m³
+                              </div>
+                              <div className="text-xs text-zinc-500">
+                                {formatNumber(item.weight.toFixed(1))} kg ({item.percentage.toFixed(1)}%)
+                              </div>
+                            </div>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
+                            <div 
+                              className="h-full rounded-full bg-emerald-500"
+                              style={{ width: `${item.percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))
+                  )}
+                </div>
+              </Card>
+            </div>
 
             {/* Recent Collections */}
             <Card className="p-6">
               <div className="flex items-center gap-2 mb-6">
                 <ArrowUpCircle className="w-5 h-5 text-zinc-600" />
                 <div>
-                  <h2 className="text-lg font-semibold text-zinc-800">Koleksi Terbaru</h2>
-                  <p className="text-sm text-zinc-500">Riwayat pengumpulan sampah terakhir</p>
+                  <h2 className="text-lg font-semibold text-zinc-800">Pengumpulan Terbaru</h2>
+                  <p className="text-sm text-zinc-500">Riwayat pengumpulan sampah terakhir yang masuk ke gudang</p>
                 </div>
               </div>
 
               <div className="divide-y divide-zinc-200">
-                {warehouseStats.recentPickups.map(pickup => {
-                  const totalWeight = Object.values(pickup.wastes).reduce((sum, waste) => 
-                    sum + (Number(waste.weight) || 0), 0);
-                  const totalVolume = totalWeight * VOLUME_CONVERSION_FACTOR;
+                {warehouseStats.recentPickups.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center p-8 bg-zinc-50 rounded-xl">
+                    <ArrowUpCircle className="w-12 h-12 mb-2 text-zinc-300" />
+                    <p className="text-zinc-600">Belum ada data pengumpulan sampah</p>
+                  </div>
+                ) : (
+                  warehouseStats.recentPickups.map(pickup => {
+                    const totalWeight = Object.values(pickup.wastes).reduce((sum, waste) => 
+                      sum + (Number(waste.weight) || 0), 0);
+                    const totalVolume = totalWeight * VOLUME_CONVERSION_FACTOR;
 
-                  return (
-                    <div key={pickup.id} className="py-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-medium text-zinc-800">{pickup.userName}</p>
-                          <p className="text-sm text-zinc-500">
-                            {new Date(pickup.completedAt?.seconds * 1000).toLocaleDateString()}
-                          </p>
+                    return (
+                      <div key={pickup.id} className="py-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium text-zinc-800">{pickup.userName}</p>
+                            <p className="text-sm text-zinc-500">
+                              {new Date(pickup.completedAt?.seconds * 1000).toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric'
+                              })}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium text-emerald-600">
+                              {formatNumber(totalVolume.toFixed(1))} m³
+                            </p>
+                            <p className="text-xs text-zinc-500">
+                              {formatNumber(totalWeight.toFixed(1))} kg
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-medium text-emerald-600">
-                            {formatNumber(totalVolume.toFixed(1))} m³
-                          </p>
-                          <p className="text-xs text-zinc-500">
-                            {formatNumber(totalWeight.toFixed(1))} kg
-                          </p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {Object.entries(pickup.wastes).map(([type, data]) => {
+                            const weight = Number(data.weight) || 0;
+                            const volume = weight * VOLUME_CONVERSION_FACTOR;
+                            
+                            // Terjemahkan nama jenis sampah
+                            const translations = {
+                              'plastic': 'Plastik',
+                              'paper': 'Kertas',
+                              'organic': 'Organik',
+                              'metal': 'Logam',
+                              'glass': 'Kaca',
+                              'electronic': 'Elektronik',
+                              'fabric': 'Kain',
+                              'others': 'Lainnya'
+                            };
+                            
+                            const typeDisplay = translations[type.toLowerCase()] || 
+                              type.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                            
+                            return (
+                              <span key={type} className="px-2 py-1 text-xs rounded-full bg-zinc-100 text-zinc-700">
+                                {typeDisplay}: {formatNumber(volume.toFixed(1))} m³
+                              </span>
+                            );
+                          })}
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {Object.entries(pickup.wastes).map(([type, data]) => {
-                          const weight = Number(data.weight) || 0;
-                          const volume = weight * VOLUME_CONVERSION_FACTOR;
-                          return (
-                            <span key={type} className="px-2 py-1 text-xs rounded-full bg-zinc-100 text-zinc-700">
-                              {type.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}: {formatNumber(volume.toFixed(1))} m³
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </Card>
 

@@ -1,714 +1,845 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Building2, 
-  Search,
-  Package,
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
-  Calendar,
-  Clock,
-  MapPin,
-  PhoneCall,
-  Users,
-  Truck,
-  Container,
-  ChevronRight
-} from 'lucide-react';
-import { collection, query, getDocs, updateDoc, doc, where, onSnapshot } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { collection, query, where, doc, setDoc, getDoc, runTransaction, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { useAuth } from '../../../hooks/useAuth';
+import { Search, AlertCircle, UserCheck, User, Users, Filter, Wallet, Calculator, Clock, Info } from 'lucide-react';
+import Swal from 'sweetalert2';
 import Sidebar from '../../../components/Sidebar';
-import Swal from 'sweetalert2/dist/sweetalert2.js';
-import 'sweetalert2/dist/sweetalert2.css';
+import { useAuth } from '../../../hooks/useAuth';
 
-// Reusable Components
-const Input = ({ className = "", ...props }) => (
-  <input
-    className={`w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg 
-      text-zinc-700 text-sm transition duration-200 ease-in-out
-      placeholder:text-zinc-400
-      focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500
-      disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
-    {...props}
-  />
-);
+export default function MasterSalaryManagement() {
+  const { userData } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [selectedRole, setSelectedRole] = useState('all');
+  const [pointsToConvert, setPointsToConvert] = useState(0);
+  const [salaryConfig, setSalaryConfig] = useState({
+    baseSalary: 0,
+  });
+  const [userStats, setUserStats] = useState({
+    totalCollections: 0,
+    totalWasteCollected: 0,
+    totalValue: 0,
+    points: 0,
+    balance: 0
+  });
+  const [wasteBankBalance, setWasteBankBalance] = useState(0);
+  const [transactions, setTransactions] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [unsubscribes, setUnsubscribes] = useState([]);
 
-const Select = ({ className = "", ...props }) => (
-  <select
-    className={`w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg 
-      text-zinc-700 text-sm transition duration-200 ease-in-out
-      focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500
-      disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
-    {...props}
-  />
-);
+  useEffect(() => {
+    return () => {
+      unsubscribes.forEach(unsubscribe => {
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
+        }
+      });
+    };
+  }, [unsubscribes]);
 
-const Badge = ({ variant = "default", children, className = "", ...props }) => {
-  const variants = {
-    default: "bg-zinc-100 text-zinc-700",
-    success: "bg-emerald-100 text-emerald-700",
-    warning: "bg-yellow-100 text-yellow-700",
-    danger: "bg-red-100 text-red-700",
-    info: "bg-blue-100 text-blue-700"
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]} ${className}`}
-      {...props}
-    >
-      {children}
-    </span>
-  );
-};
-
-const StatusCard = ({ label, count, icon: Icon, description, className }) => (
-  <div className={`bg-white p-6 rounded-xl border border-gray-200 hover:shadow-md transition-all cursor-pointer group ${className}`}>
-    <div className="flex items-start justify-between">
-      <div>
-        <div className="p-2.5 bg-gray-50 rounded-lg w-fit group-hover:bg-emerald-50 transition-colors">
-          <Icon className="w-5 h-5 text-gray-600 transition-colors group-hover:text-emerald-600" />
-        </div>
-        <p className="mt-3 text-sm font-medium text-gray-600">{label}</p>
-        <p className="mt-1 text-2xl font-semibold text-gray-800">{count}</p>
-        {description && (
-          <p className="mt-1 text-sm text-gray-500">{description}</p>
-        )}
-      </div>
-    </div>
-  </div>
-);
-
-const QuickAction = ({ icon: Icon, label, onClick, variant = "default" }) => {
-  const variants = {
-    default: "bg-gray-100 text-gray-700 hover:bg-gray-200",
-    success: "bg-emerald-100 text-emerald-700 hover:bg-emerald-200",
-    warning: "bg-yellow-100 text-yellow-700 hover:bg-yellow-200",
-    danger: "bg-red-100 text-red-700 hover:bg-red-200"
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium 
-        transition-all hover:shadow-sm ${variants[variant]}`}
-    >
-      <Icon className="w-4 h-4" />
-      {label}
-    </button>
-  );
-};
-
-const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const statusColors = {
-    pending: "bg-yellow-100 text-yellow-700 border-yellow-200",
-    processing: "bg-blue-100 text-blue-700 border-blue-200",
-    received: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    completed: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    cancelled: "bg-red-100 text-red-700 border-red-200"
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'pending': return Clock;
-      case 'processing': return Container;
-      case 'received': return CheckCircle2;
-      case 'completed': return CheckCircle2;
-      case 'cancelled': return AlertCircle;
-      default: return Package;
+  const fetchTransactionHistory = async (userId) => {
+    if (!userId) return;
+    
+    try {
+      setLoadingTransactions(true);
+      
+      const currentUnsubscribes = [...unsubscribes];
+      const transactionsUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'transactions');
+      if (transactionsUnsubscribeIndex !== -1 && typeof currentUnsubscribes[transactionsUnsubscribeIndex].fn === 'function') {
+        currentUnsubscribes[transactionsUnsubscribeIndex].fn();
+        currentUnsubscribes.splice(transactionsUnsubscribeIndex, 1);
+      }
+      
+      const transactionsQuery = query(
+        collection(db, 'transactions'),
+        where('userId', '==', userId)
+      );
+      
+      const unsubscribe = onSnapshot(
+        transactionsQuery,
+        (snapshot) => {
+          const transactionsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date()
+          }));
+          
+          const sortedTransactions = transactionsData.sort((a, b) => 
+            b.createdAt.getTime() - a.createdAt.getTime()
+          ).slice(0, 10);
+          
+          setTransactions(sortedTransactions);
+          setLoadingTransactions(false);
+        },
+        (error) => {
+          console.error('Error memantau riwayat transaksi:', error);
+          setLoadingTransactions(false);
+        }
+      );
+      
+      setUnsubscribes([...currentUnsubscribes, { name: 'transactions', fn: unsubscribe }]);
+      
+    } catch (error) {
+      console.error('Error memantau riwayat transaksi:', error);
+      setLoadingTransactions(false);
     }
   };
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('id-ID', { 
-      style: 'currency', 
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  };
-
-  const formatDateTime = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    return new Date(timestamp.seconds * 1000).toLocaleString('id-ID', {
-      dateStyle: 'medium',
-      timeStyle: 'short'
-    });
-  };
-
-  const StatusIcon = getStatusIcon(pickup.status);
-  const isDelivery = pickup.deliveryType === 'self-delivery';
-  const isCompleted = pickup.status === 'completed';
-
-  return (
-    <div className="overflow-hidden transition-all bg-white border border-gray-200 rounded-xl hover:shadow-md group">
-      {/* Status Bar with Delivery Type Indicator */}
-      <div className="flex items-center">
-        <div className={`h-1 flex-grow ${statusColors[pickup.status]?.replace('text-', 'bg-').split(' ')[0]}`} />
-        <span className={`px-2 py-0.5 text-xs font-medium ${isDelivery ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
-          {isDelivery ? 'Self Delivery' : 'Pickup'}
-        </span>
-      </div>
-      
-      <div className="p-6">
-        {/* Header with toggle */}
-        <div className="flex items-start justify-between mb-6 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
-          <div className="flex items-start gap-4">
-            <div className="p-3 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50">
-              <Users className="w-6 h-6 text-gray-600 transition-colors group-hover:text-emerald-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800 transition-colors group-hover:text-emerald-600">
-                {pickup.wasteBankName}
-              </h3>
-              <div className="flex items-center gap-3 mt-2">
-                <div className="flex items-center gap-1.5">
-                  <PhoneCall className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">
-                    {pickup.phone || 'No phone number'}
-                  </span>
-                </div>
-                <span className="text-gray-300">•</span>
-                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${statusColors[pickup.status]}`}>
-                  <StatusIcon className="w-4 h-4" />
-                  {pickup.status.charAt(0).toUpperCase() + pickup.status.slice(1)}
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex items-start gap-4 text-right">
-            <div>
-              <p className="text-xs text-gray-400">Created At</p>
-              <p className="text-sm font-medium text-gray-600">
-                {formatDateTime(pickup.createdAt)}
-              </p>
-              {isCompleted && pickup.completedAt && (
-                <>
-                  <p className="mt-2 text-xs text-gray-400">Completed At</p>
-                  <p className="text-sm font-medium text-emerald-600">
-                    {formatDateTime(pickup.completedAt)}
-                  </p>
-                </>
-              )}
-            </div>
-            <ChevronRight 
-              className={`w-5 h-5 text-gray-400 transform transition-transform duration-200 mt-2
-                ${isExpanded ? 'rotate-90' : ''}`}
-            />
-          </div>
-        </div>
-
-        {/* Collapsible Content */}
-        <div className={`transition-all duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>
-          {/* Details Grid */}
-          <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
-            <div className="flex items-start gap-3 p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50">
-              <Calendar className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
-              <div>
-                <p className="text-sm font-medium text-gray-700">Schedule</p>
-                <p className="mt-1 text-sm text-gray-600">
-                  {new Date(pickup.date?.seconds * 1000).toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
-                </p>
-                <p className="text-sm text-gray-500">{pickup.time}</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50">
-              <MapPin className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
-              <div>
-                <p className="text-sm font-medium text-gray-700">Location</p>
-                <p className="mt-1 text-sm text-gray-600">
-                  {typeof pickup.location === 'object' ? pickup.location.address : pickup.location}
-                </p>
-                {pickup.notes && (
-                  <p className="mt-1 text-sm italic text-gray-500">"{pickup.notes}"</p>
-                )}
-                {pickup.location && pickup.location.coordinates && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    {pickup.location.coordinates.lat.toFixed(6)}, {pickup.location.coordinates.lng.toFixed(6)}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {isCompleted ? (
-              <div className="flex items-start gap-3 p-4 transition-colors bg-emerald-50 rounded-xl">
-                <Container className="w-5 h-5 text-emerald-600" />
-                <div>
-                  <p className="text-sm font-medium text-emerald-700">Collection Results</p>
-                  <p className="mt-2 text-sm text-emerald-600">
-                    Total Value: <span className="font-semibold">{formatCurrency(pickup.totalValue)}</span>
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-start gap-3 p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50">
-                <Package className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Waste Types</p>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {pickup.wasteTypes?.map((type, index) => (
-                      <span 
-                        key={index} 
-                        className="px-2 py-1 text-xs border rounded-full bg-emerald-50 text-emerald-700 border-emerald-100"
-                      >
-                        {type.charAt(0).toUpperCase() + type.slice(1)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Waste Details Table */}
-          {isCompleted && pickup.wastes && (
-            <div className="pt-6 mt-6 border-t border-gray-200">
-              <h4 className="mb-4 text-sm font-medium text-gray-700">Collection Details</h4>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead>
-                    <tr>
-                      <th className="px-4 py-2 text-xs font-medium text-left text-gray-500 uppercase">Type</th>
-                      <th className="px-4 py-2 text-xs font-medium text-right text-gray-500 uppercase">Weight (kg)</th>
-                      <th className="px-4 py-2 text-xs font-medium text-right text-gray-500 uppercase">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {Object.entries(pickup.wastes).map(([type, data]) => (
-                      <tr key={type}>
-                        <td className="px-4 py-2 text-sm text-gray-700 capitalize">{type}</td>
-                        <td className="px-4 py-2 text-sm text-right text-gray-700">{data.weight.toFixed(1)}</td>
-                        <td className="px-4 py-2 text-sm text-right text-gray-700">{formatCurrency(data.value)}</td>
-                      </tr>
-                    ))}
-                    <tr className="bg-gray-50">
-                      <td className="px-4 py-2 text-sm font-medium text-gray-700">Total</td>
-                      <td className="px-4 py-2 text-sm font-medium text-right text-gray-700">
-                        {Object.values(pickup.wastes).reduce((sum, data) => sum + data.weight, 0).toFixed(1)}
-                      </td>
-                      <td className="px-4 py-2 text-sm font-medium text-right text-emerald-600">
-                        {formatCurrency(pickup.totalValue)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center justify-between pt-4 mt-6 border-t border-gray-200">
-          <div className="flex items-center gap-2">
-            <QuickAction
-              icon={Package}
-              label="Change Status"
-              onClick={() => onStatusChange(pickup)}
-              variant={pickup.status === 'completed' ? 'success' : 'default'}
-            />
-          </div>
-          
-          {pickup.status === 'pending' && (
-            <QuickAction
-              icon={AlertCircle}
-              label="Cancel"
-              variant="danger"
-              onClick={() => onStatusChange(pickup)}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const MasterTransaction = () => {
-  const { userData, currentUser } = useAuth();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [requests, setRequests] = useState([]);
-  const [collectors, setCollectors] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [error, setError] = useState(null);
-
-  // Fetch data when authenticated
-  useEffect(() => {
-    let unsubscribe;
+  const fetchWasteBankBalance = async () => {
+    if (!userData?.id) return;
     
-    const fetchData = async () => {
-      if (!currentUser?.uid) return;
+    try {
+      const unsubscribe = onSnapshot(
+        doc(db, 'users', userData.id),
+        (snapshot) => {
+          if (snapshot.exists()) {
+            setWasteBankBalance(snapshot.data().balance || 0);
+          }
+        },
+        (error) => {
+          console.error('Error memantau saldo bank sampah:', error);
+        }
+      );
+      
+      setUnsubscribes(prev => {
+        const filtered = prev.filter(u => u.name !== 'wastebank');
+        return [...filtered, { name: 'wastebank', fn: unsubscribe }];
+      });
+      
+    } catch (error) {
+      console.error('Error memantau saldo bank sampah:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchWasteBankBalance();
+  }, [userData]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      if (!userData?.id) return;
       
       try {
-        setLoading(true);
-        console.log("Fetching requests for master bank ID:", currentUser.uid);
+        setLoadingUsers(true);
         
-        // Create the query
-        const requestsQuery = query(
+        const currentUnsubscribes = [...unsubscribes];
+        const pickupsUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'pickups');
+        const collectorsUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'collectors');
+        const wastebanksUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'wastebanks');
+        const customersUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'customers');
+        
+        if (pickupsUnsubscribeIndex !== -1 && typeof currentUnsubscribes[pickupsUnsubscribeIndex].fn === 'function') {
+          currentUnsubscribes[pickupsUnsubscribeIndex].fn();
+          currentUnsubscribes.splice(pickupsUnsubscribeIndex, 1);
+        }
+        
+        if (collectorsUnsubscribeIndex !== -1 && typeof currentUnsubscribes[collectorsUnsubscribeIndex].fn === 'function') {
+          currentUnsubscribes[collectorsUnsubscribeIndex].fn();
+          currentUnsubscribes.splice(collectorsUnsubscribeIndex, 1);
+        }
+        
+        if (wastebanksUnsubscribeIndex !== -1 && typeof currentUnsubscribes[wastebanksUnsubscribeIndex].fn === 'function') {
+          currentUnsubscribes[wastebanksUnsubscribeIndex].fn();
+          currentUnsubscribes.splice(wastebanksUnsubscribeIndex, 1);
+        }
+        
+        if (customersUnsubscribeIndex !== -1 && typeof currentUnsubscribes[customersUnsubscribeIndex].fn === 'function') {
+          currentUnsubscribes[customersUnsubscribeIndex].fn();
+          currentUnsubscribes.splice(customersUnsubscribeIndex, 1);
+        }
+        
+        const newUnsubscribes = [...currentUnsubscribes];
+        
+        const pickupsQuery = query(
           collection(db, 'masterBankRequests'),
-          where('masterBankId', '==', currentUser.uid)
+          where('masterBankId', '==', userData.id)
         );
         
-        // Set up real-time listener
-        unsubscribe = onSnapshot(requestsQuery, 
+        const pickupsUnsubscribe = onSnapshot(
+          pickupsQuery,
           (snapshot) => {
-            console.log(`Found ${snapshot.size} masterBankRequests documents`);
+            const customerIds = [...new Set(
+              snapshot.docs.map(doc => doc.data().userId)
+            )].filter(Boolean);
             
-            const requestsData = snapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data(),
-              // Calculate derived fields
-              totalWeight: Object.values(doc.data().wasteWeights || {})
-                .reduce((sum, weight) => sum + Number(weight), 0),
-              totalValue: Object.values(doc.data().wastes || {})
-                .reduce((sum, waste) => sum + (Number(waste.value) || 0), 0),
-            }));
-            
-            console.log("Retrieved data:", requestsData);
-            setRequests(requestsData);
-            setLoading(false);
+            fetchRelatedUsers(customerIds, newUnsubscribes);
           },
           (error) => {
-            console.error('Error fetching requests:', error);
-            setError('Failed to load collections. Please check your network connection and try again.');
-            setLoading(false);
+            console.error('Error memantau permintaan:', error);
+            fetchRelatedUsers([], newUnsubscribes);
           }
         );
-      } catch (err) {
-        console.error('Error setting up listener:', err);
-        setError('Failed to set up data connection. Please reload the page.');
-        setLoading(false);
+        
+        newUnsubscribes.push({ name: 'pickups', fn: pickupsUnsubscribe });
+        setUnsubscribes(newUnsubscribes);
+        
+      } catch (error) {
+        console.error('Error menyiapkan pantauan pengguna:', error);
+        setLoadingUsers(false);
+        Swal.fire({
+          icon: 'error',
+          title: 'Kesalahan',
+          text: 'Gagal memuat data pengguna',
+        });
+      }
+    };
+    
+    const fetchRelatedUsers = (customerIds, currentUnsubscribes) => {
+      try {
+        const collectorQuery = query(
+          collection(db, 'users'),
+          where('role', '==', 'wastebank_master_collector'),
+          where('profile.institution', '==', userData.id)
+        );
+        
+        const wasteBankQuery = query(
+          collection(db, 'users'),
+          where('role', '==', 'wastebank_admin')
+        );
+        
+        const collectorUnsubscribe = onSnapshot(
+          collectorQuery,
+          (collectorSnapshot) => {
+            const wasteBankUnsubscribe = onSnapshot(
+              wasteBankQuery,
+              async (wasteBankSnapshot) => {
+                let customerSnapshot = { docs: [] };
+                
+                if (customerIds.length > 0) {
+                  try {
+                    const customerQuery = query(
+                      collection(db, 'users'),
+                      where('role', '==', 'customer'),
+                      where('__name__', 'in', customerIds)
+                    );
+                    
+                    const customerUnsubscribe = onSnapshot(
+                      customerQuery,
+                      (snapshot) => {
+                        processAllUserData(collectorSnapshot, wasteBankSnapshot, snapshot);
+                      },
+                      (error) => {
+                        console.error('Error memantau pelanggan:', error);
+                        processAllUserData(collectorSnapshot, wasteBankSnapshot, { docs: [] });
+                      }
+                    );
+                    
+                    currentUnsubscribes.push({ name: 'customers', fn: customerUnsubscribe });
+                  } catch (error) {
+                    console.error('Error menyiapkan pantauan pelanggan:', error);
+                    processAllUserData(collectorSnapshot, wasteBankSnapshot, { docs: [] });
+                  }
+                } else {
+                  processAllUserData(collectorSnapshot, wasteBankSnapshot, { docs: [] });
+                }
+              },
+              (error) => {
+                console.error('Error memantau bank sampah:', error);
+                processAllUserData(collectorSnapshot, { docs: [] }, { docs: [] });
+              }
+            );
+            
+            currentUnsubscribes.push({ name: 'wastebanks', fn: wasteBankUnsubscribe });
+          },
+          (error) => {
+            console.error('Error memantau kolektor:', error);
+            setLoadingUsers(false);
+          }
+        );
+        
+        currentUnsubscribes.push({ name: 'collectors', fn: collectorUnsubscribe });
+        setUnsubscribes(currentUnsubscribes);
+        
+      } catch (error) {
+        console.error('Error menyiapkan pantauan pengguna terkait:', error);
+        setLoadingUsers(false);
+      }
+    };
+    
+    const processAllUserData = (collectorSnapshot, wasteBankSnapshot, customerSnapshot) => {
+      try {
+        const usersData = [
+          ...collectorSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })),
+          ...wasteBankSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })),
+          ...(customerSnapshot?.docs || []).map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }))
+        ];
+        
+        setUsers(usersData);
+        setLoadingUsers(false);
+      } catch (error) {
+        console.error('Error memproses data pengguna:', error);
+        setLoadingUsers(false);
       }
     };
 
-    fetchData();
+    fetchUsers();
+  }, [userData]);
 
-    // Cleanup function to unsubscribe when component unmounts
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, [currentUser?.uid]);
-
-  const fetchCollectors = async () => {
+  const fetchUserDetails = async (userId) => {
     try {
-      console.log('Fetching collectors for master bank:', currentUser.uid);
-      const collectorsQuery = query(
-        collection(db, 'users'),
-        where('role', '==', 'wastebank_master_collector'),
-        where('profile.institution', '==', currentUser.uid)  // Changed to use profile.institution
+      setLoading(true);
+      
+      // Create a safe copy of unsubscribe functions
+      const currentUnsubscribes = [...unsubscribes];
+      
+      // Clean up previous listeners more safely
+      currentUnsubscribes.forEach((unsubscribe, index) => {
+        if (unsubscribe && 
+           (unsubscribe.name === 'userDetails' || unsubscribe.name === 'userPickups') && 
+           typeof unsubscribe.fn === 'function') {
+          unsubscribe.fn();
+          currentUnsubscribes.splice(index, 1);
+        }
+      });
+      
+      // Set up new listener for user details
+      const userUnsubscribe = onSnapshot(
+        doc(db, 'users', userId),
+        async (userDoc) => {
+          if (!userDoc.exists()) {
+            throw new Error('Pengguna tidak ditemukan');
+          }
+
+          const userData = userDoc.data();
+          
+          setPointsToConvert(0);
+          
+          if (userData.role === 'collector') {
+            try {
+              const salaryDoc = await getDoc(doc(db, 'salaries', userId));
+              setSalaryConfig({
+                baseSalary: salaryDoc.exists() ? salaryDoc.data().config.baseSalary : 0,
+              });
+            } catch (error) {
+              console.error('Error fetching salary config:', error);
+              setSalaryConfig({ baseSalary: 0 });
+            }
+          } else {
+            // Set default salary for non-collectors
+            setSalaryConfig({ baseSalary: 0 });
+          }
+
+          // Determine correct collection and field name based on user role
+          const collectionName = userData.role === 'wastebank_admin' ? 'masterBankRequests' : 'pickups';
+          const fieldName = userData.role === 'collector' ? 'collectorId' : 'userId';
+
+          // Set up listener for user's pickups or requests
+          const pickupsQuery = query(
+            collection(db, collectionName), 
+            where(fieldName, '==', userId)
+          );
+
+          const pickupsUnsubscribe = onSnapshot(
+            pickupsQuery,
+            (pickupsSnapshot) => {
+              let totalCollections = 0;
+              let totalWasteCollected = 0;
+              let totalValue = 0;
+
+              pickupsSnapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data.status === 'completed') {
+                  totalCollections++;
+                  totalValue += data.totalValue || 0;
+                  
+                  // Support different waste data formats
+                  if (data.wastes) {
+                    Object.values(data.wastes).forEach(waste => {
+                      totalWasteCollected += Number(waste.weight) || 0;
+                    });
+                  } else if (data.wasteWeights) {
+                    Object.values(data.wasteWeights).forEach(weight => {
+                      totalWasteCollected += Number(weight) || 0;
+                    });
+                  } else if (data.wasteQuantities) {
+                    Object.values(data.wasteQuantities).forEach(quantity => {
+                      totalWasteCollected += Number(quantity) || 0;
+                    });
+                  }
+                }
+              });
+
+              setUserStats({
+                totalCollections,
+                totalWasteCollected,
+                totalValue,
+                balance: userData.balance || 0,
+                points: userData.role === 'customer' ? userData.rewards?.points || 0 : 0,
+              });
+
+              setLoading(false);
+            },
+            (error) => {
+              console.error('Error memantau pengambilan sampah:', error);
+              setLoading(false);
+            }
+          );
+          
+          // Update unsubscribes array with new functions using a safer approach
+          const newUnsubscribes = [
+            ...currentUnsubscribes,
+            { name: 'userDetails', fn: userUnsubscribe },
+            { name: 'userPickups', fn: pickupsUnsubscribe }
+          ];
+          setUnsubscribes(newUnsubscribes);
+        },
+        (error) => {
+          console.error('Error memantau data pengguna:', error);
+          setLoading(false);
+        }
       );
-      const snapshot = await getDocs(collectorsQuery);
-      const collectorsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      console.log('Fetched collectors:', collectorsData);
-      setCollectors(collectorsData);
-      return collectorsData;
+
+      await fetchTransactionHistory(userId);
+
     } catch (error) {
-      console.error('Error fetching collectors:', error);
-      return [];
+      console.error('Error memuat detail pengguna:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Kesalahan',
+        text: 'Gagal memuat detail pengguna',
+      });
+      setLoading(false);
     }
   };
 
-  const openChangeStatusModal = async (request) => {
-    // Fetch collectors first
-    const currentCollectors = await fetchCollectors();
-    
-    const statusOptions = [
-      { value: 'pending', label: 'Pending', icon: '⏳', color: 'bg-yellow-50 text-yellow-600' },
-      { value: 'assigned', label: 'Assigned', icon: '🚛', color: 'bg-blue-50 text-blue-600' },
-      { value: 'in_progress', label: 'In Progress', icon: '⏳', color: 'bg-green-50 text-green-600' },
-      { value: 'completed', label: 'Completed', icon: '✅', color: 'bg-emerald-50 text-emerald-600' },
-      { value: 'cancelled', label: 'Cancelled', icon: '❌', color: 'bg-red-50 text-red-600' }
-    ];
+  const handleSelectUser = (userId) => {
+    setSelectedUserId(userId);
+    fetchUserDetails(userId);
+  };
 
-    // Format collector options untuk dropdown
-    const collectorOptions = currentCollectors
-      .map(collector => `
-        <option value="${collector.id}" 
-          ${request.collectorId === collector.id ? 'selected' : ''}>
-          ${collector.profile?.fullName || collector.email || 'Unnamed Collector'}
-        </option>
-      `).join('');
-
-    const { value: formValues } = await Swal.fire({
-      title: 'Update Pickup Status',
-      width: 600,
-      html: `
-        <div class="text-left p-4">
-          <!-- Current Status Display -->
-          <div class="mb-6 bg-gray-50 p-4 rounded-lg">
-            <p class="text-sm font-medium text-gray-600 mb-2">Current Status</p>
-            <div class="flex items-center gap-2">
-              <span class="text-base">${statusOptions.find(s => s.value === request.status)?.icon}</span>
-              <span class="font-medium ${statusOptions.find(s => s.value === request.status)?.color} px-3 py-1 rounded-lg">
-                ${request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-              </span>
-            </div>
-          </div>
-
-          <!-- New Status Selection -->
-          <div class="mb-6">
-            <label for="newStatus" class="block text-sm font-medium text-gray-700 mb-2">
-              New Status
-            </label>
-            <select id="newStatus" class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg
-              focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 
-              transition-all shadow-sm text-gray-700">
-              ${statusOptions.map(status => `
-                <option value="${status.value}" ${request.status === status.value ? 'selected' : ''}>
-                  ${status.icon} ${status.label}
-                </option>
-              `).join('')}
-            </select>
-          </div>
-
-          <!-- Collector Selection -->
-          <div id="collectorSelectDiv" class="mb-4" style="display: ${request.status === 'assigned' ? 'block' : 'none'}">
-            <label for="collectorSelect" class="block text-sm font-medium text-gray-700 mb-2">
-              Assign Collector
-            </label>
-            <select id="collectorSelect" class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg
-              focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 
-              transition-all shadow-sm text-gray-700">
-              <option value="">Select a collector</option>
-              ${collectorOptions}
-            </select>
-            <p class="mt-2 text-xs text-gray-500 italic">
-              * Only active collectors can be assigned to pickups
-            </p>
-          </div>
-        </div>
-      `,
-      didOpen: () => {
-        const statusSelect = document.getElementById('newStatus');
-        const collectorDiv = document.getElementById('collectorSelectDiv');
-        
-        if (statusSelect) {
-          statusSelect.addEventListener('change', (e) => {
-            if (collectorDiv) {
-              collectorDiv.style.display = e.target.value === 'assigned' ? 'block' : 'none';
-            }
-          });
-        }
-      },
-      showCancelButton: true,
-      confirmButtonText: 'Update Status',
-      cancelButtonText: 'Cancel',
-      confirmButtonColor: '#10B981',
-      cancelButtonColor: '#EF4444',
-      customClass: {
-        container: 'swal-custom-container',
-        popup: 'swal-custom-popup rounded-xl',
-        confirmButton: 'swal-custom-confirm-button',
-        cancelButton: 'swal-custom-cancel-button'
-      },
-      preConfirm: () => {
-        const newStatus = document.getElementById('newStatus').value;
-        const collectorId = document.getElementById('collectorSelect')?.value;
-        return { newStatus, collectorId };
-      }
-    });
-
-    if (!formValues) return;
+  const handlePayment = async () => {
+    if (!selectedUserId || !userData?.id) return;
 
     try {
-      setProcessing(true);
-      const requestRef = doc(db, 'masterBankRequests', request.id);
-      const updates = {
-        status: formValues.newStatus,
-        updatedAt: new Date(),
-      };
-
-      if (formValues.newStatus === 'assigned' && formValues.collectorId) {
-        updates.collectorId = formValues.collectorId;
+      setLoading(true);
+      
+      const selectedUser = users.find(u => u.id === selectedUserId);
+      const isCustomer = selectedUser?.role === 'customer';
+      
+      let paymentAmount = 0;
+      
+      if (isCustomer) {
+        const pointsRequested = Number(pointsToConvert);
+        if (pointsRequested <= 0 || pointsRequested > userStats.points) {
+          throw new Error('Jumlah poin tidak valid');
+        }
+        paymentAmount = pointsRequested * 100;
+      } else {
+        paymentAmount = salaryConfig.baseSalary;
+      }
+      
+      if (paymentAmount <= 0) {
+        throw new Error('Jumlah pembayaran tidak valid');
       }
 
-      if (formValues.newStatus === 'completed') {
-        updates.completedAt = new Date();
+      if (wasteBankBalance < paymentAmount) {
+        throw new Error('Saldo bank sampah tidak mencukupi');
       }
 
-      await updateDoc(requestRef, updates);
+      await runTransaction(db, async (transaction) => {
+        const wasteBankRef = doc(db, 'users', userData.id);
+        const userRef = doc(db, 'users', selectedUserId);
+        
+        const wasteBankDoc = await transaction.get(wasteBankRef);
+        const currentBalance = wasteBankDoc.data().balance || 0;
+        
+        if (currentBalance < paymentAmount) {
+          throw new Error('Saldo bank sampah tidak mencukupi');
+        }
+        
+        transaction.update(wasteBankRef, {
+          balance: currentBalance - paymentAmount,
+          updatedAt: new Date()
+        });
+        
+        if (isCustomer) {
+          transaction.update(userRef, {
+            balance: (selectedUser.balance || 0) + paymentAmount,
+            'rewards.points': userStats.points - pointsToConvert,
+            updatedAt: new Date()
+          });
+        } else {
+          transaction.update(userRef, {
+            balance: (selectedUser.balance || 0) + paymentAmount,
+            updatedAt: new Date()
+          });
+        }
+        
+        const transactionRef = doc(collection(db, 'transactions'));
+        transaction.set(transactionRef, {
+          userId: selectedUserId,
+          wasteBankId: userData.id,
+          amount: paymentAmount,
+          type: isCustomer ? 'points_conversion' : 'salary_payment',
+          pointsConverted: isCustomer ? pointsToConvert : 0,
+          createdAt: new Date(),
+          status: 'completed'
+        });
+      });
+
+      setPointsToConvert(0);
 
       Swal.fire({
         icon: 'success',
-        title: 'Status Updated',
-        text: 'The pickup status has been successfully updated.',
-        confirmButtonColor: '#10B981'
+        title: 'Berhasil',
+        text: `Pembayaran sebesar Rp ${paymentAmount.toLocaleString()} telah diproses dengan sukses`,
       });
     } catch (error) {
-      console.error('Error updating status:', error);
+      console.error('Error memproses pembayaran:', error);
       Swal.fire({
         icon: 'error',
-        title: 'Error',
-        text: 'Failed to update status. Please try again.',
-        confirmButtonColor: '#10B981'
+        title: 'Kesalahan',
+        text: error.message || 'Gagal memproses pembayaran',
       });
     } finally {
-      setProcessing(false);
+      setLoading(false);
     }
   };
 
-  // Filter requests based on status and search term
-  const filteredRequests = requests.filter(request => {
-    console.log("Filtering request:", request);
-    const matchesStatus = filterStatus === 'all' || request.status === filterStatus;
-    console.log("Matches status:", matchesStatus, "filterStatus:", filterStatus, "request.status:", request.status);
+  const filteredUsers = users.filter(user => {
+    const matchesRole = selectedRole === 'all' || user.role === selectedRole;
+    const matchesSearch = 
+      user.profile?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.profile?.institution?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.profile?.phone?.includes(searchTerm);
     
-    // If no searchTerm, consider it a match
-    const matchesSearch = searchTerm === '' || 
-      (request.userName && request.userName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (request.location && typeof request.location === 'string' && request.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (request.location && request.location.address && request.location.address.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (request.wasteBankName && request.wasteBankName.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    console.log("Matches search:", matchesSearch, "searchTerm:", searchTerm);
-    
-    return matchesStatus && matchesSearch;
+    return matchesRole && matchesSearch;
   });
-  
-  console.log("Filtered requests length:", filteredRequests.length, "out of total:", requests.length);
 
-  // Get counts for each status
-  const statusCounts = requests.reduce((acc, request) => {
-    acc[request.status] = (acc[request.status] || 0) + 1;
-    return acc;
-  }, {});
+  const UserListSkeleton = () => (
+    <>
+      {[1, 2, 3, 4, 5].map((item) => (
+        <div key={item} className="w-full p-3 border rounded-lg border-zinc-200 animate-pulse">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="w-5 h-5 mr-2 rounded-full bg-zinc-200"></div>
+              <div>
+                <div className="w-32 h-4 rounded-md bg-zinc-200"></div>
+                <div className="w-24 h-3 mt-1.5 bg-zinc-200 rounded-md"></div>
+              </div>
+            </div>
+            <div className="w-16 h-5 rounded-full bg-zinc-200"></div>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+
+  const UserDetailsSkeleton = () => (
+    <div className="space-y-4 animate-pulse">
+      <div className="w-full h-10 mb-6 rounded-md bg-zinc-200"></div>
+      <div className="grid grid-cols-1 gap-6">
+        <div>
+          <div className="w-32 h-5 mb-2 rounded-md bg-zinc-200"></div>
+          <div className="w-full h-10 rounded-md bg-zinc-200"></div>
+        </div>
+      </div>
+      <div className="w-full rounded-md h-60 bg-zinc-200"></div>
+    </div>
+  );
+
+  const TransactionSkeleton = () => (
+    <>
+      {[1, 2, 3].map((item) => (
+        <div key={item} className="p-4 border-b border-zinc-100 animate-pulse">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-40 h-5 rounded-md bg-zinc-200"></div>
+            <div className="w-24 h-5 rounded-md bg-zinc-200"></div>
+          </div>
+          <div className="w-20 h-4 rounded-md bg-zinc-200"></div>
+        </div>
+      ))}
+    </>
+  );
 
   return (
-    <div className="flex min-h-screen bg-zinc-50/50">
+    <div className="flex h-screen bg-zinc-50/50">
       <Sidebar 
-        role="wastebank_master"
+        role={userData?.role}
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
-
-      <main className={`flex-1 transition-all duration-300 ease-in-out
+      
+      <main className={`flex-1 transition-all duration-300 ease-in-out overflow-auto
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
       >
-        <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
-          {/* Header */}
+        <div className="p-6">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
-                <Package className="w-6 h-6 text-emerald-500" />
+                <Users className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-zinc-800">Waste Collections</h1>
-                <p className="mt-1 text-sm text-zinc-500">
-                  Manage and track all waste collection requests
+                <h1 className="text-2xl font-semibold text-zinc-800">Manajemen Pembayaran</h1>
+                <p className="text-sm text-zinc-500">Kelola pembayaran untuk bank sampah dan kolektor</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2 bg-white border rounded-lg border-zinc-200">
+              <Wallet className="w-5 h-5 text-emerald-500" />
+              <div>
+                <p className="text-sm text-zinc-500">Saldo Tersedia</p>
+                <p className="font-semibold text-zinc-800">Rp {wasteBankBalance.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 mb-6 border border-blue-200 rounded-lg bg-blue-50">
+            <div className="flex gap-3">
+              <Info className="flex-shrink-0 w-5 h-5 mt-0.5 text-blue-500" />
+              <div>
+                <h3 className="font-medium text-blue-800">Data Realtime</h3>
+                <p className="text-sm text-blue-600">
+                  Halaman ini menampilkan data secara realtime. Perubahan pada pengguna, transaksi atau saldo
+                  akan segera terlihat tanpa perlu memuat ulang halaman.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Status Cards */}
-          <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
-            <StatusCard
-              label="Total Collections"
-              count={requests.length}
-              icon={Package}
-              description="All time collections"
-            />
-            <StatusCard
-              label="Pending"
-              count={statusCounts.pending || 0}
-              icon={Clock}
-              description="Awaiting processing"
-              className="border-yellow-200"
-            />
-            <StatusCard
-              label="In Progress"
-              count={statusCounts.processing || 0}
-              icon={Truck}
-              description="Currently being processed"
-              className="border-blue-200"
-            />
-            <StatusCard
-              label="Completed"
-              count={statusCounts.completed || 0}
-              icon={CheckCircle2}
-              description="Successfully completed"
-              className="border-emerald-200"
-            />
-          </div>
-
-          {/* Filters and Search */}
-          <div className="flex flex-col gap-4 mb-6 sm:flex-row">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute w-5 h-5 -translate-y-1/2 left-3 top-1/2 text-zinc-400" />
-                <Input
-                  type="text"
-                  placeholder="Search by customer name or location..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="max-w-md pl-10"
-                />
-              </div>
-            </div>
-            <Select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full sm:w-48"
-            >
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="processing">Processing</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </Select>
-          </div>
-
-          {/* Request Cards */}
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
-            </div>
-          ) : error ? (
-            <div className="py-12 text-center">
-              <p className="text-red-500">{error}</p>
-            </div>
-          ) : filteredRequests.length === 0 ? (
-            <div className="py-12 text-center bg-white border rounded-xl border-zinc-200">
-              <Package className="w-12 h-12 mx-auto mb-4 text-zinc-400" />
-              <h3 className="mb-1 text-lg font-medium text-zinc-800">
-                No collections found
-              </h3>
-              <p className="max-w-sm mx-auto text-zinc-500">
-                {searchTerm || filterStatus !== 'all' 
-                  ? 'Try adjusting your filters or search terms'
-                  : 'No waste collections have been recorded yet'}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-6">
-              {filteredRequests.map((request) => (
-                <PickupCard
-                  key={request.id}
-                  pickup={request}
-                  onStatusChange={openChangeStatusModal}
-                  isProcessing={processing}
-                />
-              ))}
+          {selectedUserId && (
+            <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
+              {loading ? (
+                <>
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200 animate-pulse">
+                      <div className="w-32 h-4 mb-2 rounded-md bg-zinc-200"></div>
+                      <div className="w-24 h-8 rounded-md bg-zinc-200"></div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+                    <h3 className="text-sm font-medium text-zinc-500">Saldo Saat Ini</h3>
+                    <p className="text-2xl font-semibold text-zinc-800">Rp {userStats.balance.toLocaleString()}</p>
+                    <p className="mt-1 text-xs text-zinc-500">Jumlah dana yang tersedia di akun pengguna</p>
+                  </div>
+                  <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+                    <h3 className="text-sm font-medium text-zinc-500">Total Pengumpulan</h3>
+                    <p className="text-2xl font-semibold text-zinc-800">{userStats.totalCollections}</p>
+                    <p className="mt-1 text-xs text-zinc-500">Jumlah pengumpulan sampah yang telah diselesaikan</p>
+                  </div>
+                  <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+                    <h3 className="text-sm font-medium text-zinc-500">Total Nilai</h3>
+                    <p className="text-2xl font-semibold text-zinc-800">Rp {userStats.totalValue.toLocaleString()}</p>
+                    <p className="mt-1 text-xs text-zinc-500">Nilai total dari semua sampah yang dikumpulkan</p>
+                  </div>
+                </>
+              )}
             </div>
           )}
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="p-6 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <div className="mb-4 space-y-4">
+                <div className="relative">
+                  <Search className="absolute w-5 h-5 left-3 top-3 text-zinc-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari pengguna..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Filter className="w-5 h-5 text-zinc-400" />
+                  <select
+                    value={selectedRole}
+                    onChange={(e) => setSelectedRole(e.target.value)}
+                    className="flex-1 px-3 py-2 border rounded-lg bg-zinc-50 border-zinc-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  >
+                    <option value="all">Semua Pengguna</option>
+                    <option value="wastebank_master_collector">Kolektor</option>
+                    <option value="wastebank_admin">Bank Sampah</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                {loadingUsers ? (
+                  <UserListSkeleton />
+                ) : (
+                  <>
+                    {filteredUsers.map(user => (
+                      <button
+                        key={user.id}
+                        onClick={() => handleSelectUser(user.id)}
+                        className={`w-full p-3 rounded-lg text-left transition-all ${
+                          selectedUserId === user.id
+                            ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm'
+                            : 'bg-white hover:bg-zinc-50 border border-zinc-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <User className="w-5 h-5 mr-2 text-zinc-500" />
+                            <div>
+                              <div className="font-medium text-zinc-800">
+                                {user.profile?.fullName || 'Pengguna Tanpa Nama'}
+                              </div>
+                              <div className="text-sm text-zinc-500">{user.email}</div>
+                            </div>
+                          </div>
+                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                            user.role === 'wastebank_master_collector' 
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {user.role === 'wastebank_master_collector' ? 'Kolektor' : 'Bank Sampah'}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+
+                    {filteredUsers.length === 0 && (
+                      <div className="py-4 text-center">
+                        <AlertCircle className="w-5 h-5 mx-auto mb-2 text-zinc-400" />
+                        <p className="text-zinc-500">Tidak ada pengguna ditemukan</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-6 md:col-span-2">
+              {selectedUserId ? (
+                <div className="p-6 bg-white border shadow-sm rounded-xl border-zinc-200">
+                  {loading ? (
+                    <UserDetailsSkeleton />
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-xl font-semibold text-zinc-800">
+                          {users.find(u => u.id === selectedUserId)?.role === 'wastebank_admin'
+                            ? 'Pembayaran Bank Sampah' 
+                            : 'Gaji Kolektor'}
+                        </h2>
+                        <button
+                          onClick={handlePayment}
+                          disabled={loading || !salaryConfig.baseSalary || wasteBankBalance < salaryConfig.baseSalary}
+                          className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {loading ? 'Memproses...' : 'Proses Pembayaran'}
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-6">
+                        <div>
+                          <label className="block mb-2 text-sm font-medium text-zinc-700">
+                            {users.find(u => u.id === selectedUserId)?.role === 'wastebank_admin'
+                              ? 'Jumlah Pembayaran'
+                              : 'Jumlah Gaji'}
+                          </label>
+                          <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-400">
+                              Rp
+                            </span>
+                            <input
+                              type="number"
+                              value={salaryConfig.baseSalary}
+                              onChange={(e) => setSalaryConfig(prev => ({
+                                ...prev,
+                                baseSalary: Number(e.target.value)
+                              }))}
+                              min={0}
+                              step={100}
+                              className="pl-10 w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                            />
+                          </div>
+                          <p className="mt-2 text-xs text-zinc-500">
+                            Masukkan jumlah pembayaran yang akan diberikan kepada pengguna ini
+                          </p>
+                          {wasteBankBalance < salaryConfig.baseSalary && (
+                            <p className="mt-2 text-sm text-red-500">
+                              Saldo tidak mencukupi untuk memproses pembayaran ini
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed bg-zinc-50 rounded-xl border-zinc-200 text-zinc-500">
+                  <UserCheck className="w-12 h-12 mb-3" />
+                  <p>Pilih pengguna untuk melihat dan mengonfigurasi detail pembayaran mereka</p>
+                </div>
+              )}
+              
+              {selectedUserId && (
+                <div className="p-6 bg-white border shadow-sm rounded-xl border-zinc-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold text-zinc-800">Riwayat Transaksi</h2>
+                    <Clock className="w-5 h-5 text-zinc-500" />
+                  </div>
+
+                  <div className="mt-4 divide-y divide-zinc-100 max-h-[300px] overflow-y-auto">
+                    {loadingTransactions ? (
+                      <TransactionSkeleton />
+                    ) : transactions.length > 0 ? (
+                      transactions.map((transaction) => (
+                        <div key={transaction.id} className="p-4 border-b border-zinc-100">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium text-zinc-800">
+                              {transaction.type === 'salary_payment' 
+                                ? 'Pembayaran Gaji' 
+                                : transaction.type === 'points_conversion' 
+                                  ? 'Konversi Poin' 
+                                  : 'Transaksi'}
+                            </span>
+                            <span className="font-semibold text-emerald-600">
+                              Rp {transaction.amount?.toLocaleString() || 0}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-zinc-500">
+                              {transaction.createdAt.toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                              transaction.status === 'completed' 
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {transaction.status === 'completed' ? 'Selesai' : 'Tertunda'}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-6 text-center">
+                        <AlertCircle className="w-5 h-5 mx-auto mb-2 text-zinc-400" />
+                        <p className="text-zinc-500">Tidak ada riwayat transaksi ditemukan</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </main>
     </div>
   );
-};
-
-export default MasterTransaction;
+}
