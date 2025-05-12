@@ -8,7 +8,7 @@ import {
   Tag,
   ChevronDown
 } from 'lucide-react';
-import { collection, query, getDocs, where } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import Swal from 'sweetalert2';
@@ -40,74 +40,84 @@ const CustomerMarketplace = () => {
   ];
 
   useEffect(() => {
-    fetchProducts();
+    const unsubscribe = fetchProducts();
+    return () => unsubscribe && unsubscribe();
   }, [selectedCategory, selectedCondition, searchTerm]);
 
-  const fetchProducts = async () => {
+  const fetchProducts = () => {
     try {
       setLoading(true);
       let productsRef = collection(db, 'products');
       
-      // Base query - for available products only
       let queryConstraints = [where('status', '==', 'available')];
       
-      // Add category filter if not 'all'
       if (selectedCategory !== 'all') {
         queryConstraints.push(where('category', '==', selectedCategory));
       }
 
-      // Add condition filter if not 'all'
       if (selectedCondition !== 'all') {
         queryConstraints.push(where('condition', '==', selectedCondition));
       }
 
-      // Note: We'll handle price filtering client-side since Firestore doesn't support 
-      // multiple range queries in a single composite index
       const productsQuery = query(
         productsRef,
         ...queryConstraints
       );
 
-      const snapshot = await getDocs(productsQuery);
-      let fetchedProducts = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const unsubscribe = onSnapshot(productsQuery, (snapshot) => {
+        let fetchedProducts = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
 
-      // Apply search filter client-side
-      if (searchTerm) {
-        fetchedProducts = fetchedProducts.filter(product =>
-          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.description.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      }
+        if (searchTerm) {
+          fetchedProducts = fetchedProducts.filter(product =>
+            product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            product.description.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        }
 
-      // Apply price range filter client-side
-      if (priceRange.min !== '') {
-        fetchedProducts = fetchedProducts.filter(product => 
-          product.price >= Number(priceRange.min)
-        );
-      }
-      if (priceRange.max !== '') {
-        fetchedProducts = fetchedProducts.filter(product => 
-          product.price <= Number(priceRange.max)
-        );
-      }
+        if (priceRange.min !== '') {
+          fetchedProducts = fetchedProducts.filter(product => 
+            product.price >= Number(priceRange.min)
+          );
+        }
+        if (priceRange.max !== '') {
+          fetchedProducts = fetchedProducts.filter(product => 
+            product.price <= Number(priceRange.max)
+          );
+        }
 
-      // Sort by createdAt client-side to avoid additional index requirements
-      fetchedProducts.sort((a, b) => b.createdAt - a.createdAt);
+        fetchedProducts.sort((a, b) => {
+          const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt?.seconds * 1000 || 0);
+          const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt?.seconds * 1000 || 0);
+          return dateB - dateA;
+        });
 
-      setProducts(fetchedProducts);
+        setProducts(fetchedProducts);
+        setLoading(false);
+      }, (error) => {
+        console.error('Error fetching products:', error);
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to fetch products. Please try again.',
+          icon: 'error',
+          confirmButtonColor: '#10B981'
+        });
+        setLoading(false);
+      });
+
+      return unsubscribe;
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error('Error setting up products listener:', error);
       Swal.fire({
         title: 'Error',
         text: 'Failed to fetch products. Please try again.',
         icon: 'error',
         confirmButtonColor: '#10B981'
       });
-    } finally {
       setLoading(false);
+      return null;
     }
   };
 
