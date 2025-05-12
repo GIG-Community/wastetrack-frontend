@@ -14,11 +14,20 @@ const OrderConfirmation = () => {
     fetchOrderDetails();
   }, [id]);
 
+  const backToMarketPlace = () => {
+    navigate('/dashboard/customer');
+    
+    setTimeout(() => {
+      const event = new CustomEvent('setActiveTab', { detail: 'marketplace' });
+      window.dispatchEvent(event);
+    }, 50);
+  };
+
   const fetchOrderDetails = async () => {
     try {
       const docRef = doc(db, 'orders', id);
       const docSnap = await getDoc(docRef);
-      
+
       if (docSnap.exists()) {
         setOrder({ id: docSnap.id, ...docSnap.data() });
       }
@@ -44,12 +53,7 @@ const OrderConfirmation = () => {
           <h2 className="text-2xl font-bold text-gray-900">Pesanan tidak ditemukan</h2>
           <p className="mt-2 text-gray-600">Pesanan yang Anda cari tidak ada.</p>
           <button
-            onClick={() => {
-              navigate('/dashboard/customer/marketplace');
-              // Set active tab to marketplace when returning
-              const event = new CustomEvent('setActiveTab', { detail: 'marketplace' });
-              window.dispatchEvent(event);
-            }}
+            onClick={() => { backToMarketPlace(); }}
             className="mt-4 inline-flex items-center text-emerald-600 hover:text-emerald-700"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
@@ -66,12 +70,7 @@ const OrderConfirmation = () => {
       <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-100 z-50">
         <div className="flex items-center h-full px-4">
           <button
-            onClick={() => {
-              navigate('/dashboard/customer/marketplace');
-              // Set active tab to marketplace when returning
-              const event = new CustomEvent('setActiveTab', { detail: 'marketplace' });
-              window.dispatchEvent(event);
-            }}
+            onClick={() => { backToMarketPlace(); }}
             className="flex items-center text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft className="h-6 w-6" />
@@ -98,7 +97,7 @@ const OrderConfirmation = () => {
               <h3 className="font-semibold">Detail Pesanan</h3>
               <span className="text-sm text-gray-500">Pesanan #{order.id.slice(0, 8)}</span>
             </div>
-            
+
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-gray-600">Tanggal Pesanan</span>
@@ -178,12 +177,7 @@ const OrderConfirmation = () => {
             <span>Pesanan Anda akan diproses dan dikirim dalam 1-2 hari kerja</span>
           </div>
           <button
-            onClick={() => {
-              navigate('/dashboard/customer/marketplace');
-              // Set active tab to marketplace when returning
-              const event = new CustomEvent('setActiveTab', { detail: 'marketplace' });
-              window.dispatchEvent(event);
-            }}
+            onClick={() => { backToMarketPlace(); }}
             className="inline-flex items-center text-emerald-600 hover:text-emerald-700"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
