@@ -8,9 +8,12 @@ import {
   Scale,
   Clock,
   DollarSign,
-  Recycle
+  Recycle,
+  Info,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
-import { collection, query, getDocs, where } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -27,9 +30,19 @@ import {
   Cell
 } from 'recharts';
 
-const COLORS = ['#10B981', '#6366F1', '#F59E0B', '#EF4444'];
+const COLORS = ['#10B981', '#6366F1', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
+const WASTE_ICONS = {
+  'plastic': '♳',
+  'paper': '📄',
+  'organic': '🌱',
+  'metal': '🔧',
+  'glass': '🥛',
+  'electronic': '💻',
+  'fabric': '👕',
+  'others': '📦'
+};
 
-// Calculate pending pickups count correctly
+// Menghitung jumlah pengambilan berdasarkan status
 const getStatusCounts = (pickups) => ({
   pending: pickups.filter(p => p.status === 'pending').length,
   assigned: pickups.filter(p => p.status === 'assigned').length,
@@ -41,6 +54,7 @@ const CollectorDashboard = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showInfoTooltip, setShowInfoTooltip] = useState(null);
   const [stats, setStats] = useState({
     totalPickups: 0,
     totalWaste: 0,
@@ -56,6 +70,14 @@ const CollectorDashboard = () => {
   const [pickupTrends, setPickupTrends] = useState([]);
   const [wasteTypes, setWasteTypes] = useState([]);
   const [recentPickups, setRecentPickups] = useState([]);
+  const [unsubscribes, setUnsubscribes] = useState([]);
+
+  // Membersihkan subscription ketika komponen unmount
+  useEffect(() => {
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+    };
+  }, [unsubscribes]);
 
   useEffect(() => {
     if (currentUser?.uid) {
@@ -63,38 +85,66 @@ const CollectorDashboard = () => {
     }
   }, [currentUser?.uid]);
 
-  // Helper function to calculate collector's earnings (10% of total value)
+  // Fungsi untuk menghitung pendapatan kolektor (10% dari total nilai)
   const calculateCollectorEarnings = (value) => {
     return value * 0.1;
   };
 
   const fetchDashboardData = async () => {
     if (!currentUser?.uid) {
-      setError("No user ID found");
+      setError("ID pengguna tidak ditemukan");
       return;
     }
 
     setLoading(true);
     try {
-      // Fetch all pickups for this collector only
+      // Bersihkan subscription sebelumnya jika ada
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+      const newUnsubscribes = [];
+
+      // Buat query untuk mendapatkan semua pengambilan untuk kolektor ini
       const pickupsQuery = query(
         collection(db, 'pickups'),
         where('collectorId', '==', currentUser.uid)
       );
       
-      const pickupsSnapshot = await getDocs(pickupsQuery);
-      const pickupsData = pickupsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      // Buat subscription untuk mendapatkan update real-time
+      const unsubscribePickups = onSnapshot(
+        pickupsQuery, 
+        (pickupsSnapshot) => {
+          const pickupsData = pickupsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          
+          processDashboardData(pickupsData);
+        },
+        (error) => {
+          console.error('Error fetching pickups:', error);
+          setError('Gagal memuat data pengambilan');
+        }
+      );
+      
+      newUnsubscribes.push(unsubscribePickups);
+      setUnsubscribes(newUnsubscribes);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      setError('Gagal memuat data dashboard');
+      setLoading(false);
+    }
+  };
 
-      // Calculate monthly stats
+  // Fungsi untuk memproses data dashboard
+  const processDashboardData = (pickupsData) => {
+    try {
+      // Hitung statistik bulanan
       const now = new Date();
       const thisMonth = now.getMonth();
       const thisYear = now.getFullYear();
 
-      // Function to check if a date is in specified month
+      // Fungsi untuk memeriksa apakah tanggal ada dalam bulan tertentu
       const isInMonth = (timestamp, month, year) => {
+        if (!timestamp) return false;
         const date = new Date(timestamp.seconds * 1000);
         return date.getMonth() === month && date.getFullYear() === year;
       };
@@ -109,16 +159,16 @@ const CollectorDashboard = () => {
         isInMonth(p.createdAt || p.date, lastMonth, lastMonthYear)
       );
 
-      // Calculate totals with both wastes and wasteQuantities support
+      // Hitung total dengan dukungan untuk format wastes dan wasteQuantities
       const calculateTotals = (pickups) => {
         return pickups.reduce((acc, pickup) => {
           let weight = 0;
           if (pickup.wastes) {
-            // New format with actual weights
+            // Format baru dengan berat sebenarnya
             weight = Object.values(pickup.wastes).reduce((sum, waste) => 
               sum + (waste.weight || 0), 0);
           } else if (pickup.wasteQuantities) {
-            // Old format with quantities only (estimate 5kg per bag)
+            // Format lama hanya dengan kuantitas (perkiraan 5kg per kantong)
             weight = Object.values(pickup.wasteQuantities).reduce((sum, quantity) => 
               sum + (quantity * 5), 0);
           }
@@ -149,7 +199,7 @@ const CollectorDashboard = () => {
         lastMonthEarnings: lastMonthTotals.earnings
       });
 
-      // Process trends data
+      // Proses data tren
       const last7Days = [];
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
@@ -159,53 +209,88 @@ const CollectorDashboard = () => {
         nextDay.setDate(date.getDate() + 1);
 
         const dayPickups = pickupsData.filter(p => {
-          const pickupDate = new Date(p.createdAt?.seconds * 1000 || p.date.seconds * 1000);
+          if (!p.createdAt && !p.date) return false;
+          const pickupDate = new Date((p.createdAt?.seconds || p.date?.seconds) * 1000);
           return pickupDate >= date && pickupDate < nextDay;
         });
 
         const dayTotals = calculateTotals(dayPickups);
 
+        // Terjemahkan nama hari ke Bahasa Indonesia
         last7Days.push({
-          date: date.toLocaleDateString('en-US', { weekday: 'short' }),
+          date: date.toLocaleDateString('id-ID', { weekday: 'short' }),
           waste: dayTotals.weight,
           earnings: dayTotals.earnings
         });
       }
       setPickupTrends(last7Days);
 
-      // Process waste types data
+      // Proses data jenis sampah
       const wasteTypeTotals = {};
       pickupsData.forEach(pickup => {
         if (pickup.wastes) {
-          // Handle new format with actual weights
+          // Tangani format baru dengan berat sebenarnya
           Object.entries(pickup.wastes).forEach(([type, data]) => {
             if (!wasteTypeTotals[type]) {
-              wasteTypeTotals[type] = { weight: 0, value: 0 };
+              const icon = WASTE_ICONS[type.toLowerCase()] || '📦';
+              wasteTypeTotals[type] = { 
+                name: type,
+                weight: 0, 
+                value: 0,
+                icon
+              };
             }
             wasteTypeTotals[type].weight += data.weight || 0;
             wasteTypeTotals[type].value += calculateCollectorEarnings(data.value || 0);
           });
         } else if (pickup.wasteQuantities) {
-          // Handle old format with quantities
+          // Tangani format lama dengan kuantitas
           Object.entries(pickup.wasteQuantities).forEach(([type, quantity]) => {
             if (!wasteTypeTotals[type]) {
-              wasteTypeTotals[type] = { weight: 0, value: 0 };
+              const icon = WASTE_ICONS[type.toLowerCase()] || '📦';
+              wasteTypeTotals[type] = { 
+                name: type,
+                weight: 0, 
+                value: 0,
+                icon
+              };
             }
-            const estimatedWeight = quantity * 5; // Estimate 5kg per bag
+            const estimatedWeight = quantity * 5; // Perkiraan 5kg per kantong
             wasteTypeTotals[type].weight += estimatedWeight;
-            // Note: Can't calculate accurate value for old format
+            // Catatan: Tidak dapat menghitung nilai yang akurat untuk format lama
           });
         }
       });
 
-      const wasteTypeData = Object.entries(wasteTypeTotals).map(([type, data]) => ({
-        name: type.charAt(0).toUpperCase() + type.slice(1),
-        weight: data.weight,
-        value: data.value
-      }));
+      // Terjemahkan jenis sampah ke Bahasa Indonesia
+      const translateWasteType = (type) => {
+        const translations = {
+          'plastic': 'Plastik',
+          'paper': 'Kertas',
+          'organic': 'Organik',
+          'metal': 'Logam',
+          'glass': 'Kaca',
+          'electronic': 'Elektronik',
+          'fabric': 'Kain',
+          'others': 'Lainnya'
+        };
+        
+        const lowerType = type.toLowerCase();
+        return translations[lowerType] || type.split(' ').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1)
+        ).join(' ');
+      };
+
+      const wasteTypeData = Object.values(wasteTypeTotals)
+        .map(type => ({
+          ...type,
+          name: translateWasteType(type.name)
+        }))
+        .sort((a, b) => b.weight - a.weight);
+        
       setWasteTypes(wasteTypeData);
 
-      // Set recent pickups
+      // Set pengambilan terbaru
       const processedRecentPickups = pickupsData
         .filter(p => p.status === 'completed')
         .sort((a, b) => b.completedAt?.seconds - a.completedAt?.seconds)
@@ -216,15 +301,15 @@ const CollectorDashboard = () => {
         }));
       setRecentPickups(processedRecentPickups);
 
+      setLoading(false);
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      setError('Failed to load dashboard data');
-    } finally {
+      console.error('Error processing dashboard data:', error);
+      setError('Gagal memproses data dashboard');
       setLoading(false);
     }
   };
 
-  // Base components
+  // Komponen dasar
   const Button = ({ 
     variant = "primary", 
     size = "md",
@@ -262,16 +347,34 @@ const CollectorDashboard = () => {
     );
   };
 
-  const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "success", className = "" }) => (
+  const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "success", className = "", infoText }) => (
     <div className={`bg-white rounded-xl p-6 border border-zinc-200 ${className}`}>
       <div className="flex items-start justify-between">
         <div className="space-y-3">
-          <div className="p-2.5 bg-zinc-100 rounded-lg w-fit">
-            <Icon className="h-6 w-6 text-zinc-600" />
+          <div className="flex items-center gap-2">
+            <div className="p-2.5 bg-zinc-100 rounded-lg w-fit">
+              <Icon className="w-6 h-6 text-zinc-600" />
+            </div>
+            {infoText && (
+              <div className="relative">
+                <button 
+                  onClick={() => setShowInfoTooltip(infoText !== showInfoTooltip ? infoText : null)}
+                  className="p-1 text-zinc-400 hover:text-zinc-600 focus:outline-none"
+                >
+                  <Info className="w-4 h-4" />
+                </button>
+                {showInfoTooltip === infoText && (
+                  <div className="absolute z-10 p-3 text-sm text-white bg-zinc-800 rounded-lg shadow-lg min-w-[200px] max-w-[280px] top-full left-0 mt-1">
+                    {infoText}
+                    <div className="absolute w-2 h-2 rotate-45 bg-zinc-800 -top-1 left-3"></div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div>
             <p className="text-sm font-medium text-zinc-600">{label}</p>
-            <p className="text-2xl font-semibold text-zinc-800 mt-1">{value}</p>
+            <p className="mt-1 text-2xl font-semibold text-zinc-800">{value}</p>
           </div>
         </div>
         {trend && (
@@ -280,26 +383,92 @@ const CollectorDashboard = () => {
              variant === 'danger' ? 'bg-red-50 text-red-600' : 'bg-zinc-50 text-zinc-600'}`}
           >
             {variant === 'success' ? (
-              <ArrowUpRight className="h-4 w-4" />
+              <ArrowUpRight className="w-4 h-4" />
             ) : (
-              <ArrowDownRight className="h-4 w-4" />
+              <ArrowDownRight className="w-4 h-4" />
             )}
             {trend_value}
           </div>
         )}
       </div>
       {trend && (
-        <p className="text-sm text-zinc-500 mt-2">{trend}</p>
+        <p className="mt-2 text-sm text-zinc-500">{trend}</p>
       )}
     </div>
   );
 
+  // Tooltip kustom untuk diagram pie
+  const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const totalWeight = wasteTypes.reduce((sum, type) => sum + type.weight, 0);
+      const percentage = ((data.weight / totalWeight) * 100).toFixed(1);
+      
+      return (
+        <div className="p-3 bg-white border rounded-lg shadow-lg border-zinc-200">
+          <p className="flex items-center gap-1.5 font-medium">
+            <span>{data.icon}</span>
+            <span>{data.name}</span>
+          </p>
+          <p className="mt-1 text-sm">
+            <span className="font-medium">Berat:</span> {data.weight.toFixed(1)} kg ({percentage}%)
+          </p>
+          <p className="mt-0.5 text-sm">
+            <span className="font-medium">Nilai:</span> Rp {data.value.toLocaleString('id-ID')}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex min-h-screen bg-zinc-50/50">
+        <Sidebar role={userData?.role} onCollapse={setIsSidebarCollapsed} />
+        <main className={`flex-1 transition-all duration-300 ease-in-out
+          ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
+        >
+          <div className="flex items-center justify-center h-screen">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
+              <p className="text-zinc-600">Memuat data dashboard...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   if (error) {
-    return <div>Error: {error}</div>;
+    return (
+      <div className="flex min-h-screen bg-zinc-50/50">
+        <Sidebar role={userData?.role} onCollapse={setIsSidebarCollapsed} />
+        <main className={`flex-1 transition-all duration-300 ease-in-out
+          ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
+        >
+          <div className="p-8">
+            <div className="p-6 mb-8 border border-red-200 bg-red-50 rounded-xl">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="flex-shrink-0 w-6 h-6 mt-0.5 text-red-500" />
+                <div>
+                  <h3 className="font-medium text-red-800">Terjadi Kesalahan</h3>
+                  <p className="text-sm text-red-600">{error}</p>
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    className="mt-3" 
+                    onClick={fetchDashboardData}
+                  >
+                    Coba Lagi
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -315,71 +484,83 @@ const CollectorDashboard = () => {
         <div className="p-8">
           {/* Header */}
           <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 bg-white rounded-xl shadow-sm border border-zinc-200">
-              <Building2 className="h-6 w-6 text-emerald-500" />
+            <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <Building2 className="w-6 h-6 text-emerald-500" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-zinc-800">My Collection Overview</h1>
-              <p className="text-sm text-zinc-500">Personal collection metrics</p>
+              <h1 className="text-2xl font-semibold text-zinc-800">Ringkasan Pengumpulan Saya</h1>
+              <p className="text-sm text-zinc-500">Metrik pengumpulan sampah pribadi</p>
+            </div>
+          </div>
+
+          {/* Info Banner */}
+          <div className="p-4 mb-8 border border-blue-200 rounded-lg bg-blue-50">
+            <div className="flex gap-3">
+              <Info className="flex-shrink-0 w-5 h-5 mt-0.5 text-blue-500" />
+              <div>
+                <h3 className="font-medium text-blue-800">Data Realtime</h3>
+                <p className="text-sm text-blue-600">
+                  Dashboard ini menampilkan data secara realtime. Perubahan pada data pengambilan
+                  akan segera terlihat pada dashboard ini tanpa perlu memuat ulang halaman.
+                </p>
+              </div>
             </div>
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-3">
             {/* Earnings Card */}
             <StatCard
               icon={DollarSign}
-              label="Total Earnings"
-              value={`Rp ${stats.totalEarnings.toLocaleString()}`}
-              trend="vs last month"
-              trend_value={`${((stats.thisMonthEarnings - stats.lastMonthEarnings) / stats.lastMonthEarnings * 100 || 0).toFixed(1)}%`}
+              label="Total Penghasilan"
+              value={`Rp ${stats.totalEarnings.toLocaleString('id-ID')}`}
+              trend="vs bulan lalu"
+              trend_value={`${((stats.thisMonthEarnings - stats.lastMonthEarnings) / Math.max(stats.lastMonthEarnings, 1) * 100 || 0).toFixed(1)}%`}
               variant={stats.thisMonthEarnings >= stats.lastMonthEarnings ? 'success' : 'danger'}
+              infoText="Penghasilan yang Anda dapatkan dari seluruh aktivitas pengumpulan sampah (10% dari nilai total sampah)"
             />
             
             {/* Waste Collection Card */}
             <StatCard
               icon={Scale}
-              label="Total Waste Collected"
+              label="Total Sampah Terkumpul"
               value={`${stats.totalWaste.toFixed(1)} kg`}
-              trend="vs last month"
-              trend_value={`${((stats.thisMonthWaste - stats.lastMonthWaste) / stats.lastMonthWaste * 100 || 0).toFixed(1)}%`}
+              trend="vs bulan lalu"
+              trend_value={`${((stats.thisMonthWaste - stats.lastMonthWaste) / Math.max(stats.lastMonthWaste, 1) * 100 || 0).toFixed(1)}%`}
               variant={stats.thisMonthWaste >= stats.lastMonthWaste ? 'success' : 'danger'}
+              infoText="Total berat semua sampah yang telah Anda kumpulkan"
             />
 
             {/* Pickups Status Card */}
             <StatCard
               icon={Package}
-              label="Pickup Status"
+              label="Status Pengambilan"
               value={stats.completedPickups}
-              trend="Current pickups"
-              trend_value={`${stats.pendingPickups} pending`}
+              trend="Pengambilan saat ini"
+              trend_value={`${stats.pendingPickups} tertunda`}
               variant={stats.pendingPickups === 0 ? 'success' : 'danger'}
+              infoText="Jumlah pengambilan yang telah selesai dan yang masih dalam proses"
             />
-
-            {/* Collectors Card
-            <StatCard
-              icon={Users}
-              label="Collectors"
-              value={stats.totalCollectors}
-              trend="Active collectors"
-              trend_value={`${stats.activeCollectors} active`}
-              variant="success"
-            /> */}
           </div>
 
           {/* Charts Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-3">
             {/* Pickup Trends */}
-            <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-zinc-200">
+            <div className="p-6 bg-white border lg:col-span-2 rounded-xl border-zinc-200">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-lg font-semibold text-zinc-800">Collection Trends</h2>
-                  <p className="text-sm text-zinc-500">Daily collection stats</p>
+                  <h2 className="text-lg font-semibold text-zinc-800">Tren Pengumpulan</h2>
+                  <p className="text-sm text-zinc-500">Statistik pengumpulan harian</p>
                 </div>
-                <div className="p-2 bg-emerald-50 rounded-lg">
-                  <Calendar className="h-5 w-5 text-emerald-500" />
+                <div className="p-2 rounded-lg bg-emerald-50">
+                  <Calendar className="w-5 h-5 text-emerald-500" />
                 </div>
               </div>
+              
+              <div className="p-3 mb-3 text-sm text-blue-700 border border-blue-100 rounded-lg bg-blue-50">
+                <p><strong>Cara Membaca Grafik:</strong> Garis biru menunjukkan berat sampah (kg), garis hijau menunjukkan penghasilan (Rp). Data ditampilkan untuk 7 hari terakhir.</p>
+              </div>
+              
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={pickupTrends}>
@@ -393,150 +574,243 @@ const CollectorDashboard = () => {
                       yAxisId="left"
                       stroke="#71717A"
                       fontSize={12}
-                      tickFormatter={(value) => `${value}kg`}
+                      label={{ value: 'Berat (kg)', angle: -90, position: 'insideLeft' }}
                     />
                     <YAxis 
                       yAxisId="right"
                       orientation="right"
-                      stroke="#71717A"
+                      stroke="#10B981"
                       fontSize={12}
-                      tickFormatter={(value) => `Rp${value}`}
+                      label={{ value: 'Penghasilan (Rp)', angle: 90, position: 'insideRight' }}
                     />
                     <Tooltip 
-                      contentStyle={{
-                        backgroundColor: '#fff',
-                        border: '1px solid #E4E4E7',
-                        borderRadius: '8px'
-                      }}
+                      formatter={(value, name) => [
+                        name === 'waste' ? `${value} kg` : `Rp ${value.toLocaleString('id-ID')}`,
+                        name === 'waste' ? 'Berat' : 'Penghasilan'
+                      ]}
                     />
                     <Line 
                       yAxisId="left"
-                      type="monotone"
-                      dataKey="waste"
-                      stroke="#10B981"
+                      type="monotone" 
+                      dataKey="waste" 
+                      name="Berat"
+                      stroke="#6366F1" 
                       strokeWidth={2}
-                      dot={false}
-                      name="Waste"
+                      dot={{ stroke: '#6366F1', fill: '#fff', strokeWidth: 2, r: 4 }}
+                      activeDot={{ stroke: '#6366F1', fill: '#6366F1', strokeWidth: 0, r: 6 }}
                     />
                     <Line 
                       yAxisId="right"
-                      type="monotone"
-                      dataKey="earnings"
-                      stroke="#6366F1"
+                      type="monotone" 
+                      dataKey="earnings" 
+                      name="Penghasilan"
+                      stroke="#10B981" 
                       strokeWidth={2}
-                      dot={false}
-                      name="Earnings"
+                      dot={{ stroke: '#10B981', fill: '#fff', strokeWidth: 2, r: 4 }}
+                      activeDot={{ stroke: '#10B981', fill: '#10B981', strokeWidth: 0, r: 6 }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Waste Distribution */}
-            <div className="bg-white rounded-xl p-6 border border-zinc-200">
+            {/* Waste Distribution - Improved visualization */}
+            <div className="p-6 bg-white border rounded-xl border-zinc-200">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-lg font-semibold text-zinc-800">Waste Distribution</h2>
-                  <p className="text-sm text-zinc-500">By type collected</p>
+                  <h2 className="text-lg font-semibold text-zinc-800">Distribusi Sampah</h2>
+                  <p className="text-sm text-zinc-500">Berdasarkan jenis yang dikumpulkan</p>
                 </div>
-                <div className="p-2 bg-emerald-50 rounded-lg">
-                  <Recycle className="h-5 w-5 text-emerald-500" />
+                <div className="p-2 rounded-lg bg-emerald-50">
+                  <Recycle className="w-5 h-5 text-emerald-500" />
                 </div>
               </div>
+              
+              <div className="p-3 mb-3 text-sm text-blue-700 border border-blue-100 rounded-lg bg-blue-50">
+                <p><strong>Cara Membaca Grafik:</strong> Diagram menunjukkan proporsi jenis sampah yang telah dikumpulkan berdasarkan berat.</p>
+              </div>
+
               <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={wasteTypes}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={2}
-                      dataKey="weight"
-                    >
-                      {wasteTypes.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{
-                        backgroundColor: '#fff',
-                        border: '1px solid #E4E4E7',
-                        borderRadius: '8px'
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-2 mt-4">
-                  {wasteTypes.map((type, index) => (
-                    <div key={type.name} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        />
-                        <span className="text-sm text-zinc-600">{type.name}</span>
-                      </div>
-                      <span className="text-sm font-medium text-zinc-800">
-                        {type.weight.toFixed(1)}kg
-                      </span>
+                <div className="h-[60%]">
+                  {wasteTypes.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <Recycle className="w-12 h-12 mb-2 text-zinc-300" />
+                      <p className="text-zinc-500">Belum ada data sampah</p>
                     </div>
-                  ))}
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={wasteTypes}
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="weight"
+                          nameKey="name"
+                          label={(entry) => {
+                            // Hanya tampilkan label untuk segmen yang setidaknya 15% dari total
+                            const totalWeight = wasteTypes.reduce((sum, type) => sum + type.weight, 0);
+                            const percentage = (entry.weight / totalWeight) * 100;
+                            return percentage >= 15 ? `${entry.icon} ${entry.name}` : '';
+                          }}
+                          labelLine={false}
+                        >
+                          {wasteTypes.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<CustomTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+
+                <div className="pt-4 mt-2 border-t border-zinc-100">
+                  {wasteTypes.length > 0 && (
+                    <div className="flex justify-between mb-2 text-xs font-medium text-zinc-500">
+                      <span>JENIS SAMPAH</span>
+                      <span>BERAT & PERSENTASE</span>
+                    </div>
+                  )}
+                  <div className="mt-4 space-y-2 max-h-[100px] overflow-y-auto pr-2">
+                    {wasteTypes.map((entry, index) => {
+                      const totalWeight = wasteTypes.reduce((sum, type) => sum + type.weight, 0);
+                      const percentage = ((entry.weight / totalWeight) * 100).toFixed(1);
+                      return (
+                        <div key={`legend-${index}`} 
+                          className="flex items-center justify-between p-1.5 rounded hover:bg-zinc-50"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="flex-shrink-0 w-3 h-3 rounded-full"
+                              style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                            />
+                            <span className="flex items-center gap-1 text-sm truncate text-zinc-700">
+                              {entry.icon} {entry.name}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-medium text-zinc-800">
+                              {entry.weight.toFixed(1)} kg
+                            </p>
+                            <p className="text-xs text-zinc-500">
+                              {percentage}%
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Recent Pickups */}
-          <div className="bg-white rounded-xl border border-zinc-200">
+          <div className="bg-white border rounded-xl border-zinc-200">
             <div className="p-6 border-b border-zinc-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-zinc-800">Recent Collections</h2>
-                  <p className="text-sm text-zinc-500">Latest completed pickups</p>
+                  <h2 className="text-lg font-semibold text-zinc-800">Pengambilan Terbaru</h2>
+                  <p className="text-sm text-zinc-500">Daftar pengambilan yang telah selesai</p>
                 </div>
                 <Button variant="secondary" size="sm">
-                  View All
+                  Lihat Semua
                 </Button>
               </div>
             </div>
             <div className="divide-y divide-zinc-200">
-              {recentPickups.map((pickup) => (
-                <div key={pickup.id} className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="space-y-1">
-                      <h3 className="font-medium text-zinc-800">
-                        Pickup #{pickup.id.slice(-6)}
-                      </h3>
-                      <p className="text-sm text-zinc-500">
-                        {new Date(pickup.completedAt?.seconds * 1000).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <span className="text-sm font-medium text-emerald-600">
-                      Rp {pickup.collectorEarnings.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex gap-4 flex-wrap">
-                    {pickup.wastes && Object.entries(pickup.wastes).map(([type, data]) => (
-                      <div key={type} className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span className="text-sm text-zinc-600">
-                          {type}: {data.weight}kg
-                        </span>
-                      </div>
-                    ))}
-                    {pickup.wasteQuantities && Object.entries(pickup.wasteQuantities).map(([type, quantity]) => (
-                      <div key={type} className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span className="text-sm text-zinc-600">
-                          {type}: {quantity * 5}kg (est.)
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+              {recentPickups.length === 0 ? (
+                <div className="p-6 text-center">
+                  <Package className="w-12 h-12 mx-auto mb-3 text-zinc-300" />
+                  <h3 className="text-sm font-medium text-zinc-800">Belum Ada Pengambilan Terbaru</h3>
+                  <p className="mt-1 text-sm text-zinc-500">Pengambilan yang selesai akan muncul di sini</p>
                 </div>
-              ))}
+              ) : (
+                recentPickups.map((pickup) => (
+                  <div key={pickup.id} className="p-6 hover:bg-zinc-50/50">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="space-y-1">
+                        <h3 className="font-medium text-zinc-800">
+                          Pengambilan #{pickup.id.slice(-6)}
+                        </h3>
+                        <p className="text-sm text-zinc-500">
+                          {pickup.completedAt 
+                            ? new Date(pickup.completedAt.seconds * 1000).toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric'
+                              })
+                            : 'Tanggal tidak tersedia'
+                          }
+                        </p>
+                      </div>
+                      <span className="text-sm font-medium text-emerald-600">
+                        Rp {pickup.collectorEarnings.toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-4">
+                      {pickup.wastes && Object.entries(pickup.wastes).map(([type, data]) => {
+                        // Terjemahkan jenis sampah
+                        const translations = {
+                          'plastic': 'Plastik',
+                          'paper': 'Kertas',
+                          'organic': 'Organik',
+                          'metal': 'Logam',
+                          'glass': 'Kaca',
+                          'electronic': 'Elektronik',
+                          'fabric': 'Kain',
+                          'others': 'Lainnya'
+                        };
+                        
+                        const typeDisplay = translations[type.toLowerCase()] || 
+                          type.split('-').map(word => 
+                            word.charAt(0).toUpperCase() + word.slice(1)
+                          ).join(' ');
+                        
+                        return (
+                          <div key={type} className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                            <span className="text-sm text-zinc-600">
+                              {typeDisplay}: {data.weight}kg
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {pickup.wasteQuantities && Object.entries(pickup.wasteQuantities).map(([type, quantity]) => {
+                        // Terjemahkan jenis sampah
+                        const translations = {
+                          'plastic': 'Plastik',
+                          'paper': 'Kertas',
+                          'organic': 'Organik',
+                          'metal': 'Logam',
+                          'glass': 'Kaca',
+                          'electronic': 'Elektronik',
+                          'fabric': 'Kain',
+                          'others': 'Lainnya'
+                        };
+                        
+                        const typeDisplay = translations[type.toLowerCase()] || 
+                          type.split('-').map(word => 
+                            word.charAt(0).toUpperCase() + word.slice(1)
+                          ).join(' ');
+                        
+                        return (
+                          <div key={type} className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                            <span className="text-sm text-zinc-600">
+                              {typeDisplay}: {quantity * 5}kg (perkiraan)
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
