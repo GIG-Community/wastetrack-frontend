@@ -38,6 +38,7 @@ import ProductDetails from '../pages/dashboard/customer/ProductDetails';
 import Checkout from '../pages/dashboard/customer/Checkout';
 import OrderConfirmation from '../pages/dashboard/customer/OrderConfirmation';
 import CustomerProfile from '../pages/dashboard/customer/Profile';
+import PickLocation from '../components/PickLocation';
 import GovernmentDashboard from '../pages/dashboard/government/GovernmentDashboard';
 import WastebankReports from '../pages/dashboard/government/GovernmentReports';
 import GovernmentMonitoring from '../pages/dashboard/government/GovernmentMonitoring';
@@ -79,13 +80,16 @@ const AppRoutes = () => (
     <Route path="/500" element={<ServerError />} />
 
     {/* Redirect to 404 for any unmatched routes */}
-    <Route path="*" element={<NotFound />} />
+    {/* <Route path="*" element={<NotFound />} /> */}
 
     {/* Maintenance Page */}
     <Route path="/maintenance" element={<Maintenance />} />
     
     {/* Development Modal */}
     <Route path="/feature-development" element={<DevelopmentModal />} />
+
+    {/* Location Correction */}
+    <Route path="/pick-location" element={<PickLocation />} />
 
     {/* Super Admin Routes */}
     <Route path="/dashboard/super-admin/*" element={
@@ -219,7 +223,7 @@ const AppRoutes = () => (
       </ProtectedRoute>
     } />
     
-    {/* <Route path="*" element={<Navigate to="/login" replace />} /> */}
+    <Route path="*" element={<Navigate to="/login" replace />} />
   </Routes>
 );
 
