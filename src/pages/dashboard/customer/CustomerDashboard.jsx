@@ -1,5 +1,5 @@
 // src/pages/dashboard/customer/CustomerDashboard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -33,6 +33,7 @@ import ProductDetails from './ProductDetails';
 import Checkout from './Checkout';
 import OrderConfirmation from './OrderConfirmation';
 import CustomerProfile from './Profile';
+import DevelopmentModal from '../../../components/DevelopmentModal';
 
 const CustomerDashboard = () => {
   const { userData, logout } = useAuth();
@@ -40,6 +41,7 @@ const CustomerDashboard = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isDevelopmentModalOpen, setIsDevelopmentModalOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
@@ -139,6 +141,23 @@ const CustomerDashboard = () => {
     window.dispatchEvent(event);
     setIsProfileOpen(false); // Reset isProfileOpen when navigating
   };
+
+  const handleSettingNavigation = () => {
+    setIsDevelopmentModalOpen(true);
+    setIsProfileOpen(false); // Reset isProfileOpen when navigating
+  };
+
+  // Prevent body scrolling when development modal is open
+  useEffect(() => {
+    if (isDevelopmentModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [isDevelopmentModalOpen]);
 
   useEffect(() => {
     // Reset isProfileOpen when the location changes
@@ -283,7 +302,7 @@ const CustomerDashboard = () => {
                     <span className="text-sm text-gray-700">Profile</span>
                   </button>
                   <button
-                    onClick={() => handleProfileNavigation('/settings')}
+                    onClick={() => handleSettingNavigation()}
                     className="flex items-center w-full bg-white gap-2 px-4 py-2 text-left hover:bg-gray-50"
                   >
                     <Settings className="w-4 h-4 text-gray-600" />
@@ -321,6 +340,12 @@ const CustomerDashboard = () => {
           <Route path="marketplace/order-confirmation/:id" element={<OrderConfirmation />} />
         </Routes>
       </div>
+
+      {/* Development Modal */}
+      <DevelopmentModal 
+        isOpen={isDevelopmentModalOpen} 
+        onClose={() => setIsDevelopmentModalOpen(false)} 
+      />
 
       {/* Bottom Navigation - Only show if not in product detail/checkout/confirmation */}
       {!location.pathname.includes('/product/') &&

@@ -4,6 +4,11 @@ import Login from '../pages/auth/Login';
 import Register from '../pages/auth/Register';
 import Dashboard from '../pages/dashboard/Dashboard';
 import ProtectedRoute from '../components/ProtectedRoute';
+import NotFound from '../pages/NotFound';
+import Forbidden from '../pages/Forbidden';
+import ServerError from '../pages/ServerError';
+import Maintenance from '../pages/Maintenance';
+import DevelopmentModal from '../components/DevelopmentModal';
 
 // Import dashboard spesifik
 import SuperAdminDashboard from '../pages/dashboard/super-admin/SuperAdminDashboard';
@@ -67,7 +72,21 @@ const AppRoutes = () => (
         <Dashboard />
       </ProtectedRoute>
     } />
+
+    {/* Error Pages */}
+    <Route path="/403" element={<Forbidden />} />
+    <Route path="/404" element={<NotFound />} />
+    <Route path="/500" element={<ServerError />} />
+
+    {/* Redirect to 404 for any unmatched routes */}
+    <Route path="*" element={<NotFound />} />
+
+    {/* Maintenance Page */}
+    <Route path="/maintenance" element={<Maintenance />} />
     
+    {/* Development Modal */}
+    <Route path="/feature-development" element={<DevelopmentModal />} />
+
     {/* Super Admin Routes */}
     <Route path="/dashboard/super-admin/*" element={
       <ProtectedRoute allowedRoles={['super_admin']}>
@@ -77,6 +96,7 @@ const AppRoutes = () => (
           <Route path="wastebanks" element={<WasteBanks />} />
           <Route path="settings" element={<SystemSettings />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -92,6 +112,7 @@ const AppRoutes = () => (
           <Route path="transactions" element={<Transactions />} />
           <Route path="salary" element={<SalaryManagement />} />
           <Route path="request-induk" element={<RequestCollection />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -106,6 +127,7 @@ const AppRoutes = () => (
           <Route path="routes" element={<CollectorRoutes />} />
           <Route path="collections" element={<CollectorCollections />} />
           <Route path="update-collection/:pickupId" element={<UpdateCollection />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -125,6 +147,7 @@ const AppRoutes = () => (
           <Route path="marketplace/product/:id" element={<ProductDetails />} />
           <Route path="marketplace/checkout" element={<Checkout />} />
           <Route path="marketplace/order-confirmation/:id" element={<OrderConfirmation />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -137,6 +160,7 @@ const AppRoutes = () => (
           <Route path="wastebank-reports" element={<WastebankReports />} />
           <Route path="monitoring" element={<GovernmentMonitoring />} />
           <Route path="analytics" element={<GovernmentAnalytics />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -148,6 +172,7 @@ const AppRoutes = () => (
           <Route path="/" element={<IndustryDashboard />} />
           <Route path="offset-planner" element={<OffsetPlannerIndustry />} />
           <Route path="recycledhub" element={<RecycledHubIndustry />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -163,6 +188,7 @@ const AppRoutes = () => (
           <Route path="salary" element={<MasterSalaryManagement />} />
           <Route path="reports" element={<MasterReports />} />
           <Route path="requests" element={<MasterRequestCollection />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -176,6 +202,7 @@ const AppRoutes = () => (
           <Route path="routes" element={<MasterRoutes />} />
           <Route path="collections" element={<MasterCollections />} />
           <Route path="update-collection/:pickupId" element={<MasterUpdateCollection />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -187,11 +214,12 @@ const AppRoutes = () => (
           <Route path="/" element={<MarketplaceDashboard />} />
           <Route path="products" element={<Products />} />
           <Route path="orders" element={<Orders />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
-
-    <Route path="*" element={<Navigate to="/login" replace />} />
+    
+    {/* <Route path="*" element={<Navigate to="/login" replace />} /> */}
   </Routes>
 );
 

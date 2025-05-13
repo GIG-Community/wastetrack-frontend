@@ -1,46 +1,53 @@
-// src/components/ProtectedRoute.jsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { currentUser, userData } = useAuth();
+  const [authStatus, setAuthStatus] = useState('checking');
+  const [delayPassed, setDelayPassed] = useState(false);
 
-  // Periksa apakah user sudah login
-  if (!currentUser) {
-    return <Navigate to="/login" replace />;
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDelayPassed(true);
+    }, 2000); 
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Cek otorisasi user
+  useEffect(() => {
+    const checkAuthorization = () => {
+      if (!currentUser) {
+        setAuthStatus('unauthorized');
+        return;
+      }
+
+      if (allowedRoles && userData) {
+        const userRole = userData.role;
+        if (!allowedRoles.includes(userRole)) {
+          setAuthStatus('unauthorized');
+          return;
+        }
+      }
+
+      setAuthStatus('authorized');
+    };
+
+    checkAuthorization();
+  }, [currentUser, userData, allowedRoles]);
+
+  if (authStatus === 'checking' || !delayPassed) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="w-12 h-12 border-b-2 rounded-full animate-spin border-emerald-500" />
+      </div>
+    );
   }
 
-  // Periksa apakah user memiliki role yang diizinkan
-  if (allowedRoles && userData) {
-    const userRole = userData.role;
-    
-    if (!allowedRoles.includes(userRole)) {
-      // Arahkan ke halaman berdasarkan role pengguna jika tidak memiliki akses
-      switch (userRole) {
-        case 'customer':
-          return <Navigate to="/dashboard/customer" replace />;
-        case 'collector':
-          return <Navigate to="/dashboard/collector" replace />;
-        case 'wastebank_master_collector':
-          return <Navigate to="/dashboard/collector-master" replace />;
-        case 'wastebank_admin':
-          return <Navigate to="/dashboard/wastebank" replace />;
-        case 'wastebank_master':
-          return <Navigate to="/dashboard/wastebank-master" replace />;
-        case 'industry':
-          return <Navigate to="/dashboard/industry" replace />;
-        case 'marketplace':
-          return <Navigate to="/dashboard/marketplace" replace />;
-        case 'government':
-          return <Navigate to="/dashboard/government" replace />;
-        case 'super_admin':
-          return <Navigate to="/dashboard/super-admin" replace />;
-        default:
-          // Default jika role tidak dikenali, arahkan ke login
-          return <Navigate to="/login" replace />;
-      }
-    }
+  // Redirect jika tidak berhak
+  if (authStatus === 'unauthorized') {
+    return <Navigate to={currentUser ? '/403' : '/login'} replace />;
   }
 
   return children;
