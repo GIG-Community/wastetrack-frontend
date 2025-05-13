@@ -21,9 +21,16 @@ import {
 import { collection, query, where, getDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { calculatePoints, calculateTotalValue } from '../../../lib/constants';
-import '../../../styles/animation.css'; 
+import '../../../styles/animation.css';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 const History = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { currentUser, userData } = useAuth();
   const [pickups, setPickups] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -226,7 +233,7 @@ const History = () => {
     if (isFilterOpen) {
       // Save current scroll position
       const scrollY = window.scrollY;
-      
+
       // Add styles to body to prevent scrolling
       document.body.style.position = 'fixed';
       document.body.style.top = `-${scrollY}px`;
@@ -239,13 +246,13 @@ const History = () => {
       document.body.style.top = '';
       document.body.style.width = '';
       document.body.style.overflowY = '';
-      
+
       // Restore scroll position
       if (scrollY) {
         window.scrollTo(0, parseInt(scrollY || '0', 10) * -1);
       }
     }
-    
+
     return () => {
       // Cleanup in case component unmounts while modal is open
       document.body.style.position = '';
@@ -324,28 +331,28 @@ const History = () => {
       </div>
 
       {/* Bottom Filter Modal */}
-        {isFilterOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end justify-center animate-fadeIn" style={{ animationDuration: '0.2s' }}>
-            <div 
-          className={`bg-white w-full max-h-[90vh] overflow-y-auto rounded-t-3xl ${isFilterOpen ? 'animate-slideUp' : 'animate-slideDown'}`} 
-          style={{ animationDuration: '0.3s' }}
-          ref={filterRef}
-            >
-          <div className="p-6">
-            {/* Modal Header with Title */}
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">Filter</h2>
-              <button 
-            onClick={() => {
-              setIsFilterOpen(false);
-            }}
-            className="p-2 text-gray-500"
-              >
-            <X className="w-5 h-5" />
-              </button>
-            </div>
+      {isFilterOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end justify-center animate-fadeIn" style={{ animationDuration: '0.2s' }}>
+          <div
+            className={`bg-white w-full max-h-[90vh] overflow-y-auto rounded-t-3xl ${isFilterOpen ? 'animate-slideUp' : 'animate-slideDown'}`}
+            style={{ animationDuration: '0.3s' }}
+            ref={filterRef}
+          >
+            <div className="p-6">
+              {/* Modal Header with Title */}
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold">Filter</h2>
+                <button
+                  onClick={() => {
+                    setIsFilterOpen(false);
+                  }}
+                  className="p-2 text-gray-500"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-            {/* Filter Status */}
+              {/* Filter Status */}
               <div className="mb-4">
                 <h3 className="text-left mb-2 text-sm sm:text-lg font-medium">Status</h3>
                 <select
@@ -441,7 +448,7 @@ const History = () => {
                             item.status === 'assigned' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
                               item.status === 'cancelled' ? 'bg-red-100 text-red-800 border border-red-200' :
                                 item.status === 'in_progress' ? 'bg-orange-100 text-orange-800 border border-orange-200' :
-                                'bg-gray-100 text-gray-800 border border-gray-200'}`}>
+                                  'bg-gray-100 text-gray-800 border border-gray-200'}`}>
                         {item.status === 'completed' ? 'Selesai' :
                           item.status === 'pending' ? 'Menunggu' :
                             item.status === 'assigned' ? 'Ditugaskan' :
@@ -587,7 +594,7 @@ const History = () => {
                             <p className="text-xs text-gray-500">Bank Sampah</p>
                             <p className="text-xs font-medium sm:text-base">{item.wasteBankName}</p>
                           </div>
-                          
+
                           {/* Added Completion Date for completed items */}
                           {item.status === 'completed' && item.completedAt && (
                             <div className="space-y-0.5 sm:space-y-1">
