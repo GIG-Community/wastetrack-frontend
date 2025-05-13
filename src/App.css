@@ -6,6 +6,42 @@
   text-align: center;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch; /* Untuk dukungan iOS yang lebih baik */
+}
+
+.page-transition-enter {
+  opacity: 0;
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+  transition: opacity 300ms, transform 300ms;
+}
+
+.page-transition-exit {
+  opacity: 1;
+}
+
+.page-transition-exit-active {
+  opacity: 0;
+  transition: opacity 300ms, transform 300ms;
+}
+
+.smooth-scroll-page {
+  scroll-behavior: smooth;
+}
+
+.smooth-scroll-page .content-container {
+  scroll-behavior: smooth;
+}
+
 .logo {
   height: 6em;
   padding: 1.5em;
