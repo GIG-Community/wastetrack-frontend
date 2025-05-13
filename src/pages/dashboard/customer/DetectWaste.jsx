@@ -1,9 +1,9 @@
 // src/pages/dashboard/customer/DetectWaste.jsx
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Camera, 
-  RefreshCw, 
-  Info, 
+import {
+  Camera,
+  RefreshCw,
+  Info,
   AlertCircle,
   Image,
   Loader2,
@@ -16,17 +16,24 @@ import {
   ShoppingBag,
   Sparkles
 } from 'lucide-react';
-import { 
-  wasteTypes, 
-  WASTE_PRICES, 
-  WASTE_CATEGORIES, 
+import {
+  wasteTypes,
+  WASTE_PRICES,
+  WASTE_CATEGORIES,
   getWasteDetails
 } from '../../../lib/constants';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 const DetectWaste = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const videoRef = useRef(null);
   const [stream, setStream] = useState(null);
-  const [detectedWasteDetails, setDetectedWasteDetails] = useState(null); 
+  const [detectedWasteDetails, setDetectedWasteDetails] = useState(null);
   const [detecting, setDetecting] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [flashMessage, setFlashMessage] = useState(null);
@@ -38,7 +45,7 @@ const DetectWaste = () => {
   const startCamera = async () => {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { 
+        video: {
           facingMode: 'environment', // Always use back camera by default
           width: { ideal: 990 }, // Aslinya 1280
           height: { ideal: 740 } // Aslinya 720
@@ -62,7 +69,7 @@ const DetectWaste = () => {
   useEffect(() => {
     // Automatically start camera when component mounts
     startCamera();
-    
+
     return () => {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
@@ -110,12 +117,12 @@ const DetectWaste = () => {
     console.log(`Captured image base64 length: ${base64Image?.length || 0}`);
 
     try {
-      const response = await fetch('/api/detect-waste', { 
+      const response = await fetch('/api/detect-waste', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ image: base64Image }), 
+        body: JSON.stringify({ image: base64Image }),
       });
 
       if (!response.ok) {
@@ -152,10 +159,10 @@ const DetectWaste = () => {
   };
 
   const processDetectedWaste = (
-    detectedTypeId, 
-    confidence = 0, 
-    description = '', 
-    price = 0, 
+    detectedTypeId,
+    confidence = 0,
+    description = '',
+    price = 0,
     recommendations = '',
     bagColor = ''
   ) => {
@@ -174,36 +181,36 @@ const DetectWaste = () => {
         console.warn(`No details found for this type of waste`);
         showFlashMessage(`Terdeteksi sampah, tetapi informasi belum lengkap.`, 'warning');
         setDetectedWasteDetails({
-            id: detectedTypeId,
-            name: 'Jenis Sampah Baru',
-            price: price || 0,
-            category: 'unknown',
-            confidence,
-            description: description || 'Belum tersedia informasi lengkap tentang jenis sampah ini.',
-            recommendations: recommendations || 'Coba ambil foto dari sudut berbeda untuk hasil yang lebih baik.',
-            bagColor: recommendedBagColor
+          id: detectedTypeId,
+          name: 'Jenis Sampah Baru',
+          price: price || 0,
+          category: 'unknown',
+          confidence,
+          description: description || 'Belum tersedia informasi lengkap tentang jenis sampah ini.',
+          recommendations: recommendations || 'Coba ambil foto dari sudut berbeda untuk hasil yang lebih baik.',
+          bagColor: recommendedBagColor
         });
       } else if (detectedTypeId === 'unknown') {
-         showFlashMessage(`Tidak dapat mengenali jenis sampah. Silakan coba lagi.`, 'warning');
-         setDetectedWasteDetails({
-            id: 'unknown',
-            name: 'Sampah Tidak Dikenali',
-            price: 0,
-            category: 'unknown',
-            confidence,
-            description: description || 'Foto yang diberikan tidak menunjukkan sampah dengan jelas. Mungkin bukan sampah atau gambar terlalu gelap/buram.',
-            recommendations: recommendations || [
-              'Coba ambil foto dari sudut yang berbeda',
-              'Pastikan pencahayaan cukup terang',
-              'Letakkan sampah di tempat yang kontras dengan latar belakang',
-              'Bersihkan atau pisahkan bagian sampah dan coba lagi'
-            ],
-            bagColor: recommendedBagColor
-         });
+        showFlashMessage(`Tidak dapat mengenali jenis sampah. Silakan coba lagi.`, 'warning');
+        setDetectedWasteDetails({
+          id: 'unknown',
+          name: 'Sampah Tidak Dikenali',
+          price: 0,
+          category: 'unknown',
+          confidence,
+          description: description || 'Foto yang diberikan tidak menunjukkan sampah dengan jelas. Mungkin bukan sampah atau gambar terlalu gelap/buram.',
+          recommendations: recommendations || [
+            'Coba ambil foto dari sudut yang berbeda',
+            'Pastikan pencahayaan cukup terang',
+            'Letakkan sampah di tempat yang kontras dengan latar belakang',
+            'Bersihkan atau pisahkan bagian sampah dan coba lagi'
+          ],
+          bagColor: recommendedBagColor
+        });
       } else {
-        setDetectedWasteDetails({ 
-          ...details, 
-          price: price || WASTE_PRICES[detectedTypeId] || 0, 
+        setDetectedWasteDetails({
+          ...details,
+          price: price || WASTE_PRICES[detectedTypeId] || 0,
           category,
           confidence,
           description: description || details.description,
@@ -213,9 +220,9 @@ const DetectWaste = () => {
         showFlashMessage(`Terdeteksi: ${details.name}.`, 'success');
       }
     } catch (error) {
-       console.error("Error processing waste details:", error);
-       showFlashMessage('Gagal memproses detail sampah.', 'error');
-       setDetectedWasteDetails(null);
+      console.error("Error processing waste details:", error);
+      showFlashMessage('Gagal memproses detail sampah.', 'error');
+      setDetectedWasteDetails(null);
     }
   };
 
@@ -256,7 +263,7 @@ const DetectWaste = () => {
   const testGeminiApi = async () => {
     setIsTestingApi(true);
     setApiTestResult(null);
-    
+
     try {
       console.log("Testing AI connection...");
       const response = await fetch('/api/test-gemini', {
@@ -268,18 +275,18 @@ const DetectWaste = () => {
       });
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.message || `Error API: ${response.statusText}`);
       }
-      
+
       console.log("API test response:", data);
       setApiTestResult({
         success: true,
         text: "Koneksi AI berhasil."
       });
       showFlashMessage('Uji koneksi AI berhasil!', 'success');
-      
+
     } catch (error) {
       console.error("API Test Error:", error);
       setApiTestResult({
@@ -309,12 +316,12 @@ const DetectWaste = () => {
   // Fixed function to handle recommendations properly
   const getRecommendationItems = (recommendations) => {
     if (!recommendations) return [];
-    
+
     // Check if recommendations is an array or a string
     if (Array.isArray(recommendations)) {
       return recommendations.filter(item => item && item.trim().length > 0);
     }
-    
+
     if (typeof recommendations === 'string') {
       // Split by bullet points, commas, or periods followed by whitespace
       return recommendations
@@ -322,7 +329,7 @@ const DetectWaste = () => {
         .map(item => item.trim())
         .filter(item => item.length > 0);
     }
-    
+
     return []; // Return empty array if recommendations is neither string nor array
   };
 
@@ -385,7 +392,7 @@ const DetectWaste = () => {
             className="object-cover w-full h-full"
           />
         )}
-        
+
         {!capturedImage && !isCameraActive && (
           <div className="absolute inset-0 flex items-center justify-center gap-3">
             <button
@@ -423,7 +430,7 @@ const DetectWaste = () => {
             disabled={detecting || !isCameraActive || !stream}
             className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 transition-colors text-sm sm:text-lg shadow-xs sm:shadow-md
               ${detecting || !isCameraActive || !stream
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700'
               }`}
           >
@@ -455,8 +462,8 @@ const DetectWaste = () => {
           onClick={testGeminiApi}
           disabled={isTestingApi}
           className={`w-full py-3 rounded-lg flex items-center justify-center gap-2 transition-colors
-            ${isTestingApi 
-              ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+            ${isTestingApi
+              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
               : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200'
             }`}
         >
@@ -472,14 +479,14 @@ const DetectWaste = () => {
             </>
           )}
         </button>
-        
+
         {apiTestResult && (
           <div className={`p-4 mt-3 rounded-lg ${apiTestResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
             <div className="flex items-start justify-between">
               <h4 className={`font-medium ${apiTestResult.success ? 'text-green-700' : 'text-red-700'}`}>
                 {apiTestResult.success ? 'Uji API Berhasil' : 'Uji API Gagal'}
               </h4>
-              <button 
+              <button
                 onClick={() => setApiTestResult(null)}
                 className="text-gray-500 hover:text-gray-700"
               >
@@ -500,9 +507,9 @@ const DetectWaste = () => {
               <div className={`p-3 rounded-lg ${iconBgColor}`}>
                 {detectedWasteDetails.category === 'paper' && <Image className={`${iconTextColor} h-6 w-6`} />}
                 {detectedWasteDetails.category === 'plastic' && <Trash2 className={`${iconTextColor} h-6 w-6`} />}
-                {detectedWasteDetails.category === 'metal' && <AlertCircle className={`${iconTextColor} h-6 w-6`} />} 
-                {detectedWasteDetails.category === 'glass' && <AlertCircle className={`${iconTextColor} h-6 w-6`} />} 
-                {detectedWasteDetails.category === 'organic' && <Trash2 className={`${iconTextColor} h-6 w-6`} />} 
+                {detectedWasteDetails.category === 'metal' && <AlertCircle className={`${iconTextColor} h-6 w-6`} />}
+                {detectedWasteDetails.category === 'glass' && <AlertCircle className={`${iconTextColor} h-6 w-6`} />}
+                {detectedWasteDetails.category === 'organic' && <Trash2 className={`${iconTextColor} h-6 w-6`} />}
                 {!['paper', 'plastic', 'metal', 'glass', 'organic', 'unknown'].includes(detectedWasteDetails.category) && <Info className={`${iconTextColor} h-6 w-6`} />}
                 {detectedWasteDetails.category === 'unknown' && <HelpCircle className={`${iconTextColor} h-6 w-6`} />}
               </div>
@@ -526,7 +533,7 @@ const DetectWaste = () => {
                 <DollarSign className={`w-4 h-4 sm:h-5 sm:w-5 flex-shrink-0 ${checkTextColor}`} />
                 <span className="text-sm">Nilai estimasi: <strong>Rp {detectedWasteDetails.price?.toLocaleString('id-ID') || 0} / kg</strong></span>
               </div>
-              
+
               {detectedWasteDetails.bagColor && (
                 <div className="flex items-center gap-2">
                   <ShoppingBag className={`w-4 h-4sm:h-5 sm:w-5 flex-shrink-0 ${checkTextColor}`} />
@@ -550,7 +557,7 @@ const DetectWaste = () => {
                   </div>
                 </div>
               )}
-              
+
               {detectedWasteDetails.recommendations && (
                 <div className="p-2 sm:bg-white bg-opacity-50 rounded-lg">
                   <div className="flex items-start gap-2">

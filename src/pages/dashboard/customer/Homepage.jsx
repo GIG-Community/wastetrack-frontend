@@ -25,8 +25,15 @@ import {
   TIER_THRESHOLDS,
   getCurrentTier
 } from '../../../lib/constants';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 const HomePage = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData, currentUser } = useAuth();
   const [recentPickups, setRecentPickups] = useState([]);
   const [stats, setStats] = useState({
@@ -41,7 +48,7 @@ const HomePage = () => {
     points: 0
   });
   const [loading, setLoading] = useState(true);
-  
+
   // Hanya tampilkan 3 data pickup terbaru
   const displayedPickups = recentPickups.slice(0, 3);
 
@@ -154,9 +161,9 @@ const HomePage = () => {
   const formatDate = (pickup) => {
     // Use createdAt if available, fallback to date
     const timestamp = pickup.createdAt?.seconds || pickup.date?.seconds || 0;
-    
+
     if (!timestamp) return '';
-    
+
     const dateObj = new Date(timestamp * 1000);
     return dateObj.toLocaleDateString('id-ID', {
       month: 'short',
