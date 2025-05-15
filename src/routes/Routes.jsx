@@ -47,8 +47,11 @@ import WastebankReports from '../pages/dashboard/government/GovernmentReports';
 import GovernmentMonitoring from '../pages/dashboard/government/GovernmentMonitoring';
 import GovernmentAnalytics from '../pages/dashboard/government/GovernmentAnalytics';
 import IndustryDashboard from '../pages/dashboard/industry/IndustryDashboard';
-import OffsetPlannerIndustry from '../pages/dashboard/industry/OffsetPlannerIndustry';
+import EsgReport from '../pages/dashboard/industry/EsgReport';
 import RecycledHubIndustry from '../pages/dashboard/industry/RecycledHubIndustry';
+import RecycleManagement from '../pages/dashboard/industry/RecycleManagement';
+import IndustryWarehouse from '../pages/dashboard/industry/IndustryWarehouse';
+import IndustrySalary from '../pages/dashboard/industry/IndustrySalary';
 import WastebankMasterDashboard from '../pages/dashboard/wastebank-master/WastebankMasterDashboard';
 import MasterTransaction from '../pages/dashboard/wastebank-master/MasterTransaction';
 import MasterCollector from '../pages/dashboard/wastebank-master/MasterCollector';
@@ -131,8 +134,8 @@ const AppRoutes = () => (
     <Route path="/dashboard/collector/*" element={
       <ProtectedRoute allowedRoles={['collector']}>
         <Routes>
-          <Route path="/" element={<CollectorCollections />} />
-          <Route path="dashboard" element={<CollectorDashboard />} />
+          <Route path="/" element={<CollectorDashboard />} />
+          {/* <Route path="dashboard" element={<CollectorDashboard />} /> */}
           <Route path="assignments" element={<Assignments />} />
           <Route path="routes" element={<CollectorRoutes />} />
           <Route path="collections" element={<CollectorCollections />} />
@@ -180,8 +183,11 @@ const AppRoutes = () => (
       <ProtectedRoute allowedRoles={['industry']}>
         <Routes>
           <Route path="/" element={<IndustryDashboard />} />
-          <Route path="offset-planner" element={<OffsetPlannerIndustry />} />
+          <Route path="recycle-management" element={<RecycleManagement />} />
           <Route path="recycledhub" element={<RecycledHubIndustry />} />
+          <Route path="reports" element={<EsgReport />} />
+          <Route path="warehouse" element={<IndustryWarehouse />} />
+          <Route path="salary" element={<IndustrySalary />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>

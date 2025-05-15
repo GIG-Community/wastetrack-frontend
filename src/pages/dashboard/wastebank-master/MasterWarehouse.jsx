@@ -17,9 +17,300 @@ import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
 import WarehouseVisualization3D from '../../../components/WarehouseVisualization3D';
 
+// Constants for waste type data
 const VOLUME_CONVERSION_FACTOR = 0.2; // m³ per kg, rata-rata dari WASTE_IMPACT_MULTIPLIERS
 const WASTE_HEIGHT_FACTOR = 0.5; // Reduce the height factor to prevent overflow
 
+// Waste Types Structure
+export const wasteTypes = [
+  {
+    id: 'paper',
+    name: '📦 Kertas',
+    types: [
+      { id: 'kardus-bagus', name: 'Kardus Bagus' },
+      { id: 'kardus-jelek', name: 'Kardus Jelek' },
+      { id: 'koran', name: 'Koran' },
+      { id: 'hvs', name: 'HVS' },
+      { id: 'buram', name: 'Buram' },
+      { id: 'majalah', name: 'Majalah' },
+      { id: 'sak-semen', name: 'Sak Semen' },
+      { id: 'duplek', name: 'Duplek' }
+    ]
+  },
+  {
+    id: 'plastic',
+    name: '♻️ Plastik',
+    subcategories: [
+      {
+        name: 'Botol (PET & Galon)',
+        types: [
+          { id: 'pet-bening', name: 'PET Bening Bersih' },
+          { id: 'pet-biru', name: 'PET Biru Muda Bersih' },
+          { id: 'pet-warna', name: 'PET Warna Bersih' },
+          { id: 'pet-kotor', name: 'PET Kotor' },
+          { id: 'pet-jelek', name: 'PET Jelek/Minyak' },
+          { id: 'pet-galon', name: 'PET Galon Le Minerale' }
+        ]
+      },
+      {
+        name: 'Tutup Plastik',
+        types: [
+          { id: 'tutup-amdk', name: 'Tutup Botol AMDK' },
+          { id: 'tutup-galon', name: 'Tutup Galon' },
+          { id: 'tutup-campur', name: 'Tutup Campur' }
+        ]
+      },
+      {
+        name: 'Plastik Keras & Campur',
+        types: [
+          { id: 'ps-kaca', name: 'PS Kaca/Yakult/Akrilik' },
+          { id: 'keping-cd', name: 'Keping CD' },
+          { id: 'galon-utuh', name: 'Galon Utuh (Aqua/Club)' },
+          { id: 'bak-hitam', name: 'Bak Hitam' },
+          { id: 'bak-campur', name: 'Bak Campur (Tanpa Keras)' },
+          { id: 'plastik-keras', name: 'Plastik Keras' }
+        ]
+      },
+      {
+        name: 'Plastik Lembaran',
+        types: [
+          { id: 'plastik-bening', name: 'Plastik Bening' },
+          { id: 'kresek', name: 'Kresek/Bubble Wrap' },
+          { id: 'sablon-tipis', name: 'Sablon Tipis' },
+          { id: 'sablon-tebal', name: 'Sablon Tebal' },
+          { id: 'karung-kecil', name: 'Karung Kecil/Rusak' },
+          { id: 'sachet', name: 'Sachet Metalize' },
+          { id: 'lembaran-campur', name: 'Lembaran Campur' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'metal',
+    name: '🧱 Besi & Logam',
+    subcategories: [
+      {
+        name: 'Besi',
+        types: [
+          { id: 'besi-tebal', name: 'Besi Tebal' },
+          { id: 'sepeda', name: 'Sepeda/Paku' },
+          { id: 'besi-tipis', name: 'Besi Tipis/Gerabang' },
+          { id: 'kaleng', name: 'Kaleng' },
+          { id: 'seng', name: 'Seng' }
+        ]
+      },
+      {
+        name: 'Logam Mulia',
+        types: [
+          { id: 'tembaga', name: 'Tembaga' },
+          { id: 'kuningan', name: 'Kuningan' },
+          { id: 'perunggu', name: 'Perunggu' },
+          { id: 'aluminium', name: 'Aluminium' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'glass',
+    name: '🧴 Kaca',
+    types: [
+      { id: 'botol-bensin', name: 'Botol Bensin Besar' },
+      { id: 'botol-bir', name: 'Botol Bir Bintang Besar' },
+      { id: 'botol-kecap', name: 'Botol Kecap/Saos Besar' },
+      { id: 'botol-bening', name: 'Botol/Beling Bening' },
+      { id: 'botol-warna', name: 'Botol/Beling Warna' }
+    ]
+  },
+  {
+    id: 'sack',
+    name: '🧺 Karung',
+    types: [
+      { id: 'karung-100', name: 'Karung Ukuran 100 Kg' },
+      { id: 'karung-200', name: 'Karung Ukuran 200 Kg' }
+    ]
+  },
+  {
+    id: 'others',
+    name: '⚡ Lainnya',
+    types: [
+      { id: 'karak', name: 'Karak' },
+      { id: 'gembos', name: 'Gembos' },
+      { id: 'jelantah', name: 'Jelantah' },
+      { id: 'kabel', name: 'Kabel Listrik' }
+    ]
+  }
+];
+
+// Map from waste type IDs to prices
+export const WASTE_PRICES = {
+  'kardus-bagus': 1300,
+  'kardus-jelek': 1200,
+  'koran': 3500,
+  'hvs': 2000,
+  'buram': 1000,
+  'majalah': 1000,
+  'sak-semen': 700,
+  'duplek': 400,
+  
+  'pet-bening': 4200,
+  'pet-biru': 3500,
+  'pet-warna': 1200,
+  'pet-kotor': 500,
+  'pet-jelek': 100,
+  'pet-galon': 1500,
+  'tutup-amdk': 2500,
+  'tutup-galon': 2000,
+  'tutup-campur': 1000,
+  
+  'ps-kaca': 1000,
+  'keping-cd': 3500,
+  'galon-utuh': 5000,
+  'bak-hitam': 3000,
+  'bak-campur': 1500,
+  'plastik-keras': 200,
+  
+  'plastik-bening': 800,
+  'kresek': 300,
+  'sablon-tipis': 200,
+  'sablon-tebal': 300,
+  'karung-kecil': 200,
+  'sachet': 50,
+  'lembaran-campur': 50,
+  
+  'besi-tebal': 2500,
+  'sepeda': 1500,
+  'besi-tipis': 500,
+  'kaleng': 1000,
+  'seng': 1000,
+  'tembaga': 55000,
+  'kuningan': 15000,
+  'perunggu': 8000,
+  'aluminium': 9000,
+  
+  'botol-bensin': 800,
+  'botol-bir': 500,
+  'botol-kecap': 300,
+  'botol-bening': 100,
+  'botol-warna': 50,
+  
+  'karung-100': 1300,
+  'karung-200': 1800,
+  
+  'karak': 1800,
+  'gembos': 300,
+  'jelantah': 4000,
+  'kabel': 3000
+};
+
+// Waste categories mapping
+export const WASTE_CATEGORIES = {
+  // Metal
+  'aluminium': 'metal',
+  'besi-tebal': 'metal',
+  'besi-tipis': 'metal',
+  'kaleng': 'metal',
+  'kuningan': 'metal',
+  'perunggu': 'metal',
+  'seng': 'metal',
+  'tembaga': 'metal',
+  'sepeda': 'metal',
+  
+  // Paper
+  'kardus-bagus': 'paper',
+  'kardus-jelek': 'paper',
+  'koran': 'paper',
+  'majalah': 'paper',
+  'hvs': 'paper',
+  'duplek': 'paper',
+  'buram': 'paper',
+  'sak-semen': 'paper',
+  
+  // Plastics
+  'botol-bening': 'plastic',
+  'botol-bensin': 'plastic',
+  'botol-bir': 'plastic',
+  'botol-kecap': 'plastic',
+  'botol-warna': 'plastic',
+  'galon-utuh': 'plastic',
+  'pet-bening': 'plastic',
+  'pet-biru': 'plastic',
+  'pet-galon': 'plastic',
+  'pet-jelek': 'plastic',
+  'pet-kotor': 'plastic',
+  'pet-warna': 'plastic',
+  'plastik-bening': 'plastic',
+  'plastik-keras': 'plastic',
+  'ps-kaca': 'plastic',
+  'kresek': 'plastic',
+  'bak-campur': 'plastic',
+  'bak-hitam': 'plastic',
+  
+  // Organic
+  'jelantah': 'organic',
+  'karak': 'organic',
+  'gembos': 'organic',
+
+  // Other recyclables
+  'karung-100': 'other',
+  'karung-200': 'other',
+  'karung-kecil': 'other',
+  'keping-cd': 'other',
+  'kabel': 'other',
+  'sachet': 'other',
+  'sablon-tebal': 'other',
+  'sablon-tipis': 'other',
+  'lembaran-campur': 'other',
+  'tutup-amdk': 'other',
+  'tutup-campur': 'other',
+  'tutup-galon': 'other'
+};
+
+// Utility function to find waste type details
+const getWasteTypeName = (typeId) => {
+  // First check in all categories with direct types
+  for (const category of wasteTypes) {
+    if (category.types) {
+      const foundType = category.types.find(type => type.id === typeId);
+      if (foundType) {
+        return {
+          name: foundType.name,
+          category: category.id,
+          emoji: category.name.split(' ')[0]
+        };
+      }
+    }
+    
+    // Check in subcategories if they exist
+    if (category.subcategories) {
+      for (const subcategory of category.subcategories) {
+        const foundType = subcategory.types.find(type => type.id === typeId);
+        if (foundType) {
+          return {
+            name: foundType.name,
+            category: category.id,
+            subcategory: subcategory.name,
+            emoji: category.name.split(' ')[0]
+          };
+        }
+      }
+    }
+  }
+  
+  // If not found, format the typeId to be more readable
+  return {
+    name: typeId.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+    category: WASTE_CATEGORIES[typeId] || 'other',
+    emoji: '📦'
+  };
+};
+
+// More robust translation function for waste types
+const translateWasteType = (type) => {
+  const wasteInfo = getWasteTypeName(type);
+  return `${wasteInfo.emoji} ${wasteInfo.name}`;
+};
+
+// Component definitions
 const Card = ({ className = "", ...props }) => (
   <div
     className={`bg-white rounded-xl shadow-sm border border-zinc-200 ${className}`}
@@ -31,6 +322,7 @@ const formatNumber = (num) => {
   return new Intl.NumberFormat('id-ID').format(num);
 };
 
+// Storage alert function - unchanged
 const getStorageAlert = (percentage) => {
   if (percentage >= 100) {
     return {
@@ -117,7 +409,7 @@ const MasterWarehouse = () => {
     height: ''
   });
 
-  // Membersihkan subscription saat komponen unmount
+  // Cleanup subscriptions when component unmounts
   useEffect(() => {
     return () => {
       unsubscribes.forEach(unsubscribe => unsubscribe());
@@ -131,7 +423,7 @@ const MasterWarehouse = () => {
     }
   }, [currentUser?.uid]);
 
-  // Menambahkan useEffect untuk memperbarui statistik ketika dimensi berubah
+  // Update statistics when dimensions change
   useEffect(() => {
     const totalCapacity = dimensions.length * dimensions.width * dimensions.height;
     const usagePercentage = Math.min((warehouseStats.currentStorage / totalCapacity) * 100, 100);
@@ -161,9 +453,9 @@ const MasterWarehouse = () => {
     }
   };
 
-  // Memperbarui updateWarehouseDimensions untuk memperbarui statistik
+  // Update warehouse dimensions
   const updateWarehouseDimensions = async () => {
-    // Validasi sebelum menyimpan
+    // Validate before saving
     const errors = {};
     let hasError = false;
 
@@ -200,17 +492,18 @@ const MasterWarehouse = () => {
         throw new Error('ID Pengguna tidak ditemukan');
       }
 
-      // Bersihkan subscription sebelumnya jika ada
+      // Clean previous subscriptions
       unsubscribes.forEach(unsubscribe => unsubscribe());
       const newUnsubscribes = [];
 
+      // Query for completed requests where this user is the waste bank
       const pickupsQuery = query(
         collection(db, 'masterBankRequests'),
-        where('wasteBankId', '==', currentUser.uid),
+        where('masterBankId', '==', currentUser.uid),
         where('status', '==', 'completed')
       );
       
-      // Menggunakan onSnapshot untuk data realtime
+      // Use onSnapshot for realtime data
       const unsubscribePickups = onSnapshot(
         pickupsQuery, 
         (snapshot) => {
@@ -238,7 +531,7 @@ const MasterWarehouse = () => {
     }
   };
 
-  // Fungsi untuk memproses data gudang
+  // Process warehouse data with the updated waste type structure
   const processWarehouseData = (pickupsData) => {
     try {
       const wasteTypes = {};
@@ -246,6 +539,7 @@ const MasterWarehouse = () => {
       let totalWeight = 0;
 
       pickupsData.forEach(pickup => {
+        // Handle both waste data structures (wastes or wasteWeights)
         if (pickup.wastes) {
           Object.entries(pickup.wastes).forEach(([type, data]) => {
             const weight = Number(data.weight) || 0;
@@ -258,13 +552,44 @@ const MasterWarehouse = () => {
             wasteTypes[type] += weight;
             totalWeight += weight;
             
-            const pickupDate = pickup.completedAt?.toDate ? pickup.completedAt.toDate() : new Date(pickup.completedAt?.seconds * 1000 || 0);
+            const pickupDate = pickup.completedAt?.toDate ? 
+              pickup.completedAt.toDate() : 
+              new Date(pickup.completedAt?.seconds * 1000 || 0);
+              
             wasteDetails[type].push({
               weight: weight,
               date: pickupDate,
               volume: weight * VOLUME_CONVERSION_FACTOR,
               value: data.value || 0,
               points: data.points || 0
+            });
+          });
+        } 
+        // Handle if using wasteWeights structure
+        else if (pickup.wasteWeights) {
+          Object.entries(pickup.wasteWeights).forEach(([type, weight]) => {
+            weight = Number(weight) || 0;
+            
+            if (!wasteTypes[type]) {
+              wasteTypes[type] = 0;
+              wasteDetails[type] = [];
+            }
+            
+            wasteTypes[type] += weight;
+            totalWeight += weight;
+            
+            const pickupDate = pickup.completedAt?.toDate ? 
+              pickup.completedAt.toDate() : 
+              new Date(pickup.completedAt?.seconds * 1000 || 0);
+              
+            const value = WASTE_PRICES[type] ? weight * WASTE_PRICES[type] : 0;
+            
+            wasteDetails[type].push({
+              weight: weight,
+              date: pickupDate,
+              volume: weight * VOLUME_CONVERSION_FACTOR,
+              value: value,
+              points: 0
             });
           });
         }
@@ -385,6 +710,7 @@ const MasterWarehouse = () => {
                 </button>
               </div>
 
+              {/* Dimension inputs */}
               <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                 {['length', 'width', 'height'].map((dim) => (
                   <div key={dim} className="space-y-2">
@@ -473,6 +799,8 @@ const MasterWarehouse = () => {
                       wasteDetails={warehouseStats.wasteDetails}
                     />
                   </Suspense>
+                  
+                  {/* Usage gauge */}
                   <div>
                     <div className="flex justify-between mb-2">
                       <span className="text-sm font-medium text-zinc-700">
@@ -544,7 +872,7 @@ const MasterWarehouse = () => {
                 </div>
               </Card>
 
-              {/* Waste Distribution - Updated to sort by volume */}
+              {/* Waste Distribution - Updated with improved waste type translation */}
               <Card className="p-6">
                 <div className="flex items-center gap-2 mb-6">
                   <Scale className="w-5 h-5 text-zinc-600" />
@@ -573,27 +901,8 @@ const MasterWarehouse = () => {
                         const volume = weight * VOLUME_CONVERSION_FACTOR;
                         const details = warehouseStats.wasteDetails[type] || [];
                         const oldestDate = details.length > 0 ? 
-                          new Date(Math.min(...details.map(d => d.date))) : null;
+                          new Date(Math.min(...details.map(d => d.date.getTime()))) : null;
                         const percentage = (volume / warehouseStats.currentStorage) * 100;
-
-                        // Terjemahkan nama jenis sampah
-                        const translateWasteType = (type) => {
-                          const translations = {
-                            'plastic': 'Plastik',
-                            'paper': 'Kertas',
-                            'organic': 'Organik',
-                            'metal': 'Logam',
-                            'glass': 'Kaca',
-                            'electronic': 'Elektronik',
-                            'fabric': 'Kain',
-                            'others': 'Lainnya'
-                          };
-                          
-                          const lowerType = type.toLowerCase();
-                          return translations[lowerType] || type.split('-').map(word => 
-                            word.charAt(0).toUpperCase() + word.slice(1)
-                          ).join(' ');
-                        };
 
                         return {
                           type,
@@ -645,7 +954,7 @@ const MasterWarehouse = () => {
               </Card>
             </div>
 
-            {/* Recent Collections */}
+            {/* Recent Collections - Updated with better waste type handling */}
             <Card className="p-6">
               <div className="flex items-center gap-2 mb-6">
                 <ArrowUpCircle className="w-5 h-5 text-zinc-600" />
@@ -663,15 +972,27 @@ const MasterWarehouse = () => {
                   </div>
                 ) : (
                   warehouseStats.recentPickups.map(pickup => {
-                    const totalWeight = Object.values(pickup.wastes).reduce((sum, waste) => 
-                      sum + (Number(waste.weight) || 0), 0);
+                    // Handle both waste data structures
+                    const wastes = pickup.wastes || {};
+                    const wasteWeights = pickup.wasteWeights || {};
+                    
+                    // Calculate totals
+                    let totalWeight = 0;
+                    if (Object.keys(wastes).length > 0) {
+                      totalWeight = Object.values(wastes).reduce((sum, waste) => 
+                        sum + (Number(waste.weight) || 0), 0);
+                    } else if (Object.keys(wasteWeights).length > 0) {
+                      totalWeight = Object.values(wasteWeights).reduce((sum, weight) => 
+                        sum + (Number(weight) || 0), 0);
+                    }
+                    
                     const totalVolume = totalWeight * VOLUME_CONVERSION_FACTOR;
 
                     return (
                       <div key={pickup.id} className="py-4">
                         <div className="flex items-start justify-between">
                           <div>
-                            <p className="font-medium text-zinc-800">{pickup.userName}</p>
+                            <p className="font-medium text-zinc-800">{pickup.userName || "Pengguna"}</p>
                             <p className="text-sm text-zinc-500">
                               {new Date(pickup.completedAt?.seconds * 1000).toLocaleDateString('id-ID', {
                                 day: 'numeric',
@@ -679,6 +1000,11 @@ const MasterWarehouse = () => {
                                 year: 'numeric'
                               })}
                             </p>
+                            {pickup.wasteBankName && (
+                              <p className="text-xs text-zinc-500">
+                                Bank Sampah: {pickup.wasteBankName}
+                              </p>
+                            )}
                           </div>
                           <div className="text-right">
                             <p className="font-medium text-emerald-600">
@@ -690,31 +1016,31 @@ const MasterWarehouse = () => {
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2 mt-2">
-                          {Object.entries(pickup.wastes).map(([type, data]) => {
-                            const weight = Number(data.weight) || 0;
-                            const volume = weight * VOLUME_CONVERSION_FACTOR;
-                            
-                            // Terjemahkan nama jenis sampah
-                            const translations = {
-                              'plastic': 'Plastik',
-                              'paper': 'Kertas',
-                              'organic': 'Organik',
-                              'metal': 'Logam',
-                              'glass': 'Kaca',
-                              'electronic': 'Elektronik',
-                              'fabric': 'Kain',
-                              'others': 'Lainnya'
-                            };
-                            
-                            const typeDisplay = translations[type.toLowerCase()] || 
-                              type.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-                            
-                            return (
-                              <span key={type} className="px-2 py-1 text-xs rounded-full bg-zinc-100 text-zinc-700">
-                                {typeDisplay}: {formatNumber(volume.toFixed(1))} m³
-                              </span>
-                            );
-                          })}
+                          {Object.keys(wastes).length > 0 ? (
+                            // Display wastes from the wastes structure
+                            Object.entries(wastes).map(([type, data]) => {
+                              const weight = Number(data.weight) || 0;
+                              const volume = weight * VOLUME_CONVERSION_FACTOR;
+                              
+                              return (
+                                <span key={type} className="px-2 py-1 text-xs rounded-full bg-zinc-100 text-zinc-700">
+                                  {translateWasteType(type)}: {formatNumber(volume.toFixed(1))} m³
+                                </span>
+                              );
+                            })
+                          ) : (
+                            // Display wastes from the wasteWeights structure
+                            Object.entries(wasteWeights).map(([type, weight]) => {
+                              weight = Number(weight) || 0;
+                              const volume = weight * VOLUME_CONVERSION_FACTOR;
+                              
+                              return (
+                                <span key={type} className="px-2 py-1 text-xs rounded-full bg-zinc-100 text-zinc-700">
+                                  {translateWasteType(type)}: {formatNumber(volume.toFixed(1))} m³
+                                </span>
+                              );
+                            })
+                          )}
                         </div>
                       </div>
                     );

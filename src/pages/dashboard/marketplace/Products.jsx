@@ -6,7 +6,7 @@ import Swal from 'sweetalert2';
 import { db, storage } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import { useLanguage } from '../../../contexts/LanguageContext';
-import DashboardLayout from '../../../components/DashboardLayout';
+import Sidebar from '../../../components/Sidebar';
 
 const Products = () => {
   const [products, setProducts] = useState([]);
@@ -25,11 +25,15 @@ const Products = () => {
     imageFile: null,
     condition: '',
     minimumOrder: '1',
-    status: 'available'
+    status: 'available',
+    city: '',
+    postalCode: '',
+    shippingAddress: ''
   });
 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const { language, toggleLanguage, translations } = useLanguage();
   const t = translations[language].products;
@@ -54,6 +58,40 @@ const Products = () => {
     { value: 'limited', color: 'yellow' },
     { value: 'out_of_stock', color: 'red' }
   ];
+
+  const [productStats, setProductStats] = useState({
+    total: 0,
+    available: 0,
+    limited: 0,
+    out_of_stock: 0
+  });
+
+  const calculateProductStats = (productsData) => {
+    const stats = {
+      total: productsData.length,
+      available: 0,
+      limited: 0,
+      out_of_stock: 0
+    };
+
+    productsData.forEach(product => {
+      switch (product.status) {
+        case 'available':
+          stats.available++;
+          break;
+        case 'limited':
+          stats.limited++;
+          break;
+        case 'out_of_stock':
+          stats.out_of_stock++;
+          break;
+        default:
+          break;
+      }
+    });
+
+    setProductStats(stats);
+  };
 
   useEffect(() => {
     fetchProducts();
@@ -81,6 +119,7 @@ const Products = () => {
       }
 
       setProducts(productsData);
+      calculateProductStats(productsData);
     } catch (error) {
       console.error('Error fetching products:', error);
     } finally {
@@ -148,6 +187,9 @@ const Products = () => {
         minimumOrder: parseInt(formData.minimumOrder) || 1,
         status: formData.status || 'available',
         sellerId: currentUser.uid,
+        city: formData.city,
+        postalCode: formData.postalCode,
+        shippingAddress: formData.shippingAddress,
         updatedAt: new Date()
       };
 
@@ -190,7 +232,10 @@ const Products = () => {
         imageFile: null,
         condition: '',
         minimumOrder: '1',
-        status: 'available'
+        status: 'available',
+        city: '',
+        postalCode: '',
+        shippingAddress: ''
       });
       
       await fetchProducts();
@@ -284,376 +329,458 @@ const Products = () => {
       imageFile: null,
       condition: product.condition || '',
       minimumOrder: product.minimumOrder?.toString() || '1',
-      status: product.status || 'available'
+      status: product.status || 'available',
+      city: product.city || '',
+      postalCode: product.postalCode || '',
+      shippingAddress: product.shippingAddress || ''
     });
     setIsModalOpen(true);
   };
 
   const ProductSkeleton = () => (
-    <div className="border rounded-lg p-4 space-y-3 animate-pulse">
-      <div className="h-40 bg-gray-200 rounded-lg mb-4"/>
-      <div className="h-4 bg-gray-200 rounded w-3/4"/>
-      <div className="h-4 bg-gray-200 rounded w-1/2"/>
-      <div className="h-4 bg-gray-200 rounded w-1/4"/>
+    <div className="p-4 space-y-3 border rounded-lg animate-pulse">
+      <div className="h-40 mb-4 bg-gray-200 rounded-lg"/>
+      <div className="w-3/4 h-4 bg-gray-200 rounded"/>
+      <div className="w-1/2 h-4 bg-gray-200 rounded"/>
+      <div className="w-1/4 h-4 bg-gray-200 rounded"/>
     </div>
   );
 
   return (
-    <DashboardLayout role="marketplace">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">{t.title}</h1>
-            <p className="text-gray-600">{t.subtitle}</p>
-          </div>
-          <button
-            onClick={toggleLanguage}
-            className="p-2 rounded-full hover:bg-gray-100"
-            title={language === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
-          >
-            <Globe className="h-5 w-5 text-gray-600" />
-          </button>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-            <div className="w-full md:w-auto flex items-center space-x-4 flex-1">
-              <div className="relative flex-1 max-w-md">
-                <input
-                  type="text"
-                  placeholder={t.searchPlaceholder}
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-              </div>
+    <div className="flex h-screen overflow-hidden bg-gray-50">
+      <Sidebar collapsed={isSidebarCollapsed} setCollapsed={setIsSidebarCollapsed} role="marketplace" />
+      <main className={`flex-1 p-4 md:p-8 overflow-y-auto transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+        <div className="mx-auto max-w-7xl">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">{t.title}</h1>
+              <p className="text-gray-600">{t.subtitle}</p>
             </div>
             <button
-              onClick={() => {
-                setSelectedProduct(null);
-                setFormData({
-                  name: '',
-                  category: '',
-                  price: '',
-                  description: '',
-                  stock: '',
-                  imageUrl: '',
-                  imageFile: null,
-                  condition: '',
-                  minimumOrder: '1',
-                  status: 'available'
-                });
-                setIsModalOpen(true);
-              }}
-              className="w-full md:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center justify-center space-x-2"
+              onClick={toggleLanguage}
+              className="p-2 rounded-full hover:bg-gray-100"
+              title={language === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
             >
-              <Plus size={20} />
-              <span>{t.addProduct}</span>
+              <Globe className="w-5 h-5 text-gray-600" />
             </button>
           </div>
 
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, index) => (
-                <ProductSkeleton key={index} />
-              ))}
+          {/* Add Product Statistics */}
+          <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-4">
+            <div className="p-4 bg-white shadow-sm rounded-xl">
+              <h3 className="text-sm text-gray-500">Total Products</h3>
+              <p className="text-2xl font-bold">{productStats.total}</p>
             </div>
-          ) : products.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {products.map((product) => (
-                <div key={product.id} className="border rounded-lg overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="aspect-w-16 aspect-h-9 bg-gray-100">
-                    {product.imageUrl ? (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <ImageIcon className="h-12 w-12 text-gray-400" />
+            <div className="p-4 bg-white shadow-sm rounded-xl">
+              <h3 className="text-sm text-emerald-500">Available</h3>
+              <p className="text-2xl font-bold">{productStats.available}</p>
+            </div>
+            <div className="p-4 bg-white shadow-sm rounded-xl">
+              <h3 className="text-sm text-yellow-500">Limited Stock</h3>
+              <p className="text-2xl font-bold">{productStats.limited}</p>
+            </div>
+            <div className="p-4 bg-white shadow-sm rounded-xl">
+              <h3 className="text-sm text-red-500">Out of Stock</h3>
+              <p className="text-2xl font-bold">{productStats.out_of_stock}</p>
+            </div>
+          </div>
+
+          <div className="p-4 bg-white shadow-sm rounded-xl md:p-6">
+            <div className="flex flex-col items-start justify-between gap-4 mb-6 md:flex-row md:items-center">
+              <div className="flex items-center w-full md:w-auto">
+                <div className="relative w-full md:w-80">
+                  <input
+                    type="text"
+                    placeholder={t.searchPlaceholder}
+                    className="w-full py-2 pl-10 pr-4 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedProduct(null);
+                  setFormData({
+                    name: '',
+                    category: '',
+                    price: '',
+                    description: '',
+                    stock: '',
+                    imageUrl: '',
+                    imageFile: null,
+                    condition: '',
+                    minimumOrder: '1',
+                    status: 'available',
+                    city: '',
+                    postalCode: '',
+                    shippingAddress: ''
+                  });
+                  setIsModalOpen(true);
+                }}
+                className="flex items-center justify-center w-full px-4 py-2 space-x-2 text-white transition-colors rounded-lg md:w-auto bg-emerald-600 hover:bg-emerald-700"
+              >
+                <Plus size={20} />
+                <span>{t.addProduct}</span>
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {[...Array(6)].map((_, index) => (
+                  <ProductSkeleton key={index} />
+                ))}
+              </div>
+            ) : products.length > 0 ? (
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {products.map((product) => (
+                  <div key={product.id} className="overflow-hidden transition-shadow border rounded-lg hover:shadow-lg">
+                    <div className="bg-gray-100 aspect-w-16 aspect-h-9">
+                      {product.imageUrl ? (
+                        <img
+                          src={product.imageUrl}
+                          alt={product.name}
+                          className="object-cover w-full h-full"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center w-full h-full">
+                          <ImageIcon className="w-12 h-12 text-gray-400" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="font-medium text-gray-800 line-clamp-1">{product.name}</h3>
+                          <p className="text-sm text-gray-500">{t.categories[product.category]}</p>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            statusOptions.find(s => s.value === product.status)?.color === 'emerald' ? 'bg-emerald-100 text-emerald-800' :
+                            statusOptions.find(s => s.value === product.status)?.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {t.status[product.status]}
+                          </span>
+                          <div className="flex space-x-1">
+                            <button
+                              onClick={() => openEditModal(product)}
+                              className="p-1 rounded hover:bg-gray-100"
+                              title={t.editProduct}
+                            >
+                              <Edit size={16} className="text-gray-600" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(product.id, product.imageUrl)}
+                              className="p-1 rounded hover:bg-gray-100"
+                              title={t.messages.deleteConfirm}
+                            >
+                              <Trash size={16} className="text-red-600" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600 line-clamp-2">{product.description}</p>
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-emerald-600">
+                          {language === 'id' ? 'Rp ' : '$ '}{product.price?.toLocaleString()}
+                        </p>
+                        <p className="text-sm text-gray-500">{t.stock}: {product.stock}</p>
+                      </div>
+                      {product.city && (
+                        <div className="text-sm text-gray-600">
+                          <p className="line-clamp-1">
+                            📍 {product.city} {product.postalCode}
+                          </p>
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <span className="px-2 py-1 text-xs text-gray-800 bg-gray-100 rounded-full">
+                          {t.conditions[product.condition]}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-12 text-center">
+                <Package className="w-12 h-12 mx-auto text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">{t.noProducts}</h3>
+                <p className="mt-1 text-sm text-gray-500">{t.noProductsSubtext}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <h2 className="mb-4 text-xl font-semibold">
+                {selectedProduct ? t.editProduct : t.addNewProduct}
+              </h2>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block mb-1 text-sm font-medium text-gray-700">
+                    {t.productName}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder={t.productNamePlaceholder}
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-1 text-sm font-medium text-gray-700">
+                    {t.category}
+                  </label>
+                  <select
+                    required
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="">{t.selectCategory}</option>
+                    {categories.map((category) => (
+                      <option key={category} value={category}>
+                        {t.categories[category]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block mb-1 text-sm font-medium text-gray-700">
+                    {t.condition}
+                  </label>
+                  <select
+                    required
+                    value={formData.condition}
+                    onChange={(e) => setFormData({ ...formData, condition: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="">{t.selectCondition}</option>
+                    {conditions.map((condition) => (
+                      <option key={condition} value={condition}>
+                        {t.conditions[condition]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block mb-1 text-sm font-medium text-gray-700">
+                    {t.description}
+                  </label>
+                  <textarea
+                    required
+                    placeholder={t.descriptionPlaceholder}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    rows="3"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block mb-1 text-sm font-medium text-gray-700">
+                      {t.price}
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      placeholder="0"
+                      value={formData.price}
+                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 text-sm font-medium text-gray-700">
+                      {t.stock}
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      placeholder="0"
+                      value={formData.stock}
+                      onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block mb-1 text-sm font-medium text-gray-700">
+                    {t.minimumOrder}
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={formData.minimumOrder}
+                    onChange={(e) => setFormData({ ...formData, minimumOrder: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t.productImage}
+                  </label>
+                  
+                  <div className="flex flex-col gap-4 mt-1">
+                    {/* Preview area */}
+                    {(formData.imageUrl || formData.imageFile) && (
+                      <div className="relative w-full h-48 overflow-hidden bg-gray-100 rounded-lg">
+                        <img
+                          src={formData.imageFile ? URL.createObjectURL(formData.imageFile) : formData.imageUrl}
+                          alt="Preview"
+                          className="object-cover w-full h-full"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setFormData({
+                            ...formData,
+                            imageUrl: '',
+                            imageFile: null
+                          })}
+                          className="absolute p-1 text-white bg-red-500 rounded-full top-2 right-2 hover:bg-red-600"
+                        >
+                          <Trash size={16} />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Upload and URL inputs */}
+                    <div className="flex gap-4">
+                      <div className="flex-1">
+                        <label className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm cursor-pointer hover:bg-gray-50">
+                          <Upload className="w-5 h-5 mr-2 text-gray-400" />
+                          <span>{formData.imageFile ? t.changeImage : t.uploadImage}</span>
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                setFormData({
+                                  ...formData,
+                                  imageFile: file,
+                                  imageUrl: '' // Clear URL when file is selected
+                                });
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="flex-1">
+                        <input
+                          type="url"
+                          placeholder={t.imageUrl}
+                          value={formData.imageUrl}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            imageUrl: e.target.value,
+                            imageFile: null // Clear file when URL is entered
+                          })}
+                          className="w-full px-3 py-2 border rounded-lg"
+                        />
+                      </div>
+                    </div>
+
+                    {isUploading && (
+                      <div className="w-full bg-gray-200 rounded-full h-2.5">
+                        <div
+                          className="bg-emerald-600 h-2.5 rounded-full transition-all duration-300"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
                       </div>
                     )}
                   </div>
-                  <div className="p-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-medium text-gray-800 line-clamp-1">{product.name}</h3>
-                        <p className="text-sm text-gray-500">{t.categories[product.category]}</p>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          statusOptions.find(s => s.value === product.status)?.color === 'emerald' ? 'bg-emerald-100 text-emerald-800' :
-                          statusOptions.find(s => s.value === product.status)?.color === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {t.status[product.status]}
-                        </span>
-                        <div className="flex space-x-1">
-                          <button
-                            onClick={() => openEditModal(product)}
-                            className="p-1 hover:bg-gray-100 rounded"
-                            title={t.editProduct}
-                          >
-                            <Edit size={16} className="text-gray-600" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(product.id, product.imageUrl)}
-                            className="p-1 hover:bg-gray-100 rounded"
-                            title={t.messages.deleteConfirm}
-                          >
-                            <Trash size={16} className="text-red-600" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-2 line-clamp-2">{product.description}</p>
-                    <div className="flex justify-between items-center mt-4">
-                      <p className="font-medium text-emerald-600">
-                        {language === 'id' ? 'Rp ' : '$ '}{product.price?.toLocaleString()}
-                      </p>
-                      <p className="text-sm text-gray-500">{t.stock}: {product.stock}</p>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <span className="text-xs px-2 py-1 bg-gray-100 text-gray-800 rounded-full">
-                        {t.conditions[product.condition]}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <Package className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">{t.noProducts}</h3>
-              <p className="mt-1 text-sm text-gray-500">{t.noProductsSubtext}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-semibold mb-4">
-              {selectedProduct ? t.editProduct : t.addNewProduct}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t.productName}
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder={t.productNamePlaceholder}
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t.category}
-                </label>
-                <select
-                  required
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2"
-                >
-                  <option value="">{t.selectCategory}</option>
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {t.categories[category]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t.condition}
-                </label>
-                <select
-                  required
-                  value={formData.condition}
-                  onChange={(e) => setFormData({ ...formData, condition: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2"
-                >
-                  <option value="">{t.selectCondition}</option>
-                  {conditions.map((condition) => (
-                    <option key={condition} value={condition}>
-                      {t.conditions[condition]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t.description}
-                </label>
-                <textarea
-                  required
-                  placeholder={t.descriptionPlaceholder}
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2"
-                  rows="3"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t.price}
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    placeholder="0"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    className="w-full border rounded-lg px-3 py-2"
-                  />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t.stock}
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    placeholder="0"
-                    value={formData.stock}
-                    onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                    className="w-full border rounded-lg px-3 py-2"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t.minimumOrder}
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  value={formData.minimumOrder}
-                  onChange={(e) => setFormData({ ...formData, minimumOrder: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
-
-              <div className="space-y-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  {t.productImage}
-                </label>
-                
-                <div className="mt-1 flex flex-col gap-4">
-                  {/* Preview area */}
-                  {(formData.imageUrl || formData.imageFile) && (
-                    <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100">
-                      <img
-                        src={formData.imageFile ? URL.createObjectURL(formData.imageFile) : formData.imageUrl}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setFormData({
-                          ...formData,
-                          imageUrl: '',
-                          imageFile: null
-                        })}
-                        className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
-                      >
-                        <Trash size={16} />
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Upload and URL inputs */}
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <label className="cursor-pointer w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                        <Upload className="h-5 w-5 mr-2 text-gray-400" />
-                        <span>{formData.imageFile ? t.changeImage : t.uploadImage}</span>
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = e.target.files[0];
-                            if (file) {
-                              setFormData({
-                                ...formData,
-                                imageFile: file,
-                                imageUrl: '' // Clear URL when file is selected
-                              });
-                            }
-                          }}
-                        />
-                      </label>
-                    </div>
-
-                    <div className="flex-1">
-                      <input
-                        type="url"
-                        placeholder={t.imageUrl}
-                        value={formData.imageUrl}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          imageUrl: e.target.value,
-                          imageFile: null // Clear file when URL is entered
-                        })}
-                        className="w-full border rounded-lg px-3 py-2"
-                      />
-                    </div>
+                <div className="space-y-4">
+                  <h3 className="font-medium text-gray-700">Location Information</h3>
+                  
+                  <div>
+                    <label className="block mb-1 text-sm font-medium text-gray-700">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter city"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
                   </div>
 
-                  {isUploading && (
-                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                      <div
-                        className="bg-emerald-600 h-2.5 rounded-full transition-all duration-300"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
+                  <div>
+                    <label className="block mb-1 text-sm font-medium text-gray-700">
+                      Postal Code
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter postal code"
+                      value={formData.postalCode}
+                      onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    />
+                  </div>
 
-              <div className="flex justify-end space-x-4 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    setSelectedProduct(null);
-                  }}
-                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  {t.cancel}
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                >
-                  {selectedProduct ? t.update : t.save}
-                </button>
-              </div>
-            </form>
+                  <div>
+                    <label className="block mb-1 text-sm font-medium text-gray-700">
+                      Shipping Address
+                    </label>
+                    <textarea
+                      required
+                      placeholder="Enter complete address"
+                      value={formData.shippingAddress}
+                      onChange={(e) => setFormData({ ...formData, shippingAddress: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg"
+                      rows="3"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end mt-6 space-x-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      setSelectedProduct(null);
+                    }}
+                    className="px-4 py-2 text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+                  >
+                    {t.cancel}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-white transition-colors rounded-lg bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    {selectedProduct ? t.update : t.save}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
-    </DashboardLayout>
+        )}
+      </main>
+    </div>
   );
 };
 

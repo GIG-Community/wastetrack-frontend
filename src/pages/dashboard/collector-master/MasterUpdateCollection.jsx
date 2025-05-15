@@ -5,21 +5,20 @@ import {
   User,
   Loader2,
   AlertCircle,
-  Coins,
-  Calculator
+  Calculator,
+  Info
 } from 'lucide-react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
 import { useParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { 
-  calculatePoints, 
   calculateTotalValue, 
-  WASTE_PRICES, 
-  POINTS_CONVERSION_RATE,
-  getWasteDetails 
+  WASTE_PRICES,
+  getWasteDetails,
+  wasteTypes
 } from '../../../lib/constants';
 
 // Reusable Input Component
@@ -48,44 +47,62 @@ const MasterUpdateCollection = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [wasteData, setWasteData] = useState({});
-  const [calculatedPoints, setCalculatedPoints] = useState(0);
   const [totalValue, setTotalValue] = useState(0);
   const { pickupId } = useParams();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchPickup = async () => {
+    let unsubscribePickup;
+
+    const fetchPickup = () => {
       try {
         const pickupRef = doc(db, 'masterBankRequests', pickupId);
-        const pickupSnap = await getDoc(pickupRef);
-
-        if (!pickupSnap.exists()) {
-          throw new Error('Pickup not found');
-        }
-
-        const data = pickupSnap.data();
-        setPickup({ id: pickupSnap.id, ...data });
         
-        // Initialize waste data from existing quantities
-        const initialWasteData = {};
-        Object.entries(data.wasteQuantities || {}).forEach(([type, quantity]) => {
-          initialWasteData[type] = {
-            quantity: quantity,
-            weight: 0 // New weight to be added
-          };
-        });
-        setWasteData(initialWasteData);
-        setError(null);
+        // Set up real-time listener for the pickup document
+        unsubscribePickup = onSnapshot(
+          pickupRef,
+          (pickupSnap) => {
+            if (!pickupSnap.exists()) {
+              throw new Error('Pengambilan tidak ditemukan');
+            }
+
+            const data = pickupSnap.data();
+            setPickup({ id: pickupSnap.id, ...data });
+            
+            // Initialize waste data from existing quantities
+            const initialWasteData = {};
+            Object.entries(data.wasteQuantities || {}).forEach(([type, quantity]) => {
+              initialWasteData[type] = {
+                quantity: quantity,
+                weight: wasteData[type]?.weight || 0 // Preserve any entered weights
+              };
+            });
+            setWasteData(prev => {
+              // Only replace if there are no weights already entered
+              if (Object.values(prev).some(item => item.weight > 0)) {
+                return prev;
+              }
+              return initialWasteData;
+            });
+            setError(null);
+            setLoading(false);
+          },
+          (err) => {
+            console.error('Error fetching pickup:', err);
+            setError(err.message);
+            setLoading(false);
+            Swal.fire({
+              title: 'Error',
+              text: `Gagal memuat data: ${err.message}`,
+              icon: 'error',
+              confirmButtonColor: '#10B981',
+              confirmButtonText: 'Tutup'
+            });
+          }
+        );
       } catch (err) {
-        console.error('Error fetching pickup:', err);
+        console.error('Error setting up snapshot:', err);
         setError(err.message);
-        Swal.fire({
-          title: 'Error',
-          text: err.message,
-          icon: 'error',
-          confirmButtonColor: '#10B981'
-        });
-      } finally {
         setLoading(false);
       }
     };
@@ -93,9 +110,14 @@ const MasterUpdateCollection = () => {
     if (pickupId) {
       fetchPickup();
     }
+
+    // Clean up the subscription when the component unmounts
+    return () => {
+      if (unsubscribePickup) unsubscribePickup();
+    };
   }, [pickupId]);
 
-  // Calculate points and value whenever waste data changes
+  // Calculate value whenever waste data changes
   useEffect(() => {
     const wastes = {};
     Object.entries(wasteData).forEach(([typeId, data]) => {
@@ -110,9 +132,6 @@ const MasterUpdateCollection = () => {
     });
 
     const total = calculateTotalValue(wastes);
-    const points = calculatePoints(total);
-
-    setCalculatedPoints(points);
     setTotalValue(total);
   }, [wasteData]);
 
@@ -133,24 +152,22 @@ const MasterUpdateCollection = () => {
       // Validate that weights have been entered
       const hasWeights = Object.values(wasteData).some(waste => waste.weight > 0);
       if (!hasWeights) {
-        throw new Error('Please enter weights for at least one waste type');
+        throw new Error('Silakan masukkan berat untuk setidaknya satu jenis sampah');
       }
 
       const pickupRef = doc(db, 'masterBankRequests', pickupId);
       
-      // Prepare wastes object with weights, values and points
+      // Prepare wastes object with weights and values
       const wastes = {};
       
       Object.entries(wasteData).forEach(([type, data]) => {
         if (data.weight > 0) {
-          // Get base type (remove any prefixes/suffixes)
           const baseType = type.split('-').pop().toLowerCase();
           const price = WASTE_PRICES[baseType] || 1000; // Default price if type not found
           
           wastes[type] = {
             weight: data.weight,
-            value: data.weight * price,
-            points: calculatePoints(data.weight)
+            value: data.weight * price
           };
         }
       });
@@ -160,16 +177,15 @@ const MasterUpdateCollection = () => {
         completedAt: new Date(),
         wastes,
         totalValue,
-        pointsAmount: calculatedPoints,
-        pointsAdded: false, // Will be set to true by the waste bank
         updatedAt: new Date()
       });
 
       Swal.fire({
-        title: 'Success',
-        text: 'Collection has been recorded successfully',
+        title: 'Berhasil',
+        text: 'Pengumpulan telah berhasil dicatat',
         icon: 'success',
-        confirmButtonColor: '#10B981'
+        confirmButtonColor: '#10B981',
+        confirmButtonText: 'OK'
       }).then(() => {
         navigate('/dashboard/collector');
       });
@@ -179,7 +195,8 @@ const MasterUpdateCollection = () => {
         title: 'Error',
         text: err.message,
         icon: 'error',
-        confirmButtonColor: '#10B981'
+        confirmButtonColor: '#10B981',
+        confirmButtonText: 'Tutup'
       });
     }
   };
@@ -191,6 +208,7 @@ const MasterUpdateCollection = () => {
         <main className={`flex-1 p-8 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+            <span className="ml-2 text-gray-600">Memuat data pengambilan...</span>
           </div>
         </main>
       </div>
@@ -209,7 +227,7 @@ const MasterUpdateCollection = () => {
               onClick={() => navigate('/dashboard/collector')}
               className="px-4 py-2 text-white rounded-lg bg-emerald-500"
             >
-              Return to Dashboard
+              Kembali ke Dashboard
             </button>
           </div>
         </main>
@@ -230,8 +248,23 @@ const MasterUpdateCollection = () => {
             <ArrowLeft className="w-6 h-6 text-gray-500" />
           </button>
           <div>
-            <h1 className="text-2xl font-semibold text-gray-800">Record Collection</h1>
-            <p className="text-sm text-gray-500">Enter waste weights for collection #{pickup?.id?.slice(0, 6)}</p>
+            <h1 className="text-2xl font-semibold text-gray-800">Catat Pengumpulan</h1>
+            <p className="text-sm text-gray-500">Masukkan berat sampah untuk pengambilan #{pickup?.id?.slice(0, 6)}</p>
+          </div>
+        </div>
+
+        {/* Info Banner */}
+        <div className="p-4 mb-6 border border-blue-200 rounded-lg bg-blue-50">
+          <div className="flex items-start gap-2">
+            <Info className="w-5 h-5 mt-0.5 text-blue-500 flex-shrink-0" />
+            <div>
+              <h3 className="font-medium text-blue-800">Petunjuk Pengisian</h3>
+              <p className="text-sm text-blue-600">
+                Masukkan berat aktual setiap jenis sampah dalam kilogram (kg). 
+                Data ini akan digunakan untuk menghitung nilai total sampah yang dikumpulkan.
+                Nilai dihitung secara otomatis berdasarkan harga pasar untuk setiap jenis sampah.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -247,37 +280,23 @@ const MasterUpdateCollection = () => {
           </div>
         </div>
 
-        {/* Points and Value Summary */}
+        {/* Value Summary */}
         <div className="p-6 mb-6 bg-white border border-gray-200 rounded-xl">
           <h3 className="flex items-center gap-2 mb-4 font-medium text-gray-900">
             <Calculator className="w-5 h-5 text-emerald-500" />
-            Points & Value Calculation
+            Perhitungan Nilai
           </h3>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div className="p-4 rounded-lg bg-emerald-50">
-              <div className="flex items-start gap-3">
-                <Coins className="w-5 h-5 text-emerald-600" />
-                <div>
-                  <p className="text-sm font-medium text-emerald-800">Total Points</p>
-                  <p className="mt-1 text-2xl font-semibold text-emerald-700">
-                    {calculatedPoints} points
-                  </p>
-                  <p className="mt-1 text-xs text-emerald-600">1 point per {POINTS_CONVERSION_RATE} Rupiah</p>
-                </div>
-              </div>
-            </div>
-            <div className="p-4 rounded-lg bg-blue-50">
-              <div className="flex items-start gap-3">
-                <Scale className="w-5 h-5 text-blue-600" />
-                <div>
-                  <p className="text-sm font-medium text-blue-800">Total Value</p>
-                  <p className="mt-1 text-2xl font-semibold text-blue-700">
-                    Rp {totalValue.toLocaleString()}
-                  </p>
-                  <p className="mt-1 text-xs text-blue-600">
-                    Based on waste type market values
-                  </p>
-                </div>
+          <div className="p-4 rounded-lg bg-blue-50">
+            <div className="flex items-start gap-3">
+              <Scale className="w-5 h-5 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium text-blue-800">Total Nilai</p>
+                <p className="mt-1 text-2xl font-semibold text-blue-700">
+                  Rp {totalValue.toLocaleString()}
+                </p>
+                <p className="mt-1 text-xs text-blue-600">
+                  Berdasarkan nilai pasar untuk setiap jenis sampah
+                </p>
               </div>
             </div>
           </div>
@@ -290,20 +309,64 @@ const MasterUpdateCollection = () => {
               const wasteDetails = getWasteDetails(typeId);
               const price = WASTE_PRICES[typeId] || 0;
               
+              // Improved function to get consistent waste type names
+              const getWasteTypeName = (typeId) => {
+                // First try to get name from wasteDetails (from constants)
+                if (wasteDetails) return wasteDetails.name;
+                
+                // Otherwise, look through waste types structure
+                for (const category of wasteTypes) {
+                  if (category.id === typeId) {
+                    return category.name.split(' ').slice(1).join(' '); // Remove emoji
+                  }
+                  
+                  // Check in subcategories if present
+                  if (category.subcategories) {
+                    for (const subcat of category.subcategories) {
+                      for (const type of subcat.types) {
+                        if (type.id === typeId) {
+                          return type.name;
+                        }
+                      }
+                    }
+                  }
+                  // Check in direct types if present
+                  else if (category.types) {
+                    for (const type of category.types) {
+                      if (type.id === typeId) {
+                        return type.name;
+                      }
+                    }
+                  }
+                }
+                
+                // Fallback translations for basic categories (if specific type not found)
+                const basicTranslations = {
+                  'plastic': 'Plastik',
+                  'paper': 'Kertas',
+                  'organic': 'Organik',
+                  'metal': 'Logam',
+                  'glass': 'Kaca',
+                  'electronic': 'Elektronik',
+                  'fabric': 'Kain',
+                  'others': 'Lainnya',
+                  'kabel': 'Kabel'
+                };
+                
+                return basicTranslations[typeId.toLowerCase()] || typeId;
+              };
+              
               return (
                 <div key={typeId} className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-gray-50">
                   <div>
                     <p className="font-medium text-gray-900">
-                      {wasteDetails ? wasteDetails.name : typeId}
+                      {getWasteTypeName(typeId)}
                     </p>
-                    <p className="text-sm text-gray-500">Quantity: {quantity} bags</p>
+                    <p className="text-sm text-gray-500">Jumlah: {quantity} kantong</p>
                     {wasteData[typeId]?.weight > 0 && (
                       <div className="mt-2 text-sm">
-                        <p className="text-emerald-600">
-                          Points: {calculatePoints(wasteData[typeId].weight * price)}
-                        </p>
                         <p className="text-blue-600">
-                          Value: Rp {(wasteData[typeId].weight * price).toLocaleString()}
+                          Nilai: Rp {(wasteData[typeId].weight * price).toLocaleString()}
                         </p>
                       </div>
                     )}
@@ -312,7 +375,7 @@ const MasterUpdateCollection = () => {
                     type="number"
                     min="0"
                     step="0.1"
-                    placeholder="Enter weight (kg)"
+                    placeholder="Masukkan berat (kg)"
                     value={wasteData[typeId]?.weight || ''}
                     onChange={(e) => handleWeightChange(typeId, e.target.value)}
                     className="text-right"
@@ -328,7 +391,7 @@ const MasterUpdateCollection = () => {
               className="px-6 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 
                 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
-              Complete Collection
+              Selesaikan Pengumpulan
             </button>
           </div>
         </form>
