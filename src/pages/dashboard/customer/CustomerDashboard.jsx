@@ -1,21 +1,23 @@
 // src/pages/dashboard/customer/CustomerDashboard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import { 
+import {
   Home,
-  Camera, 
-  Calendar, 
-  MapPin, 
-  Gift, 
+  Camera,
+  Calendar,
+  MapPin,
+  Gift,
   Clock,
   Bell,
   User,
+  ShoppingBag,
   Menu,
   X,
   LogOut,
   Settings,
+  Wallet,
   ChevronDown
 } from 'lucide-react';
 
@@ -30,6 +32,8 @@ import Marketplace from './CustomerMarketplace';
 import ProductDetails from './ProductDetails';
 import Checkout from './Checkout';
 import OrderConfirmation from './OrderConfirmation';
+import CustomerProfile from './Profile';
+import DevelopmentModal from '../../../components/DevelopmentModal';
 
 const CustomerDashboard = () => {
   const { userData, logout } = useAuth();
@@ -37,19 +41,19 @@ const CustomerDashboard = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isDevelopmentModalOpen, setIsDevelopmentModalOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
 
   // Navigation items configuration
   const navItems = [
-    { id: 'home', icon: Home, label: 'Home' },
-    { id: 'detect', icon: Camera, label: 'Cek Sampah' },
+    { id: 'home', icon: Home, label: 'Beranda' },
+    { id: 'detect', icon: Camera, label: 'Deteksi' },
     { id: 'schedule', icon: Calendar, label: 'Setor' },
-    { id: 'marketplace', icon: Gift, label: 'Marketplace' },
-    { id: 'history', icon: Clock, label: 'Buku Tabungan' },
-    
-    // { id: 'history', icon: Clock, label: 'History' }
+    { id: 'marketplace', icon: ShoppingBag, label: 'Toko' },
+    { id: 'history', icon: Wallet, label: 'Tabungan' },
+
   ];
 
   // Simulated notifications
@@ -86,7 +90,7 @@ const CustomerDashboard = () => {
 
       if (result.isConfirmed) {
         await logout();
-        
+
         await Swal.fire({
           title: 'Berhasil Keluar',
           text: 'Anda telah berhasil keluar dari akun Anda.',
@@ -131,6 +135,35 @@ const CustomerDashboard = () => {
     setIsMobileMenuOpen(false);
   };
 
+  // Handle profile
+  const handleProfileNavigation = () => {
+    const event = new CustomEvent('setActiveTab', { detail: 'profile' });
+    window.dispatchEvent(event);
+    setIsProfileOpen(false); // Reset isProfileOpen when navigating
+  };
+
+  const handleSettingNavigation = () => {
+    setIsDevelopmentModalOpen(true);
+    setIsProfileOpen(false); // Reset isProfileOpen when navigating
+  };
+
+  // Prevent body scrolling when development modal is open
+  useEffect(() => {
+    if (isDevelopmentModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [isDevelopmentModalOpen]);
+
+  useEffect(() => {
+    // Reset isProfileOpen when the location changes
+    setIsProfileOpen(false);
+  }, [location]);
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -166,10 +199,10 @@ const CustomerDashboard = () => {
   // Render active component
   const renderContent = () => {
     // Only render marketplace component on the main marketplace page
-    if (activeTab === 'marketplace' && 
-        !location.pathname.includes('/product/') && 
-        !location.pathname.includes('/checkout') && 
-        !location.pathname.includes('/order-confirmation')) {
+    if (activeTab === 'marketplace' &&
+      !location.pathname.includes('/product/') &&
+      !location.pathname.includes('/checkout') &&
+      !location.pathname.includes('/order-confirmation')) {
       return <Marketplace />;
     }
 
@@ -182,6 +215,8 @@ const CustomerDashboard = () => {
         return <SchedulePickup />;
       case 'history':
         return <History />;
+      case 'profile':
+        return <CustomerProfile />;
       default:
         return <HomePage />;
     }
@@ -190,7 +225,7 @@ const CustomerDashboard = () => {
   return (
     <div className="sm:min-h-screen">
       {/* Top Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-white border-b border-gray-100 px-6">
+      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-white border-b border-gray-100 px-6 shadow-sm">
         <div className="flex items-center justify-between h-full">
           {/* Left side - Brand/Logo */}
           <div className="flex items-center gap-3">
@@ -211,8 +246,8 @@ const CustomerDashboard = () => {
           <div className="flex items-center gap-2 sm:gap-4">
             {/* Notifications */}
             <div className="relative notification-menu">
-              <button 
-                className="relative p-2 rounded-lg hover:bg-gray-100"
+              <button
+                className="bg-white relative p-2 rounded-lg hover:bg-gray-100"
                 onClick={() => setIsNotificationOpen(!isNotificationOpen)}
               >
                 <Bell className="w-5 h-5 text-gray-600" />
@@ -241,8 +276,8 @@ const CustomerDashboard = () => {
 
             {/* User Menu */}
             <div className="relative profile-menu">
-              <button 
-                className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100"
+              <button
+                className="bg-white flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100"
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
               >
                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-100">
@@ -259,16 +294,22 @@ const CustomerDashboard = () => {
                   <div className="px-4 py-2 border-b border-gray-100">
                     <p className="text-md font-semibold text-gray-700 sm:text-lg">Akun Saya</p>
                   </div>
-                  <button className="flex items-center w-full bg-white gap-2 px-4 py-2 text-left hover:bg-gray-50">
+                  <button
+                    onClick={() => handleProfileNavigation()}
+                    className="mt-2 flex items-center w-full bg-white gap-2 px-4 py-2 text-left hover:bg-gray-50"
+                  >
                     <User className="w-4 h-4 text-gray-600" />
                     <span className="text-sm text-gray-700">Profile</span>
                   </button>
-                  <button className="flex items-center w-full bg-white gap-2 px-4 py-2 text-left hover:bg-gray-50">
+                  <button
+                    onClick={() => handleSettingNavigation()}
+                    className="flex items-center w-full bg-white gap-2 px-4 py-2 text-left hover:bg-gray-50"
+                  >
                     <Settings className="w-4 h-4 text-gray-600" />
                     <span className="text-sm text-gray-700">Pengaturan</span>
                   </button>
-                  <div className="mt-3 border-t bg-white border-gray-100">
-                    <button 
+                  <div className="mt-2 border-t bg-white border-gray-100">
+                    <button
                       onClick={handleSignOut}
                       className="flex items-center w-full gap-2 bg-white px-4 py-2 text-left text-red-600 hover:bg-gray-50"
                     >
@@ -286,7 +327,7 @@ const CustomerDashboard = () => {
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
-            onClick={() => setIsMobileMenuOpen(false)} />
+          onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
       {/* Main Content */}
@@ -300,29 +341,35 @@ const CustomerDashboard = () => {
         </Routes>
       </div>
 
+      {/* Development Modal */}
+      <DevelopmentModal 
+        isOpen={isDevelopmentModalOpen} 
+        onClose={() => setIsDevelopmentModalOpen(false)} 
+      />
+
       {/* Bottom Navigation - Only show if not in product detail/checkout/confirmation */}
-      {!location.pathname.includes('/product/') && 
-       !location.pathname.includes('/checkout') && 
-       !location.pathname.includes('/order-confirmation') && (
-        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100">
-          <div className="flex items-center justify-around h-16">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleNavigation(item.id)}
-                className={`flex flex-col items-center p-2 min-w-[64px] transition-colors
-                  ${activeTab === item.id 
-                    ? 'text-emerald-500 bg-emerald-50 rounded-lg' 
-                    : 'text-gray-500 hover:text-emerald-400 hover:bg-gray-50'
-                  }`}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="mt-1 text-xs font-medium">{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </nav>
-      )}
+      {!location.pathname.includes('/product/') &&
+        !location.pathname.includes('/checkout') &&
+        !location.pathname.includes('/order-confirmation') && (
+          <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-b border-gray-100 shadow-[0_4px_12px_rgba(0,0,0,0.1)]">
+            <div className="flex items-center justify-around h-16">
+              {navItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavigation(item.id)}
+                  className={`bg-white flex flex-col items-center p-2 min-w-[64px] transition-colors
+                  ${activeTab === item.id
+                      ? 'text-emerald-500 bg-emerald-50 rounded-lg'
+                      : 'text-gray-500 hover:text-emerald-400 hover:bg-gray-50'
+                    }`}
+                >
+                  <item.icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span className="mt-1 text-[11px]">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </nav>
+        )}
     </div>
   );
 };

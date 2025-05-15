@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { 
-  LogIn, 
-  Mail, 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  Check, 
-  Bell, 
-  Zap 
+import {
+  LogIn,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  Check,
+  Bell,
+  Zap
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
@@ -43,24 +43,53 @@ export default function Login() {
         }
       });
 
-      navigate('/dashboard');
-    } catch (err) {
-      // SweetAlert2 untuk notifikasi error dengan tampilan custom
-      Swal.fire({
-        icon: 'error',
-        title: 'Login Gagal',
-        text: 'Email atau password tidak valid',
-        background: '#fff5f5', // background merah muda muda
-        color: '#333',         // teks yang gelap untuk kontras
-        iconColor: '#d33',     // warna ikon error merah
-        confirmButtonColor: '#d33',
-        customClass: {
-          popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
-          title: 'text-xl sm:text-2xl font-semibold text-gray-800',
-          htmlContainer: 'text-sm sm:text-base text-gray-600',
-          confirmButton: 'text-sm sm:text-base'
-        }
+      // Check if we need to redirect to a specific page after login
+      const redirectPath = location.state?.redirectAfterLogin || '/dashboard';
+      navigate(redirectPath, {
+        state: location.state?.email ? { email: location.state.email } : undefined
       });
+    } catch (err) {
+      console.error("Login error:", err);
+      // Cek apakah error terkait verifikasi email
+      if (err.message && err.message.includes("Email belum diverifikasi")) {
+        // SweetAlert untuk error verifikasi email
+        Swal.fire({
+          icon: 'warning',
+          title: 'Email Belum Diverifikasi',
+          text: 'Silakan verifikasi email Anda.',
+          background: '#fff9e8',
+          color: '#333',
+          iconColor: '#f59e0b',
+          confirmButtonText: 'Pergi ke halaman verifikasi',
+          confirmButtonColor: '#f59e0b',
+          customClass: {
+            popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+            title: 'text-base sm:text-xl font-semibold text-gray-800',
+            htmlContainer: 'text-sm sm:text-base text-gray-600',
+            confirmButton: 'text-sm font-md sm:text-base',
+          }
+        }).then((result) => {
+          if (result.isConfirmed) {
+            navigate('/email-verification', { state: { email: formData.email } });
+          }
+        });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Login Gagal',
+          text: 'Email atau password tidak valid',
+          background: '#fff5f5',
+          color: '#333',
+          iconColor: '#d33',
+          confirmButtonColor: '#d33',
+          customClass: {
+            popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+            title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+            htmlContainer: 'text-sm sm:text-base text-gray-600',
+            confirmButton: 'text-sm sm:text-base'
+          }
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -94,7 +123,7 @@ export default function Login() {
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Mail className="w-4 h-4 text-gray-400 sm:w-5 sm:h-5"/>
+                    <Mail className="w-4 h-4 text-gray-400 sm:w-5 sm:h-5" />
                   </div>
                   <input
                     id="email"
@@ -136,6 +165,11 @@ export default function Login() {
                   >
                     {showPassword ? <EyeOff className="w-5 h-5 text-gray-400" /> : <Eye className="w-5 h-5 text-gray-400" />}
                   </span>
+                </div>
+                <div className="text-right">
+                  <Link to="/forgot-password" className="text-[10px] sm:text-sm font-medium text-emerald-600 hover:text-emerald-700 sm:text-sm">
+                    Lupa Password?
+                  </Link>
                 </div>
               </div>
               <button

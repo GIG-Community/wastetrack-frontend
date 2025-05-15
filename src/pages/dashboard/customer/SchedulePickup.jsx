@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import { 
+import {
   Calendar,
-  Clock, 
-  MapPin, 
-  Package, 
+  Clock,
+  MapPin,
+  Package,
   Trash2,
   AlertCircle,
   CheckCircle2,
@@ -24,20 +25,29 @@ import {
   Timer,
   Trees
 } from 'lucide-react';
-import { collection, addDoc, Timestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
+import getCurrentLocation from '../../../lib/utils/getCurrentLocation';
 import Swal from 'sweetalert2';
+import PickLocation from '../../../components/PickLocation';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 const SchedulePickup = () => {
-  const { userData, currentUser } = useAuth();
-  const [loading, setLoading] = useState(false);
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
+  const navigate = useNavigate();
+  const { userData, currentUser } = useAuth(); const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [step, setStep] = useState(1);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [wasteBanks, setWasteBanks] = useState([]);
   const [loadingWasteBanks, setLoadingWasteBanks] = useState(true);
-
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   // Form data
   const [formData, setFormData] = useState({
     deliveryType: '', // 'pickup' or 'self-delivery'
@@ -45,9 +55,9 @@ const SchedulePickup = () => {
     time: '',
     wasteTypes: [],
     wasteQuantities: {}, // Store quantities per waste type
-    location: userData?.profile?.address || '',
-    phone: '',
-    coordinates: null,
+    location: userData?.location?.address || '', // Use existing address from collection
+    phone: userData?.profile?.phone || '', // Use existing phone from profile
+    coordinates: userData?.profile?.location?.coordinates || null, // Use existing coordinates
     wasteBankId: '',
     wasteBankName: '',
     notes: '',
@@ -57,68 +67,84 @@ const SchedulePickup = () => {
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // Radius of the earth in km
     // Convert coordinates from degrees to radians
-    const lat1Rad = lat1 * Math.PI/180;
-    const lat2Rad = lat2 * Math.PI/180;
-    const deltaLat = (lat2 - lat1) * Math.PI/180;
-    const deltaLon = (lon2 - lon1) * Math.PI/180;
-    
+    const lat1Rad = lat1 * Math.PI / 180;
+    const lat2Rad = lat2 * Math.PI / 180;
+    const deltaLat = (lat2 - lat1) * Math.PI / 180;
+    const deltaLon = (lon2 - lon1) * Math.PI / 180;
+
     // Haversine formula
-    const a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
-            Math.cos(lat1Rad) * Math.cos(lat2Rad) + 
-            Math.sin(deltaLon/2) * Math.sin(deltaLon/2); 
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+      Math.cos(lat1Rad) * Math.cos(lat2Rad) +
+      Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c; // Distance in km
     return distance;
   };
 
   // Fetch waste banks - Menggunakan perhitungan jarak
   useEffect(() => {
-    const fetchWasteBanks = async () => {
+    let unsubscribe = null;
+
+    const fetchWasteBanks = () => {
       try {
+        setLoadingWasteBanks(true);
         const q = query(
           collection(db, 'users'),
           where('role', '==', 'wastebank_admin')
         );
-        const snapshot = await getDocs(q);
-        let wasteBankData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          distance: null // Tambahkan properti distance
-        }));
-        
-        // Jika ada koordinat pengguna, hitung jarak untuk setiap bank sampah
-        if (formData.coordinates) {
-          wasteBankData = wasteBankData.map(bank => {
-            const bankCoords = bank.profile?.location?.coordinates;
-            if (bankCoords) {
-              const distance = calculateDistance(
-                formData.coordinates.lat,
-                formData.coordinates.lng,
-                bankCoords.lat,
-                bankCoords.lng
-              );
-              return { ...bank, distance };
-            }
-            return bank;
-          });
 
-          // Urutkan bank sampah berdasarkan jarak
-          wasteBankData.sort((a, b) => {
-            if (a.distance === null) return 1;
-            if (b.distance === null) return -1;
-            return a.distance - b.distance;
-          });
-        }
-        
-        setWasteBanks(wasteBankData);
+        // Replace getDocs with onSnapshot
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          let wasteBankData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            distance: null // Tambahkan properti distance
+          }));
+
+          // Jika ada koordinat pengguna, hitung jarak untuk setiap bank sampah
+          if (formData.coordinates) {
+            wasteBankData = wasteBankData.map(bank => {
+              const bankCoords = bank.profile?.location?.coordinates;
+              if (bankCoords) {
+                const distance = calculateDistance(
+                  formData.coordinates.lat,
+                  formData.coordinates.lng,
+                  bankCoords.lat,
+                  bankCoords.lng
+                );
+                return { ...bank, distance };
+              }
+              return bank;
+            });
+
+            // Urutkan bank sampah berdasarkan jarak
+            wasteBankData.sort((a, b) => {
+              if (a.distance === null) return 1;
+              if (b.distance === null) return -1;
+              return a.distance - b.distance;
+            });
+          }
+
+          setWasteBanks(wasteBankData);
+          setLoadingWasteBanks(false);
+        }, (error) => {
+          console.error('Error fetching waste banks:', error);
+          setLoadingWasteBanks(false);
+        });
       } catch (error) {
-        console.error('Error fetching waste banks:', error);
-      } finally {
+        console.error('Error setting up waste banks listener:', error);
         setLoadingWasteBanks(false);
       }
     };
 
     fetchWasteBanks();
+
+    // Clean up the subscription when component unmounts or dependencies change
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [formData.coordinates]); // Tambahkan coordinates sebagai dependency
 
   // Available waste types with detailed categories
@@ -248,36 +274,67 @@ const SchedulePickup = () => {
     { time: '13:00-15:00', available: true },
     { time: '15:00-17:00', available: true }
   ];
-
-  // Get current location
-  const getCurrentLocation = () => {
+  // Fixed handleGetLocation function for SchedulePickup.jsx
+  const handleGetLocation = () => {
     setGettingLocation(true);
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          try {
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-            );
-            const data = await response.json();
-            setFormData(prev => ({
-              ...prev,
-              location: data.display_name,
-              coordinates: { lat: latitude, lng: longitude }
-            }));
-          } catch (error) {
-            console.error('Error getting address:', error);
-          } finally {
-            setGettingLocation(false);
-          }
-        },
-        (error) => {
-          console.error('Error:', error);
-          setGettingLocation(false);
+    getCurrentLocation({
+      onSuccess: (locationData) => {
+        // The locationData object contains parsed coordinates as strings
+        // Make sure we're setting the coordinates with proper lat/lng structure
+        if (locationData.coordinates) {
+          setFormData(prev => ({
+            ...prev,
+            coordinates: {
+              lat: parseFloat(locationData.coordinates.lat),
+              lng: parseFloat(locationData.coordinates.lng)
+            },
+            // Update address fields with data from reverse geocoding if available
+            location: locationData.address || prev.location,
+            // Keep phone number from user profile (don't overwrite)
+            city: locationData.city || prev.city,
+            province: locationData.province || prev.province
+          }));
         }
-      );
-    }
+        setGettingLocation(false);
+      },
+      onLoading: (loading) => {
+        setGettingLocation(loading);
+      },
+      onError: (error) => {
+        console.error('Error getting location:', error);
+        setGettingLocation(false);
+        // Display error to user using Swal
+        Swal.fire({
+          title: 'Error',
+          text: 'Gagal mendapatkan lokasi. Silakan coba lagi.',
+          icon: 'error',
+          confirmButtonColor: '#10B981',
+          customClass: {
+            popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+            title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+            htmlContainer: 'text-sm sm:text-base text-gray-600',
+            confirmButton: 'text-sm sm:text-base'
+          }
+        });
+      },
+      includeAddress: true
+    });
+  };
+  const handleLocationCorrection = () => {
+    setShowLocationPicker(true);
+  };
+
+  // Handle saving location from PickLocation component
+  const handleSaveLocation = (locationData) => {
+    setFormData(prev => ({
+      ...prev,
+      location: locationData.address,
+      coordinates: {
+        lat: locationData.latitude,
+        lng: locationData.longitude
+      }
+    }));
+    setShowLocationPicker(false);
   };
 
   // Handle waste quantity change
@@ -285,11 +342,11 @@ const SchedulePickup = () => {
     setFormData(prev => {
       const currentQuantity = prev.wasteQuantities[typeId] || 0;
       const newQuantity = Math.max(0, Math.min(10, currentQuantity + change));
-  
+
       // Copy existing waste types and quantities
       const updatedWasteTypes = [...prev.wasteTypes];
       const updatedWasteQuantities = { ...prev.wasteQuantities };
-  
+
       if (newQuantity === 0) {
         // Delete waste type if quantity is 0
         const index = updatedWasteTypes.indexOf(typeId);
@@ -299,14 +356,14 @@ const SchedulePickup = () => {
         // Still keep the waste type in the list
         updatedWasteQuantities[typeId] = newQuantity;
       }
-  
+
       return {
         ...prev,
         wasteTypes: updatedWasteTypes,
         wasteQuantities: updatedWasteQuantities
       };
     });
-  };  
+  };
 
   // Calculate total amount
   const calculateTotal = () => {
@@ -322,7 +379,7 @@ const SchedulePickup = () => {
     if (!value) return value;
     const phoneNumber = value.replace(/[^\d]/g, '');
     const phoneNumberLength = phoneNumber.length;
-    
+
     if (phoneNumberLength < 5) return phoneNumber;
     if (phoneNumberLength < 9) {
       return `${phoneNumber.slice(0, 4)}-${phoneNumber.slice(4)}`;
@@ -427,13 +484,13 @@ const SchedulePickup = () => {
       });
     }
   }, [success]);
-  
+
 
   return (
     <div className="max-w-3xl mx-auto">
       <div className="p-4 mb-8 text-white bg-gradient-to-r from-emerald-500 to-emerald-700 rounded-2xl">
         <h1 className="mb-2 text-lg sm:text-2xl font-bold">Setor Sampah</h1>
-        <p className="text-sm sm:text-md text-emerald-50">Mari kami bantu mengelola sampah Anda secara berkelanjutan</p>
+        <p className="text-sm sm:text-md text-emerald-50">Bantu kelola sampah Anda dengan berkelanjutan</p>
       </div>
 
       {/* Steps indicator with progress bar */}
@@ -445,7 +502,7 @@ const SchedulePickup = () => {
               className="h-1 sm:h-2 transition-all duration-300 rounded-full bg-emerald-500"
               style={{
                 width: `${((step - 1) / ((formData.deliveryType === 'pickup' ? 6 : 4) - 1)) * 100}%`
-              }}              
+              }}
             />
           </div>
           <div className="absolute left-0 flex justify-between w-full -top-2">
@@ -457,11 +514,11 @@ const SchedulePickup = () => {
                   className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-sm
                     transition-all duration-300 -ml-3 first:ml-0 last:ml-0
                     ${step > index + 1 ? 'bg-emerald-500 text-white' :
-                    step === index + 1 ? 'bg-emerald-500 text-white' :
-                    'bg-gray-200 text-gray-500'}`}
-                    style={{
-                      left: `${(index / ((formData.deliveryType === 'pickup' ? 6 : 4) - 1)) * 100}%`
-                    }}                    
+                      step === index + 1 ? 'bg-emerald-500 text-white' :
+                        'bg-gray-200 text-gray-500'}`}
+                  style={{
+                    left: `${(index / ((formData.deliveryType === 'pickup' ? 6 : 4) - 1)) * 100}%`
+                  }}
                 >
                   {step > index + 1 ? (
                     <Check className="w-4 h-4" />
@@ -469,7 +526,7 @@ const SchedulePickup = () => {
                     <span className="text-xs">{index + 1}</span>
                   )}
                 </div>
-            ))}
+              ))}
           </div>
         </div>
 
@@ -479,7 +536,7 @@ const SchedulePickup = () => {
             .slice(0, formData.deliveryType === 'pickup' ? 6 : 4)
             .map((text) => (
               <div key={text} className="flex-1 text-center">{text}</div>
-          ))}
+            ))}
         </div>
       </div>
 
@@ -531,7 +588,7 @@ const SchedulePickup = () => {
                       )}
                     </div>
                   </button>
-                  
+
                   <button
                     type="button"
                     onClick={() => setFormData({ ...formData, deliveryType: 'self-delivery' })}
@@ -540,11 +597,11 @@ const SchedulePickup = () => {
                         ? 'border-emerald-500 bg-emerald-50'
                         : 'border-gray-200 hover:border-emerald-200'
                       }`}
-                  > 
+                  >
                     <div className="flex items-start justify-between">
                       <div className="w-full">
                         <div className="flex items-center gap-2 cursor-pointer"
-                            onClick={() => setFormData({ ...formData, deliveryType: 'self-delivery' })}>
+                          onClick={() => setFormData({ ...formData, deliveryType: 'self-delivery' })}>
                           <div className="flex items-center rounded-md justify-center w-8 h-8 sm:rounded-lg bg-emerald-100">
                             <Package className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
                           </div>
@@ -612,7 +669,7 @@ const SchedulePickup = () => {
                               ${formData.wasteBankId === bank.id ? 'bg-emerald-100' : 'bg-gray-100 group-hover:bg-emerald-100'}`}
                             >
                               <Building2 className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors duration-300
-                                ${formData.wasteBankId === bank.id ? 'text-emerald-600' : 'text-gray-600 group-hover:text-emerald-600'}`} 
+                                ${formData.wasteBankId === bank.id ? 'text-emerald-600' : 'text-gray-600 group-hover:text-emerald-600'}`}
                               />
                             </div>
                             <div>
@@ -626,12 +683,12 @@ const SchedulePickup = () => {
                                 </p>
                               </div>
                               <div className="items-center gap-4 mt-2">
-                                {bank.distance !== null && (
+                                {/* {bank.distance !== null && (
                                   <div className="flex items-center text-sm text-gray-600">
                                     <Navigation className="w-4 h-4 mr-1 text-blue-500" />
                                     <span>{bank.distance.toFixed(1)} km</span>
                                   </div>
-                                )}
+                                )} */}
                                 <div className="flex gap-2">
                                   <div className="flex items-center px-3 text-[8px] sm:text-sm text-emerald-700 bg-emerald-100 rounded-full">
                                     <Trees className="w-3 h-3 sm:w-4 sm:h-4 mr-1 text-emerald-500" />
@@ -642,7 +699,7 @@ const SchedulePickup = () => {
                                     <span>Layanan Cepat</span>
                                   </div>
                                 </div>
-                                <div> 
+                                <div>
                                   {bank.profile?.phone && (
                                     <div className="mt-4 flex items-center text-sm text-gray-600">
                                       <Phone className="w-4 h-4 mr-1 text-gray-400" />
@@ -687,14 +744,14 @@ const SchedulePickup = () => {
                 </div>
               </div>
               <div className="pb-6 sm:p-6">
-              <input
-                type="date"
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                min={new Date().toISOString().split('T')[0]}
-                className="w-full p-3 border border-gray-200 bg-white rounded-lg text-sm"
-                required
-              />
+                <input
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full p-3 border border-gray-200 bg-white rounded-lg text-sm"
+                  required
+                />
               </div>
             </div>
 
@@ -760,75 +817,73 @@ const SchedulePickup = () => {
                               <div key={idx} className="space-y-2">
                                 <h4 className="text-md font-medium text-gray-700">{subcat.name}</h4>
                                 <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
-                                {subcat.types.map(type => {
-                                  const isChecked = formData.wasteTypes.includes(type.id);
-                                  const quantity = formData.wasteQuantities[type.id] || 0;
+                                  {subcat.types.map(type => {
+                                    const isChecked = formData.wasteTypes.includes(type.id);
+                                    const quantity = formData.wasteQuantities[type.id] || 0;
 
-                                  return (
-                                    <div key={type.id} className="space-y-1">
-                                      <label className="flex items-center justify-between p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-                                        <div className="flex items-center">
-                                          <input
-                                            type="checkbox"
-                                            checked={isChecked}
-                                            onChange={() => {
-                                              const newTypes = isChecked
-                                                ? formData.wasteTypes.filter(t => t !== type.id)
-                                                : [...formData.wasteTypes, type.id];
-                                              setFormData(prev => ({
-                                                ...prev,
-                                                wasteTypes: newTypes,
-                                                wasteQuantities: {
-                                                  ...prev.wasteQuantities,
-                                                  [type.id]: newTypes.includes(type.id) ? 1 : 0
-                                                }
-                                              }));
-                                            }}
-                                            className="w-3 h-3 sm:w-4 sm:h-4 border-gray-300 rounded text-emerald-500 focus:ring-emerald-500"
-                                          />
-                                          <span className="ml-2 text-sm text-gray-700">{type.name}</span>
-                                        </div>
-                                      </label>
-
-                                      {isChecked && (
-                                        <div className="flex items-center justify-between px-3 py-2 bg-white rounded-md sm:shadow-sm border">
-                                          <div className="flex items-center gap-3">
-                                            <div className="flex items-center">
-                                              <button
-                                                type="button"
-                                                onClick={() => handleQuantityChange(type.id, -1)}
-                                                disabled={quantity <= 0}
-                                                className={`p-2 rounded-l-md ${
-                                                  quantity <= 0
-                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                    : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
-                                                }`}
-                                              >
-                                                <Minus className="w-3 h-3 sm:w-5 sm:h-5" strokeWidth={2.5} />
-                                              </button>
-                                              <div className="w-12 h-[32px] border-y bg-white flex items-center justify-center text-sm sm:text-base font-semibold text-gray-800">
-                                                {quantity}
-                                              </div>
-                                              <button
-                                                type="button"
-                                                onClick={() => handleQuantityChange(type.id, 1)}
-                                                disabled={quantity >= 10}
-                                                className={`p-2 rounded-r-md ${
-                                                  quantity >= 10
-                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                    : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
-                                                }`}
-                                              >
-                                                <Plus className="w-3 h-3 sm:w-5 sm:h-5" strokeWidth={2.5} />
-                                              </button>
-                                            </div>
-                                            <span className="text-xs sm:text-sm font-medium text-gray-500 min-w-[60px]">kantong</span>
+                                    return (
+                                      <div key={type.id} className="space-y-1">
+                                        <label className="flex items-center justify-between p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+                                          <div className="flex items-center">
+                                            <input
+                                              type="checkbox"
+                                              checked={isChecked}
+                                              onChange={() => {
+                                                const newTypes = isChecked
+                                                  ? formData.wasteTypes.filter(t => t !== type.id)
+                                                  : [...formData.wasteTypes, type.id];
+                                                setFormData(prev => ({
+                                                  ...prev,
+                                                  wasteTypes: newTypes,
+                                                  wasteQuantities: {
+                                                    ...prev.wasteQuantities,
+                                                    [type.id]: newTypes.includes(type.id) ? 1 : 0
+                                                  }
+                                                }));
+                                              }}
+                                              className="w-3 h-3 sm:w-4 sm:h-4 border-gray-300 rounded text-emerald-500 focus:ring-emerald-500"
+                                            />
+                                            <span className="ml-2 text-sm text-gray-700">{type.name}</span>
                                           </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
+                                        </label>
+
+                                        {isChecked && (
+                                          <div className="flex items-center justify-between px-3 py-2 bg-white rounded-md sm:shadow-sm border">
+                                            <div className="flex items-center gap-3">
+                                              <div className="flex items-center">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleQuantityChange(type.id, -1)}
+                                                  disabled={quantity <= 0}
+                                                  className={`p-2 rounded-l-md ${quantity <= 0
+                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
+                                                    }`}
+                                                >
+                                                  <Minus className="w-3 h-3 sm:w-5 sm:h-5" strokeWidth={2.5} />
+                                                </button>
+                                                <div className="w-12 h-[32px] border-y bg-white flex items-center justify-center text-sm sm:text-base font-semibold text-gray-800">
+                                                  {quantity}
+                                                </div>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleQuantityChange(type.id, 1)}
+                                                  disabled={quantity >= 10}
+                                                  className={`p-2 rounded-r-md ${quantity >= 10
+                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
+                                                    }`}
+                                                >
+                                                  <Plus className="w-3 h-3 sm:w-5 sm:h-5" strokeWidth={2.5} />
+                                                </button>
+                                              </div>
+                                              <span className="text-xs sm:text-sm font-medium text-gray-500 min-w-[60px]">kantong</span>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             ))}
@@ -874,11 +929,10 @@ const SchedulePickup = () => {
                                             type="button"
                                             onClick={() => handleQuantityChange(type.id, -1)}
                                             disabled={quantity <= 0}
-                                            className={`p-2 rounded-l-md ${
-                                              quantity <= 0
-                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
-                                            }`}
+                                            className={`p-2 rounded-l-md ${quantity <= 0
+                                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                              : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
+                                              }`}
                                           >
                                             <Minus className="w-3 h-3 sm:w-5 sm:h-5" strokeWidth={2.5} />
                                           </button>
@@ -889,11 +943,10 @@ const SchedulePickup = () => {
                                             type="button"
                                             onClick={() => handleQuantityChange(type.id, 1)}
                                             disabled={quantity >= 10}
-                                            className={`p-2 rounded-r-md ${
-                                              quantity >= 10
-                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
-                                            }`}
+                                            className={`p-2 rounded-r-md ${quantity >= 10
+                                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                              : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
+                                              }`}
                                           >
                                             <Plus className="w-3 h-3 sm:w-5 sm:h-5" strokeWidth={2.5} />
                                           </button>
@@ -928,29 +981,56 @@ const SchedulePickup = () => {
                 <p className="mt-1 text-sm text-gray-500">Di mana kami harus menjemput sampah Anda?</p>
               </div>
               <div className="sm:p-6 space-y-4">
-                <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
+                <div className="flex flex-col items-start justify-between gap-4 sm:flex-col">
                   <textarea
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     className="w-full p-3 border border-gray-200 rounded-lg placeholder:text-xs text-sm"
-                    rows="5"
+                    rows="4"
                     placeholder="Masukkan alamat lengkap Anda"
                     required
                   />
                   <button
                     type="button"
-                    onClick={getCurrentLocation}
-                    className="flex items-center flex-shrink-0 gap-2 px-4 py-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 text-sm"
+                    onClick={handleGetLocation}
+                    className="flex items-center w-full flex-shrink-0 gap-2 px-4 py-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 text-sm"
                   >
                     {gettingLocation ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <Navigation className="w-4 h-4" />
                     )}
-                    Gunakan Lokasi Saat Ini
+                    Lokasi Saat Ini
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleLocationCorrection}
+                    className="flex items-center w-full flex-shrink-0 gap-2 px-4 py-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 text-sm"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Pilih Lokasi Manual
+                  </button>
+
+                  {/* Location Picker Modal */}
+                  {showLocationPicker && (
+                    <div className="inset-0 z-40 flex items-center justify-center sm:bg-black sm:bg-opacity-50">
+                      <div className="w-full h-full">
+                        <PickLocation
+                          initialLocation={formData.coordinates ? {
+                            latitude: formData.coordinates.lat,
+                            longitude: formData.coordinates.lng
+                          } : null}
+                          onSaveLocation={handleSaveLocation}
+                          onCancel={() => setShowLocationPicker(false)}
+                          pageTitle="Pilih Lokasi Penjemputan"
+                          useFirebase={false}
+                          allowBack={true}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                
+
                 <input
                   type="tel"
                   value={formData.phone}
@@ -973,6 +1053,7 @@ const SchedulePickup = () => {
           </div>
         )}
 
+
         {/* Step 5 (pickup) or Step 4 (self-delivery): Confirmation */}
         {((formData.deliveryType === 'pickup' && step === 6) || (formData.deliveryType === 'self-delivery' && step === 4)) && (
           <div className="overflow-hidden sm:bg-white sm:shadow-lg rounded-xl">
@@ -980,7 +1061,7 @@ const SchedulePickup = () => {
               <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Tinjau {formData.deliveryType === 'pickup' ? 'Penjemputan' : 'Pengantaran'} Anda</h2>
               <p className="mt-1 text-sm text-gray-500">Harap konfirmasi detail informasi Anda</p>
             </div>
-            
+
             <div className="sm:p-6 text-left space-y-6">
               {/* WasteBank Info */}
               <div className="flex items-start gap-4">
@@ -1023,19 +1104,19 @@ const SchedulePickup = () => {
                 <div>
                   <p className="text-sm font-medium text-gray-500">Jadwal</p>
                   <p className="text-gray-900 text-sm font-semibold">
-                  <span>
-                    {new Date(formData.date).toLocaleDateString('id-ID', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </span>
-                  <br />
-                  <span>
-                    {formData.time}
-                  </span>
-                </p>
+                    <span>
+                      {new Date(formData.date).toLocaleDateString('id-ID', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </span>
+                    <br />
+                    <span>
+                      {formData.time}
+                    </span>
+                  </p>
                 </div>
               </div>
 
@@ -1102,13 +1183,13 @@ const SchedulePickup = () => {
               Kembali
             </button>
           )}
-          
+
           {((formData.deliveryType === 'pickup' && step < 6) || (formData.deliveryType === 'self-delivery' && step < 4)) && (
             <button
               type="button"
               onClick={() => {
                 let validationError = '';
-                
+
                 switch (step) {
                   case 1:
                     if (!formData.deliveryType) {
@@ -1142,12 +1223,12 @@ const SchedulePickup = () => {
                     }
                     break;
                 }
-                
+
                 if (validationError) {
                   setError(validationError);
                   return;
                 }
-                
+
                 setError('');
                 setStep(step + 1);
               }}
@@ -1157,7 +1238,7 @@ const SchedulePickup = () => {
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           )}
-          
+
           {((formData.deliveryType === 'pickup' && step === 6) || (formData.deliveryType === 'self-delivery' && step === 4)) && (
             <button
               type="submit"
@@ -1212,9 +1293,10 @@ const SchedulePickup = () => {
             >
               Jadwalkan Penjemputan Lainnya
             </button>
-          </div>
-        </div>
+          </div>        </div>
       )} */}
+
+
     </div>
   );
 };

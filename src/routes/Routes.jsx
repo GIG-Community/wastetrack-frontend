@@ -2,8 +2,16 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from '../pages/auth/Login';
 import Register from '../pages/auth/Register';
+import EmailVerification from '../pages/auth/EmailVerification';
+import ForgotPassword from '../pages/auth/ForgotPassword';
+import ResetPassword from '../pages/auth/ResetPassword';
 import Dashboard from '../pages/dashboard/Dashboard';
 import ProtectedRoute from '../components/ProtectedRoute';
+import NotFound from '../pages/NotFound';
+import Forbidden from '../pages/Forbidden';
+import ServerError from '../pages/ServerError';
+import Maintenance from '../pages/Maintenance';
+import DevelopmentModal from '../components/DevelopmentModal';
 
 // Import dashboard spesifik
 import SuperAdminDashboard from '../pages/dashboard/super-admin/SuperAdminDashboard';
@@ -32,6 +40,8 @@ import CustomerMarketplace from '../pages/dashboard/customer/CustomerMarketplace
 import ProductDetails from '../pages/dashboard/customer/ProductDetails';
 import Checkout from '../pages/dashboard/customer/Checkout';
 import OrderConfirmation from '../pages/dashboard/customer/OrderConfirmation';
+import CustomerProfile from '../pages/dashboard/customer/Profile';
+import PickLocation from '../components/PickLocation';
 import GovernmentDashboard from '../pages/dashboard/government/GovernmentDashboard';
 import WastebankReports from '../pages/dashboard/government/GovernmentReports';
 import GovernmentMonitoring from '../pages/dashboard/government/GovernmentMonitoring';
@@ -62,6 +72,9 @@ const AppRoutes = () => (
   <Routes>
     <Route path="/login" element={<Login />} />
     <Route path="/register" element={<Register />} />
+    <Route path="/email-verification" element={<EmailVerification />} />
+    <Route path="/forgot-password" element={<ForgotPassword />} />
+    <Route path="/reset-password" element={<ResetPassword />} />
     
     {/* General Protected route - redirects based on user role */}
     <Route path="/dashboard" element={
@@ -69,7 +82,24 @@ const AppRoutes = () => (
         <Dashboard />
       </ProtectedRoute>
     } />
+
+    {/* Error Pages */}
+    <Route path="/403" element={<Forbidden />} />
+    <Route path="/404" element={<NotFound />} />
+    <Route path="/500" element={<ServerError />} />
+
+    {/* Redirect to 404 for any unmatched routes */}
+    {/* <Route path="*" element={<NotFound />} /> */}
+
+    {/* Maintenance Page */}
+    <Route path="/maintenance" element={<Maintenance />} />
     
+    {/* Development Modal */}
+    <Route path="/feature-development" element={<DevelopmentModal />} />
+
+    {/* Location Correction */}
+    <Route path="/pick-location" element={<PickLocation />} />
+
     {/* Super Admin Routes */}
     <Route path="/dashboard/super-admin/*" element={
       <ProtectedRoute allowedRoles={['super_admin']}>
@@ -79,6 +109,7 @@ const AppRoutes = () => (
           <Route path="wastebanks" element={<WasteBanks />} />
           <Route path="settings" element={<SystemSettings />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -94,6 +125,7 @@ const AppRoutes = () => (
           <Route path="transactions" element={<Transactions />} />
           <Route path="salary" element={<SalaryManagement />} />
           <Route path="request-induk" element={<RequestCollection />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -108,6 +140,7 @@ const AppRoutes = () => (
           <Route path="routes" element={<CollectorRoutes />} />
           <Route path="collections" element={<CollectorCollections />} />
           <Route path="update-collection/:pickupId" element={<UpdateCollection />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -121,11 +154,13 @@ const AppRoutes = () => (
           <Route path="detect-waste" element={<DetectWaste />} />
           <Route path="history" element={<History />} />
           <Route path="rewards" element={<Rewards />} />
+          <Route path="profile" element={<CustomerProfile />} />
           <Route path="track-pickup" element={<TrackPickup />} />
           <Route path="marketplace" element={<CustomerMarketplace />} />
           <Route path="marketplace/product/:id" element={<ProductDetails />} />
           <Route path="marketplace/checkout" element={<Checkout />} />
           <Route path="marketplace/order-confirmation/:id" element={<OrderConfirmation />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -138,6 +173,7 @@ const AppRoutes = () => (
           <Route path="wastebank-reports" element={<WastebankReports />} />
           <Route path="monitoring" element={<GovernmentMonitoring />} />
           <Route path="analytics" element={<GovernmentAnalytics />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -152,6 +188,7 @@ const AppRoutes = () => (
           <Route path="reports" element={<EsgReport />} />
           <Route path="warehouse" element={<IndustryWarehouse />} />
           <Route path="salary" element={<IndustrySalary />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -167,6 +204,7 @@ const AppRoutes = () => (
           <Route path="salary" element={<MasterSalaryManagement />} />
           <Route path="reports" element={<MasterReports />} />
           <Route path="requests" element={<MasterRequestCollection />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -180,6 +218,7 @@ const AppRoutes = () => (
           <Route path="routes" element={<MasterRoutes />} />
           <Route path="collections" element={<MasterCollections />} />
           <Route path="update-collection/:pickupId" element={<MasterUpdateCollection />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
@@ -191,10 +230,11 @@ const AppRoutes = () => (
           <Route path="/" element={<MarketplaceDashboard />} />
           <Route path="products" element={<Products />} />
           <Route path="orders" element={<Orders />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
     } />
-
+    
     <Route path="*" element={<Navigate to="/login" replace />} />
   </Routes>
 );

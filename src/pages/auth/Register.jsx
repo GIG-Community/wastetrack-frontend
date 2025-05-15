@@ -17,6 +17,7 @@ import {
 import Swal from 'sweetalert2';
 import { GeoPoint, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import getCurrentLocation from '../../lib/utils/getCurrentLocation';
 
 // Daftar role yang tersedia (ditambah role super_admin)
 const ROLES = {
@@ -72,82 +73,31 @@ export default function Register() {
 
   // Fungsi untuk mendapatkan lokasi GPS dan melakukan reverse geocoding
   const handleGetLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          // Simpan data koordinat sebagai GeoPoint
+    getCurrentLocation({
+      onSuccess: (locationData) => {
+        if (locationData.coordinates) {
+          // Convert string coordinates to numbers for GeoPoint
+          const latitude = parseFloat(locationData.coordinates.lat);
+          const longitude = parseFloat(locationData.coordinates.lng);
+
           setFormData(prev => ({
             ...prev,
-            coordinates: new GeoPoint(lat, lng)
+            coordinates: new GeoPoint(latitude, longitude),
+            // Optionally update address fields if they're empty
+            address: prev.address || locationData.address || '',
+            city: prev.city || locationData.city || '',
+            province: prev.province || locationData.province || ''
           }));
-          try {
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`
-            );
-            const data = await response.json();
-            setFormData(prev => ({
-              ...prev,
-              address: data.address.road || '',
-              city: data.address.city || data.address.town || data.address.village || '',
-              province: data.address.state || ''
-            }));
-          } catch (err) {
-            console.error('Reverse geocoding failed', err);
-            Swal.fire({
-              icon: 'error',
-              title: 'Location Error',
-              text: 'Failed to retrieve address information.',
-              background: '#fff5f5',
-              color: '#333',
-              iconColor: '#d33',
-              confirmButtonColor: '#d33',
-              customClass: { 
-                popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
-                title: 'text-xl sm:text-2xl font-semibold text-gray-800',
-                htmlContainer: 'text-sm sm:text-base text-gray-600',
-                confirmButton: 'text-sm sm:text-base'
-              }
-            });
-          }
-        },
-        (error) => {
-          console.error("Error obtaining location:", error);
-          Swal.fire({
-            icon: 'error',
-            title: 'Location Error',
-            text: 'Unable to retrieve location.',
-            background: '#fff5f5',
-            color: '#333',
-            iconColor: '#d33',
-            confirmButtonColor: '#d33',
-            customClass: { 
-              popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
-              title: 'text-xl sm:text-2xl font-semibold text-gray-800',
-              htmlContainer: 'text-sm sm:text-base text-gray-600',
-              confirmButton: 'text-sm sm:text-base'
-            }
-          });
         }
-      );
-    } else {
-      Swal.fire({
-        icon: 'error',
-        title: 'Geolocation Unsupported',
-        text: 'Geolocation is not supported by your browser.',
-        background: '#fff5f5',
-        color: '#333',
-        iconColor: '#d33',
-        confirmButtonColor: '#d33',
-        customClass: { 
-          popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
-          title: 'text-xl sm:text-2xl font-semibold text-gray-800',
-          htmlContainer: 'text-sm sm:text-base text-gray-600',
-          confirmButton: 'text-sm sm:text-base'
-        }
-      });
-    }
+      },
+      onLoading: (loading) => {
+        setLoading(loading);
+      },
+      onError: (error) => {
+        console.error('Error getting location:', error);
+        setError('Gagal mendapatkan lokasi. Silakan coba lagi.');
+      }
+    });
   };
 
   // Function to fetch waste banks based on role
@@ -171,7 +121,7 @@ export default function Register() {
         id: doc.id,
         ...doc.data()
       }));
-      
+
       if (role === 'collector') {
         setWasteBanks(banks);
       } else {
@@ -229,11 +179,11 @@ export default function Register() {
       const profile = {
         fullName: formData.fullName,
         phone: formData.phone,
-        institution: formData.role === 'collector' || formData.role === 'wastebank_master_collector' 
+        institution: formData.role === 'collector' || formData.role === 'wastebank_master_collector'
           ? formData.institution // Gunakan ID institusi langsung dari form
           : formData.institution,
         institutionName: formData.role === 'collector' || formData.role === 'wastebank_master_collector'
-          ? (wasteBanks.find(bank => bank.id === formData.institution)?.profile?.institution || 
+          ? (wasteBanks.find(bank => bank.id === formData.institution)?.profile?.institution ||
             wasteBankMasters.find(bank => bank.id === formData.institution)?.profile?.institution)
           : formData.institution,
         location: {
@@ -277,15 +227,17 @@ export default function Register() {
 
       console.log('Final user data:', userData); // Debug log
 
-      await signup(formData.email, formData.password, userData);
+      // Daftar pengguna baru - user will remain logged in after signup
+      const user = await signup(formData.email, formData.password, userData);
+
       await Swal.fire({
         icon: 'success',
-        title: 'Account Created',
-        text: 'Your account has been created successfully! Please log in.',
+        title: 'Akun Berhasil Dibuat',
+        text: 'Silakan periksa email Anda untuk verifikasi. Data Anda akan disimpan setelah email diverifikasi.',
         background: '#f0fff4',
         color: '#333',
         iconColor: '#28a745',
-        timer: 1500,
+        timer: 3000,
         showConfirmButton: false,
         customClass: {
           popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg shadow-lg',
@@ -293,13 +245,15 @@ export default function Register() {
           htmlContainer: 'text-sm sm:text-base text-gray-600'
         }
       });
-      navigate('/login'); // Redirect ke halaman login
+
+      // User is now already logged in, so we can go directly to the verification page
+      navigate('/email-verification');
     } catch (err) {
       console.error('Registration error:', err);
-      const errorMessage = err.code === 'auth/email-already-in-use' 
+      const errorMessage = err.code === 'auth/email-already-in-use'
         ? 'This email is already registered. Please use a different email or try logging in.'
         : 'Failed to create account. Please try again.';
-      
+
       setError(errorMessage);
       Swal.fire({
         icon: 'error',
@@ -327,7 +281,7 @@ export default function Register() {
       setError('Harap isi kedua kolom kata sandi');
       return;
     }
-    
+
     if (formData.password !== formData.confirmPassword) {
       setError('Kata sandi tidak sesuai');
       return;
@@ -662,11 +616,11 @@ export default function Register() {
           <div className="flex justify-between">
             {step > 1 && (
               <button
-              type="button"
-              onClick={() => setStep(step - 1)}
-              className="text-sm font-semibold mr-auto px-10 py-3 text-gray-400 transition-colors rounded-lg shadow-sm border border-gray-200 hover:border-gray-400 hover:text-gray-500 focus:outline-none sm:text-base"
+                type="button"
+                onClick={() => setStep(step - 1)}
+                className="text-sm font-semibold mr-auto px-10 py-3 text-gray-400 transition-colors rounded-lg shadow-sm border border-gray-200 hover:border-gray-400 hover:text-gray-500 focus:outline-none sm:text-base"
               >
-              Kembali
+                Kembali
               </button>
             )}
             {step < 2 && (
