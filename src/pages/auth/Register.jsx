@@ -79,7 +79,7 @@ export default function Register() {
           // Convert string coordinates to numbers for GeoPoint
           const latitude = parseFloat(locationData.coordinates.lat);
           const longitude = parseFloat(locationData.coordinates.lng);
-          
+
           setFormData(prev => ({
             ...prev,
             coordinates: new GeoPoint(latitude, longitude),
@@ -227,15 +227,17 @@ export default function Register() {
 
       console.log('Final user data:', userData); // Debug log
 
-      await signup(formData.email, formData.password, userData);
+      // Daftar pengguna baru - user will remain logged in after signup
+      const user = await signup(formData.email, formData.password, userData);
+
       await Swal.fire({
         icon: 'success',
-        title: 'Account Created',
-        text: 'Your account has been created successfully! Please log in.',
+        title: 'Akun Berhasil Dibuat',
+        text: 'Silakan periksa email Anda untuk verifikasi. Data Anda akan disimpan setelah email diverifikasi.',
         background: '#f0fff4',
         color: '#333',
         iconColor: '#28a745',
-        timer: 1500,
+        timer: 3000,
         showConfirmButton: false,
         customClass: {
           popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg shadow-lg',
@@ -243,7 +245,9 @@ export default function Register() {
           htmlContainer: 'text-sm sm:text-base text-gray-600'
         }
       });
-      navigate('/login'); // Redirect ke halaman login
+
+      // User is now already logged in, so we can go directly to the verification page
+      navigate('/email-verification');
     } catch (err) {
       console.error('Registration error:', err);
       const errorMessage = err.code === 'auth/email-already-in-use'
