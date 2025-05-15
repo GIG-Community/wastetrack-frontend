@@ -316,7 +316,7 @@ const Verify = () => {
                         )}
 
                         {!showResetForm && status !== 'Verifying...' && (
-                            <div className="text-center mt-6">
+                            <div className="hidden text-center mt-6">
                                 <Link
                                     to="/login"
                                     className="inline-flex items-center py-2 px-4 rounded-lg text-sm font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 transition-colors duration-200"
