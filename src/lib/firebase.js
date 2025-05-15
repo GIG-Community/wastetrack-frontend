@@ -3,6 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { exp } from 'three/tsl';
 
 // Konfigurasi Firebase menggunakan variabel lingkungan dari .env
 const firebaseConfig = {
@@ -26,3 +27,5 @@ export const storage = getStorage(app);
 setPersistence(auth, browserLocalPersistence).catch((err) => {
   console.error("Error setting persistence:", err);
 });
+
+export default app;
