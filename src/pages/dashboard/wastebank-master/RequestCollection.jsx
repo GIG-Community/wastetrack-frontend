@@ -14,7 +14,11 @@ import {
   Loader2,
   Check,
   ArrowRight,
-  ArrowLeft
+  ArrowLeft,
+  Phone,
+  MapPin,
+  Navigation,
+  Info
 } from 'lucide-react';
 import { 
   collection, 
@@ -32,6 +36,32 @@ import {
 import { db } from '../../../lib/firebase';
 import { wasteTypes, calculateStorageFromCollections } from '../../../lib/constants';
 
+// Add a utility function to translate status to Indonesian
+const translateStatus = (status) => {
+  switch (status) {
+    case 'completed': return 'Selesai';
+    case 'pending': return 'Menunggu';
+    case 'assigned': return 'Ditugaskan';
+    case 'cancelled': return 'Dibatalkan';
+    case 'in_progress': return 'Dalam Proses';
+    case 'processing': return 'Diproses';
+    default: return status.charAt(0).toUpperCase() + status.slice(1);
+  }
+};
+
+// Helper component for information tooltips/panels
+const InfoPanel = ({ title, children }) => (
+  <div className="p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+    <div className="flex gap-3">
+      <Info className="w-5 h-5 mt-0.5 text-blue-500 flex-shrink-0" />
+      <div>
+        <h3 className="mb-1 text-sm font-medium text-blue-800">{title}</h3>
+        <div className="text-sm text-blue-700">{children}</div>
+      </div>
+    </div>
+  </div>
+);
+
 const MasterRequestCollection = () => {
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -39,12 +69,13 @@ const MasterRequestCollection = () => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [step, setStep] = useState(1);
-  const [masterBanks, setMasterBanks] = useState([]);
-  const [loadingMasterBanks, setLoadingMasterBanks] = useState(true);
+  const [industries, setIndustries] = useState([]);
+  const [loadingIndustries, setLoadingIndustries] = useState(true);
   const [collections, setCollections] = useState([]);
   const [loadingCollections, setLoadingCollections] = useState(true);
   const [requests, setRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
+  const [gettingLocation, setGettingLocation] = useState(false); // Added for geolocation
 
   // Form data
   const [formData, setFormData] = useState({
@@ -52,35 +83,41 @@ const MasterRequestCollection = () => {
     time: '',
     wasteTypes: [],
     wasteWeights: {}, // Changed from wasteQuantities to wasteWeights
-    masterBankId: '',
-    masterBankName: '',
+    industryId: '',
+    industryName: '',
     notes: '',
     status: 'pending',
+    address: userData?.profile?.address || '', // Added address field
+    phone: userData?.profile?.phone || '', // Added phone number field
+    location: {
+      address: userData?.profile?.address || '',
+      coordinates: null
+    }, // Added location field with address and coordinates
   });
 
-  // Fetch master wastebanks
+  // Fetch industries
   useEffect(() => {
-    const fetchMasterBanks = async () => {
+    const fetchIndustries = async () => {
       try {
         const q = query(
           collection(db, 'users'),
           where('role', '==', 'industry')
         );
         const snapshot = await getDocs(q);
-        const masterBankData = snapshot.docs.map(doc => ({
+        const industriesData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
         
-        setMasterBanks(masterBankData);
+        setIndustries(industriesData);
       } catch (error) {
-        console.error('Error fetching master banks:', error);
+        console.error('Error memuat data industri:', error);
       } finally {
-        setLoadingMasterBanks(false);
+        setLoadingIndustries(false);
       }
     };
 
-    fetchMasterBanks();
+    fetchIndustries();
   }, []);
 
   // Fetch completed collections
@@ -99,7 +136,7 @@ const MasterRequestCollection = () => {
         }));
         setCollections(collectionsData);
       } catch (error) {
-        console.error('Error fetching collections:', error);
+        console.error('Error memuat koleksi sampah:', error);
       } finally {
         setLoadingCollections(false);
       }
@@ -108,13 +145,13 @@ const MasterRequestCollection = () => {
     fetchCollections();
   }, [currentUser.uid]);
 
-  // Fetch requests
+  // Fetch requests - updated to use industryRequests collection
   useEffect(() => {
     if (!currentUser?.uid) return;
 
     const q = query(
-      collection(db, 'masterBankRequests'),
-      where('wasteBankId', '==', currentUser.uid)
+      collection(db, 'industryRequests'),
+      where('masterBankId', '==', currentUser.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -125,7 +162,7 @@ const MasterRequestCollection = () => {
       setRequests(requestsData);
       setLoadingRequests(false);
     }, (error) => {
-      console.error("Error fetching requests:", error);
+      console.error("Error memantau permintaan:", error);
       setLoadingRequests(false);
     });
 
@@ -155,6 +192,44 @@ const MasterRequestCollection = () => {
     { time: '13:00-15:00', available: true },
     { time: '15:00-17:00', available: true }
   ];
+
+  // Get current location
+  const getCurrentLocation = () => {
+    setGettingLocation(true);
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          try {
+            // Fetch address from coordinates using OpenStreetMap Nominatim API
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+            );
+            const data = await response.json();
+            setFormData(prev => ({
+              ...prev,
+              address: data.display_name,
+              location: {
+                address: data.display_name,
+                coordinates: { lat: latitude, lng: longitude }
+              }
+            }));
+          } catch (error) {
+            console.error('Error mendapatkan alamat:', error);
+          } finally {
+            setGettingLocation(false);
+          }
+        },
+        (error) => {
+          console.error('Error geolokasi:', error);
+          setGettingLocation(false);
+        }
+      );
+    } else {
+      setError("Geolokasi tidak didukung oleh browser Anda");
+      setGettingLocation(false);
+    }
+  };
 
   // Handle waste weight change
   const handleWeightChange = (typeId, value) => {
@@ -220,14 +295,15 @@ const MasterRequestCollection = () => {
         }
       }
 
+      // Improved request data structure for industryRequests
       const collectionData = {
         ...formData,
-        wasteBankId: currentUser.uid,
-        wasteBankName: userData?.profile?.institution,
+        masterBankId: currentUser.uid,
+        masterBankName: userData?.profile?.institution || 'Bank Sampah Tanpa Nama',
         createdAt: Timestamp.now(),
         date: Timestamp.fromDate(new Date(formData.date)),
         wastes: Object.fromEntries(
-          Object.entries(formData.wasteWeights).map(([type, weight]) => [
+          Object.entries(formData.wasteWeights).filter(([_, weight]) => weight > 0).map(([type, weight]) => [
             type,
             { 
               weight,
@@ -237,7 +313,7 @@ const MasterRequestCollection = () => {
           ])
         ),
         wasteQuantities: Object.fromEntries(
-          Object.entries(formData.wasteWeights).map(([type, weight]) => [
+          Object.entries(formData.wasteWeights).filter(([_, weight]) => weight > 0).map(([type, weight]) => [
             type,
             Math.ceil(weight) // Convert to whole number for quantities
           ])
@@ -245,55 +321,75 @@ const MasterRequestCollection = () => {
         status: 'pending',
         completionCallback: {
           collectionIds: collectionUpdates
-        }
+        },
+        // Adding additional useful fields
+        updatedAt: Timestamp.now(),
+        requestType: 'industry',
+        location: formData.location || { address: formData.address, coordinates: null },
+        phone: formData.phone || userData?.profile?.phone || ''
       };
 
-      await addDoc(collection(db, 'masterBankRequests'), collectionData);
+      // Submit to industryRequests collection
+      await addDoc(collection(db, 'industryRequests'), collectionData);
       setSuccess(true);
       setFormData({
         date: '',
         time: '',
         wasteTypes: [],
         wasteWeights: {},
-        masterBankId: '',
-        masterBankName: '',
-        notes: '', // Enhanced with weight reduction logic from Cloud Function
-        status: 'pending'
+        industryId: '',
+        industryName: '',
+        notes: '',
+        status: 'pending',
+        address: userData?.profile?.address || '',
+        phone: userData?.profile?.phone || '',
+        location: {
+          address: userData?.profile?.address || '',
+          coordinates: null
+        }
       });
       setStep(1);
     } catch (err) {
-      setError('Failed to schedule collection');
-      console.error(err);
+      setError('Gagal menjadwalkan pengambilan: ' + (err.message || 'Kesalahan tidak diketahui'));
+      console.error('Error mengirim permintaan:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Update request status  
+  // Update request status - modified to correctly handle industryRequests
   const updateRequestStatus = async (requestId, newStatus) => {
     try {
-      const requestRef = doc(db, 'masterBankRequests', requestId);
+      setLoading(true);
+      const requestRef = doc(db, 'industryRequests', requestId);
       const requestSnapshot = await getDoc(requestRef);
+      
+      if (!requestSnapshot.exists()) {
+        setError("Permintaan tidak ditemukan");
+        return;
+      }
+      
       const requestData = requestSnapshot.data();
       const previousStatus = requestData.status;
-
-      await updateDoc(requestRef, { 
-        status: newStatus, 
-        updatedAt: Timestamp.now() 
+      
+      // Update the status first
+      await updateDoc(requestRef, {
+        status: newStatus,
+        updatedAt: Timestamp.now()
       });
-
+      
       // If status changed to completed
       if (previousStatus !== 'completed' && newStatus === 'completed') {
         const { completionCallback } = requestData;
         if (completionCallback && completionCallback.collectionIds && completionCallback.collectionIds.length > 0) {
-          console.log(`Processing ${completionCallback.collectionIds.length} collection updates`);
+          console.log(`Memproses ${completionCallback.collectionIds.length} pembaruan koleksi`);
 
           const batch = writeBatch(db);
           for (const collection of completionCallback.collectionIds) {
             const pickupRef = doc(db, 'masterBankRequests', collection.id);
             const pickupDoc = await getDoc(pickupRef);
             if (!pickupDoc.exists()) {
-              console.log(`Pickup ${collection.id} not found`);
+              console.log(`Pengambilan ${collection.id} tidak ditemukan`);
               continue;
             }
 
@@ -325,12 +421,14 @@ const MasterRequestCollection = () => {
           }
 
           await batch.commit();
-          console.log('Successfully updated pickup weights');
+          console.log('Berhasil memperbarui berat pengambilan');
         }
       }
     } catch (error) {
-      console.error("Error updating status:", error);
-      setError("Failed to update request status: " + error.message);
+      console.error("Error memperbarui status:", error);
+      setError("Gagal memperbarui status permintaan: " + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -376,11 +474,25 @@ const MasterRequestCollection = () => {
                 <Truck className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-zinc-800">Request Collection</h1>
-                <p className="text-sm text-zinc-500">Schedule a collection from master waste bank</p>
+                <h1 className="text-2xl font-semibold text-zinc-800">Permintaan Pengambilan</h1>
+                <p className="text-sm text-zinc-500">Jadwalkan pengambilan ke industri pengolahan</p>
               </div>
             </div>
           </div>
+
+          {/* Information Panel */}
+          <InfoPanel title="Tentang Permintaan Pengambilan">
+            <p>
+              Halaman ini memungkinkan Anda untuk meminta pengambilan sampah dari penyimpanan Anda ke industri pengolahan.
+              Data akan diperbarui secara real-time. Ikuti langkah-langkah berikut untuk membuat permintaan:
+            </p>
+            <ol className="mt-2 ml-4 list-decimal">
+              <li>Pilih industri pengolahan tujuan</li>
+              <li>Tentukan jadwal pengambilan</li>
+              <li>Pilih jenis sampah yang akan diambil</li>
+              <li>Konfirmasi detail permintaan</li>
+            </ol>
+          </InfoPanel>
 
           {/* Error Display */}
           {error && (
@@ -402,7 +514,7 @@ const MasterRequestCollection = () => {
                 />
               </div>
               <div className="absolute left-0 flex justify-between w-full -top-2">
-                {['Master Bank', 'Schedule', 'Waste Details', 'Confirm']
+                {['Industri Pengolahan', 'Jadwal', 'Detail Sampah', 'Konfirmasi']
                   .map((text, index) => (
                     <div
                       key={text}
@@ -422,7 +534,7 @@ const MasterRequestCollection = () => {
               </div>
             </div>
             <div className="flex justify-between px-1 text-xs text-gray-600">
-              {['Master Bank', 'Schedule', 'Waste Details', 'Confirm'].map((text) => (
+              {['Industri Pengolahan', 'Jadwal', 'Detail Sampah', 'Konfirmasi'].map((text) => (
                 <div key={text} className="flex-1 text-center">{text}</div>
               ))}
             </div>
@@ -435,66 +547,75 @@ const MasterRequestCollection = () => {
             }} 
             className="space-y-6"
           >
-            {/* Step 1: Master Bank Selection */}
+            {/* Step 1: Industry Selection */}
             {step === 1 && (
               <div className="overflow-hidden bg-white border shadow-sm rounded-xl border-zinc-200">
                 <div className="p-6 border-b border-zinc-100">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-emerald-500" />
-                    <h2 className="text-xl font-semibold text-gray-800">Select Master Waste Bank</h2>
+                    <h2 className="text-xl font-semibold text-gray-800">Pilih Industri Pengolahan</h2>
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">Choose the master waste bank for collection</p>
+                  <p className="mt-1 text-sm text-gray-500">Pilih industri pengolahan untuk pengambilan</p>
                 </div>
                 
                 <div className="divide-y divide-gray-100">
-                  {loadingMasterBanks ? (
+                  {loadingIndustries ? (
                     <div className="flex justify-center p-6">
                       <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+                      <span className="ml-2 text-gray-600">Memuat daftar industri pengolahan...</span>
                     </div>
                   ) : (
-                    masterBanks.map((bank) => (
-                      <label
-                        key={bank.id}
-                        className={`flex items-start p-6 cursor-pointer hover:bg-emerald-50/50 transition-all
-                          ${formData.masterBankId === bank.id ? 'bg-emerald-50' : ''}`}
-                      >
-                        <input
-                          type="radio"
-                          name="masterBank"
-                          className="sr-only"
-                          checked={formData.masterBankId === bank.id}
-                          onChange={() => setFormData({
-                            ...formData,
-                            masterBankId: bank.id,
-                            masterBankName: bank.profile?.institution || 'Unnamed Master Bank'
-                          })}
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className={`p-3 rounded-xl transition-colors duration-300
-                                ${formData.masterBankId === bank.id ? 'bg-emerald-100' : 'bg-gray-100'}`}
-                              >
-                                <Building2 className={`w-6 h-6 
-                                  ${formData.masterBankId === bank.id ? 'text-emerald-600' : 'text-gray-600'}`} 
-                                />
+                    industries.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                        <h3 className="font-medium text-gray-700">Tidak ada industri pengolahan ditemukan</h3>
+                        <p className="mt-1 text-sm text-gray-500">Silakan hubungi administrator untuk informasi lebih lanjut</p>
+                      </div>
+                    ) : (
+                      industries.map((industry) => (
+                        <label
+                          key={industry.id}
+                          className={`flex items-start p-6 cursor-pointer hover:bg-emerald-50/50 transition-all
+                            ${formData.industryId === industry.id ? 'bg-emerald-50' : ''}`}
+                        >
+                          <input
+                            type="radio"
+                            name="industry"
+                            className="sr-only"
+                            checked={formData.industryId === industry.id}
+                            onChange={() => setFormData({
+                              ...formData,
+                              industryId: industry.id,
+                              industryName: industry.profile?.institution || 'Industri Tanpa Nama'
+                            })}
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`p-3 rounded-xl transition-colors duration-300
+                                  ${formData.industryId === industry.id ? 'bg-emerald-100' : 'bg-gray-100'}`}
+                                >
+                                  <Building2 className={`w-6 h-6 
+                                    ${formData.industryId === industry.id ? 'text-emerald-600' : 'text-gray-600'}`} 
+                                  />
+                                </div>
+                                <div>
+                                  <h3 className="font-medium text-gray-900">
+                                    {industry.profile?.institution || 'Industri Tanpa Nama'}
+                                  </h3>
+                                  <p className="text-sm text-gray-500">{industry.profile?.address || 'Alamat tidak tersedia'}</p>
+                                </div>
                               </div>
-                              <div>
-                                <h3 className="font-medium text-gray-900">
-                                  {bank.profile?.institution || 'Unnamed Master Bank'}
-                                </h3>
-                                <p className="text-sm text-gray-500">{bank.profile?.address || 'No address provided'}</p>
-                              </div>
+                              {formData.industryId === industry.id && (
+                                <div className="bg-emerald-500 text-white rounded-full p-1.5">
+                                  <Check className="w-4 h-4" />
+                                </div>
+                              )}
                             </div>
-                            {formData.masterBankId === bank.id && (
-                              <div className="bg-emerald-500 text-white rounded-full p-1.5">
-                                <Check className="w-4 h-4" />
-                              </div>
-                            )}
                           </div>
-                        </div>
-                      </label>
-                    ))
+                        </label>
+                      ))
+                    )
                   )}
                 </div>
               </div>
@@ -508,9 +629,9 @@ const MasterRequestCollection = () => {
                   <div className="p-6 border-b border-zinc-100">
                     <div className="flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-emerald-500" />
-                      <h2 className="text-xl font-semibold text-gray-800">Select Date</h2>
+                      <h2 className="text-xl font-semibold text-gray-800">Pilih Tanggal</h2>
                     </div>
-                    <p className="mt-1 text-sm text-gray-500">Choose your preferred collection date</p>
+                    <p className="mt-1 text-sm text-gray-500">Pilih tanggal pengambilan yang diinginkan</p>
                   </div>
                   <div className="p-6">
                     <input
@@ -529,9 +650,9 @@ const MasterRequestCollection = () => {
                   <div className="p-6 border-b border-gray-100">
                     <div className="flex items-center gap-2">
                       <Clock className="w-5 h-5 text-emerald-500" />
-                      <h2 className="text-xl font-semibold text-gray-800">Select Time</h2>
+                      <h2 className="text-xl font-semibold text-gray-800">Pilih Waktu</h2>
                     </div>
-                    <p className="mt-1 text-sm text-gray-500">Choose your preferred collection time</p>
+                    <p className="mt-1 text-sm text-gray-500">Pilih rentang waktu pengambilan yang diinginkan</p>
                   </div>
                   <div className="p-6">
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -564,21 +685,22 @@ const MasterRequestCollection = () => {
                 <div className="p-6 border-b border-gray-100">
                   <div className="flex items-center gap-2">
                     <Package className="w-5 h-5 text-emerald-500" />
-                    <h2 className="text-xl font-semibold text-gray-800">Select Waste Types</h2>
+                    <h2 className="text-xl font-semibold text-gray-800">Pilih Jenis Sampah</h2>
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">Choose waste types from your storage</p>
+                  <p className="mt-1 text-sm text-gray-500">Pilih jenis sampah dari penyimpanan Anda</p>
                 </div>
                 <div className="p-6">
                   {loadingCollections ? (
                     <div className="flex justify-center py-8">
                       <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+                      <span className="ml-2 text-gray-600">Memuat data penyimpanan sampah...</span>
                     </div>
                   ) : (
                     availableWasteTypes.length === 0 ? (
                       <div className="py-8 text-center">
                         <Package className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                        <h3 className="font-medium text-gray-600">No Waste in Storage</h3>
-                        <p className="mt-1 text-sm text-gray-500">Your storage is currently empty</p>
+                        <h3 className="font-medium text-gray-600">Tidak Ada Sampah di Penyimpanan</h3>
+                        <p className="mt-1 text-sm text-gray-500">Penyimpanan Anda saat ini kosong</p>
                       </div>
                     ) : (
                       <div className="space-y-4">
@@ -607,7 +729,7 @@ const MasterRequestCollection = () => {
                                 <span className="font-medium text-gray-700">{waste.name}</span>
                               </label>
                               <span className="text-sm text-gray-500">
-                                Available: {waste.currentStock.toFixed(1)} kg
+                                Tersedia: {waste.currentStock.toFixed(1)} kg
                               </span>
                             </div>
                             {formData.wasteTypes.includes(waste.id) && (
@@ -620,7 +742,7 @@ const MasterRequestCollection = () => {
                                   value={formData.wasteWeights[waste.id] || ''}
                                   onChange={(e) => handleWeightChange(waste.id, e.target.value)}
                                   className="w-32 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                                  placeholder="Weight in kg"
+                                  placeholder="Berat dalam kg"
                                 />
                                 <span className="text-sm text-gray-500">kg</span>
                               </div>
@@ -638,18 +760,18 @@ const MasterRequestCollection = () => {
             {step === 4 && (
               <div className="overflow-hidden bg-white border shadow-sm rounded-xl border-zinc-200">
                 <div className="p-6 border-b border-gray-100">
-                  <h2 className="text-xl font-semibold text-gray-800">Review Collection Request</h2>
-                  <p className="mt-1 text-sm text-gray-500">Please confirm your details</p>
+                  <h2 className="text-xl font-semibold text-gray-800">Tinjau Permintaan Pengambilan</h2>
+                  <p className="mt-1 text-sm text-gray-500">Silakan konfirmasi detail permintaan Anda</p>
                 </div>
                 <div className="p-6 space-y-6">
-                  {/* Master Bank Info */}
+                  {/* Industry Info */}
                   <div className="flex items-start gap-4">
                     <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
                       <Building2 className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-500">Selected Master Bank</p>
-                      <p className="font-medium text-gray-900">{formData.masterBankName}</p>
+                      <p className="text-sm font-medium text-gray-500">Industri Pengolahan Terpilih</p>
+                      <p className="font-medium text-gray-900">{formData.industryName}</p>
                     </div>
                   </div>
 
@@ -659,15 +781,15 @@ const MasterRequestCollection = () => {
                       <Calendar className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-500">Schedule</p>
+                      <p className="text-sm font-medium text-gray-500">Jadwal</p>
                       <p className="text-gray-900">
-                        {new Date(formData.date).toLocaleDateString('en-US', {
+                        {new Date(formData.date).toLocaleDateString('id-ID', {
                           weekday: 'long',
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric'
                         })}
-                        {' at '}
+                        {' pukul '}
                         {formData.time}
                       </p>
                     </div>
@@ -679,7 +801,7 @@ const MasterRequestCollection = () => {
                       <Package className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-500">Selected Waste</p>
+                      <p className="text-sm font-medium text-gray-500">Sampah Terpilih</p>
                       <div className="mt-2 space-y-2">
                         {formData.wasteTypes.map(typeId => {
                           const waste = availableWasteTypes.find(w => w.id === typeId);
@@ -694,17 +816,102 @@ const MasterRequestCollection = () => {
                     </div>
                   </div>
 
+                  {/* Contact Information */}
+                  <div className="flex items-start gap-4">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
+                      <Phone className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-500">Informasi Kontak</p>
+                      <div className="mt-2 space-y-3">
+                        <div>
+                          <label htmlFor="bankName" className="block mb-1 text-sm text-gray-600">Nama Bank Sampah</label>
+                          <input
+                            id="bankName"
+                            type="text"
+                            value={userData?.profile?.institution || ''}
+                            className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50"
+                            disabled
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="phone" className="block mb-1 text-sm text-gray-600">Nomor Telepon</label>
+                          <input
+                            id="phone"
+                            type="tel"
+                            value={formData.phone}
+                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                            className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                            placeholder="Masukkan nomor telepon kontak"
+                            required
+                          />
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="address" className="block mb-1 text-sm text-gray-600">Alamat</label>
+                          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
+                            <textarea
+                              id="address"
+                              value={formData.address}
+                              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                              className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                              rows="2"
+                              placeholder="Masukkan alamat pengambilan"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={getCurrentLocation}
+                              className="flex items-center flex-shrink-0 gap-2 px-4 py-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200"
+                            >
+                              {gettingLocation ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Navigation className="w-4 h-4" />
+                              )}
+                              Gunakan Lokasi Saat Ini
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Location Info */}
+                  <div className="flex items-start gap-4">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
+                      <MapPin className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Lokasi Pengambilan</p>
+                      <p className="text-gray-900">
+                        {typeof formData.address === 'object' ? formData.address.address : formData.address}
+                      </p>
+                      {formData.phone && (
+                        <>
+                          <p className="mt-2 text-sm font-medium text-gray-500">Nomor Kontak</p>
+                          <p className="text-gray-700">{formData.phone}</p>
+                        </>
+                      )}
+                      {formData.location && formData.location.coordinates && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Koordinat: {formData.location.coordinates.lat.toFixed(6)}, {formData.location.coordinates.lng.toFixed(6)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Notes */}
                   <div className="mt-4">
                     <label className="block mb-2 text-sm font-medium text-gray-700">
-                      Additional Notes (Optional)
+                      Catatan Tambahan (Opsional)
                     </label>
                     <textarea
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                       className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                       rows="3"
-                      placeholder="Any special instructions..."
+                      placeholder="Instruksi khusus atau detail lain tentang pengambilan..."
                     />
                   </div>
                 </div>
@@ -720,7 +927,7 @@ const MasterRequestCollection = () => {
                   className="px-6 py-2.5 bg-zinc-100 text-zinc-700 rounded-lg hover:bg-zinc-200 flex items-center gap-2 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  Back
+                  Kembali
                 </button>
               )}
               
@@ -733,23 +940,23 @@ const MasterRequestCollection = () => {
 
                     switch (step) {
                       case 1:
-                        if (!formData.masterBankId) {
-                          validationError = 'Please select a master bank';
+                        if (!formData.industryId) {
+                          validationError = 'Silakan pilih industri pengolahan';
                           canProceed = false;
                         }
                         break;
                       case 2:
                         if (!formData.date || !formData.time) {
-                          validationError = 'Please select both date and time';
+                          validationError = 'Silakan pilih tanggal dan waktu';
                           canProceed = false;
                         }
                         break;
                       case 3:
                         if (formData.wasteTypes.length === 0) {
-                          validationError = 'Please select at least one waste type';
+                          validationError = 'Silakan pilih minimal satu jenis sampah';
                           canProceed = false;
                         } else if (formData.wasteTypes.some(type => !formData.wasteWeights[type])) {
-                          validationError = 'Please enter weight for all selected waste types';
+                          validationError = 'Silakan masukkan berat untuk semua jenis sampah yang dipilih';
                           canProceed = false;
                         }
                         break;
@@ -764,7 +971,7 @@ const MasterRequestCollection = () => {
                   }}
                   className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 ml-auto flex items-center gap-2 transition-colors focus:ring-4 focus:ring-emerald-300"
                 >
-                  Continue
+                  Lanjutkan
                   <ArrowRight className="w-4 h-4" />
                 </button>
               ) : (
@@ -777,10 +984,10 @@ const MasterRequestCollection = () => {
                   {loading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Processing...
+                      Memproses...
                     </>
                   ) : (
-                    'Submit Request'
+                    'Kirim Permintaan'
                   )}
                 </button>
               )}
@@ -796,8 +1003,8 @@ const MasterRequestCollection = () => {
                     <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-zinc-800">Request Submitted!</h3>
-                    <p className="text-zinc-500">Your collection request has been sent successfully.</p>
+                    <h3 className="text-lg font-semibold text-zinc-800">Permintaan Terkirim!</h3>
+                    <p className="text-zinc-500">Permintaan pengambilan Anda telah berhasil dikirim.</p>
                   </div>
                 </div>
                 <button
@@ -809,31 +1016,38 @@ const MasterRequestCollection = () => {
                       time: '',
                       wasteTypes: [],
                       wasteWeights: {},
-                      masterBankId: '',
-                      masterBankName: '',
+                      industryId: '',
+                      industryName: '',
                       notes: '',
-                      status: 'pending'
+                      status: 'pending',
+                      address: userData?.profile?.address || '',
+                      phone: userData?.profile?.phone || '',
+                      location: {
+                        address: userData?.profile?.address || '',
+                        coordinates: null
+                      }
                     });
                   }}
                   className="w-full px-4 py-2 text-white transition-colors rounded-lg bg-emerald-600 hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300"
                 >
-                  Make Another Request
+                  Buat Permintaan Lain
                 </button>
               </div>
             </div>
           )}
 
-          {/* Debug Panel - Request Status */}
+          {/* Debug Panel - Request Status - Updated to use industryRequests collection */}
           <div className="mt-8">
             <div className="p-6 bg-white border shadow-sm rounded-xl border-zinc-200">
-              <h2 className="mb-4 text-lg font-semibold text-gray-800">Debug Panel - Request Status</h2>
+              <h2 className="mb-4 text-lg font-semibold text-gray-800">Panel Status Permintaan</h2>
               
               {loadingRequests ? (
                 <div className="flex justify-center">
                   <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+                  <span className="ml-2 text-gray-600">Memuat data permintaan...</span>
                 </div>
               ) : requests.length === 0 ? (
-                <p className="text-gray-500">No requests found</p>
+                <p className="text-gray-500">Tidak ada permintaan ditemukan</p>
               ) : (
                 <div className="space-y-4">
                   {requests.map((request) => (
@@ -841,16 +1055,16 @@ const MasterRequestCollection = () => {
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="font-medium text-gray-700">
-                            Request to: {request.masterBankName}
+                            Permintaan dari: {request.masterBankName}
                           </p>
                           <p className="text-sm text-gray-500">
-                            Date: {new Date(request.date.seconds * 1000).toLocaleDateString()}
+                            Tanggal: {new Date(request.date.seconds * 1000).toLocaleDateString('id-ID')}
                           </p>
                           <p className="text-sm text-gray-500">
-                            Time: {request.time}
+                            Waktu: {request.time}
                           </p>
                           <div className="mt-2">
-                            <p className="text-sm font-medium text-gray-600">Waste Types:</p>
+                            <p className="text-sm font-medium text-gray-600">Jenis Sampah:</p>
                             {Object.entries(request.wastes || {}).map(([type, data]) => (
                               <p key={type} className="text-sm text-gray-500">
                                 {type}: {data.weight} kg
@@ -860,21 +1074,25 @@ const MasterRequestCollection = () => {
                         </div>
                         <div className="space-y-2">
                           <p className="text-sm text-gray-500">
-                            Current Status: <span className={`font-medium ${
+                            Status Saat Ini: <span className={`font-medium ${
                               request.status === 'completed' ? 'text-emerald-600' :
                               request.status === 'pending' ? 'text-amber-600' :
+                              request.status === 'in_progress' ? 'text-blue-600' :
+                              request.status === 'assigned' ? 'text-blue-600' :
+                              request.status === 'cancelled' ? 'text-red-600' :
                               'text-gray-600'
-                            }`}>{request.status}</span>
+                            }`}>{translateStatus(request.status)}</span>
                           </p>
                           <select
                             value={request.status}
                             onChange={(e) => updateRequestStatus(request.id, e.target.value)}
                             className="block w-full text-sm border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
                           >
-                            <option value="pending">Pending</option>
-                            <option value="processing">Processing</option>
-                            <option value="completed">Completed</option>
-                            <option value="cancelled">Cancelled</option>
+                            <option value="pending">Menunggu</option>
+                            <option value="assigned">Ditugaskan</option>
+                            <option value="in_progress">Dalam Proses</option>
+                            <option value="completed">Selesai</option>
+                            <option value="cancelled">Dibatalkan</option>
                           </select>
                         </div>
                       </div>
