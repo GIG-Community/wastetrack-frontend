@@ -111,7 +111,7 @@ const PickupCard = ({ pickup, onSelect }) => {
       onSelect(pickup, newStatus);
     } else if (newStatus === 'completed') {
       if (pickup.id) {
-        navigate(`/dashboard/collector/update-collection/${pickup.id}`);
+        navigate(`/dashboard/collector-master/update-collection/${pickup.id}`);
       } else {
         Swal.fire({
           title: 'Error',

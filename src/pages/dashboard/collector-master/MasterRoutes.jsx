@@ -375,14 +375,29 @@ const MasterRoutes = () => {
       const unsubscribe = onSnapshot(
         pickupsQuery, 
         (snapshot) => {
-          const allPickupsData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
+          const allPickupsData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              // Ensure coordinates are properly extracted from location
+              coordinates: data.location?.coordinates || null,
+              // Ensure address is properly extracted
+              address: data.location?.address || data.address,
+              // Handle wastes and waste quantities consistently
+              wasteQuantities: data.wasteQuantities || 
+                (data.wastes ? Object.keys(data.wastes).reduce((acc, key) => {
+                  acc[key] = data.wastes[key].weight || 0;
+                  return acc;
+                }, {}) : {}),
+              // Provide fallback values for essential fields
+              status: data.status || 'pending',
+              userName: data.userName || data.wasteBankName || 'Unnamed'
+            };
+          });
 
-          // Filter for only pickup deliveryType and ensure coordinates exist
+          // Filter for pickups with valid coordinates
           const pickupsData = allPickupsData.filter(pickup => 
-            pickup.deliveryType === 'pickup' && 
             pickup.coordinates !== null && 
             pickup.coordinates.lat !== undefined
           );
@@ -585,9 +600,9 @@ const MasterRoutes = () => {
                 {/* Pickup Location Markers */}
                 {pickups.map((pickup) => (
                   <Marker
-                    key={`pickup-${pickup.id}-${pickup.status}`} // Add status to key to ensure re-render when status changes
+                    key={`pickup-${pickup.id}-${pickup.status}`}
                     position={[pickup.coordinates.lat, pickup.coordinates.lng]}
-                    icon={statusIcons[pickup.status] || statusIcons['assigned']} // Fallback to assigned if status not found
+                    icon={statusIcons[pickup.status] || statusIcons['assigned']}
                     eventHandlers={{
                       click: () => handlePickupClick(pickup)
                     }}
@@ -598,7 +613,9 @@ const MasterRoutes = () => {
                           {pickup.userName}
                         </h3>
                         <p className="mt-1 text-sm text-gray-500">
-                          {pickup.location}
+                          {typeof pickup.address === 'string'
+                            ? pickup.address
+                            : pickup.location?.address || 'Alamat tidak tersedia'}
                         </p>
                         <div className="flex flex-col gap-2 mt-2">
                           <div className="flex items-center gap-2">
@@ -668,7 +685,11 @@ const MasterRoutes = () => {
                     </div>
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{segment.pickup.userName}</p>
-                      <p className="text-sm text-gray-500">{segment.pickup.location}</p>
+                      <p className="text-sm text-gray-500">
+                        {typeof segment.pickup.address === 'string' 
+                          ? segment.pickup.address 
+                          : segment.pickup.location?.address || 'Alamat tidak tersedia'}
+                      </p>
                       <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
                         <span className="flex items-center gap-1">
                           <RouteIcon className="w-4 h-4" />

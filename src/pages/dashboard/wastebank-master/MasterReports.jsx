@@ -263,7 +263,7 @@ const MasterReports = () => {
 
       const pickupsQuery = query(
         collection(db, 'masterBankRequests'),
-        where('wasteBankId', '==', currentUser.uid),
+        where('masterBankId', '==', currentUser.uid),
         where('status', '==', 'completed')
       );
 

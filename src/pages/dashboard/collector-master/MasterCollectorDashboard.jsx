@@ -11,9 +11,10 @@ import {
   Recycle,
   Info,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Wallet
 } from 'lucide-react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -55,6 +56,7 @@ const MasterCollectorDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showInfoTooltip, setShowInfoTooltip] = useState(null);
+  const [balance, setBalance] = useState(0);
   const [stats, setStats] = useState({
     totalPickups: 0,
     totalWaste: 0,
@@ -85,9 +87,9 @@ const MasterCollectorDashboard = () => {
     }
   }, [currentUser?.uid]);
 
-  // Fungsi untuk menghitung pendapatan kolektor (10% dari total nilai)
+  // Fungsi untuk menghitung pendapatan kolektor (berdasarkan data aktual, tidak lagi perkiraan)
   const calculateCollectorEarnings = (value) => {
-    return value * 0.1;
+    return value * 0.1; // 10% dari nilai total
   };
 
   const fetchDashboardData = async () => {
@@ -101,6 +103,23 @@ const MasterCollectorDashboard = () => {
       // Bersihkan subscription sebelumnya jika ada
       unsubscribes.forEach(unsubscribe => unsubscribe());
       const newUnsubscribes = [];
+
+      // 1. Subscribe to user document for real-time balance updates
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const unsubscribeUser = onSnapshot(
+        userDocRef,
+        (userSnapshot) => {
+          if (userSnapshot.exists()) {
+            const userData = userSnapshot.data();
+            setBalance(userData.balance || 0);
+          }
+        },
+        (error) => {
+          console.error('Error fetching user data:', error);
+          setError('Gagal memuat data pengguna');
+        }
+      );
+      newUnsubscribes.push(unsubscribeUser);
 
       // Buat query untuk mendapatkan semua pengambilan untuk kolektor ini
       const pickupsQuery = query(
@@ -508,9 +527,17 @@ const MasterCollectorDashboard = () => {
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-3">
-            {/* Earnings Card */}
+          <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
+            {/* Current Balance Card - NEW */}
             <StatCard
+              icon={Wallet}
+              label="Total Penghasilan"
+              value={`Rp ${balance.toLocaleString('id-ID')}`}
+              infoText="Saldo yang tersedia di akun Anda untuk penarikan"
+            />
+
+            {/* Earnings Card */}
+            {/* <StatCard
               icon={DollarSign}
               label="Total Penghasilan"
               value={`Rp ${stats.totalEarnings.toLocaleString('id-ID')}`}
@@ -518,7 +545,7 @@ const MasterCollectorDashboard = () => {
               trend_value={`${((stats.thisMonthEarnings - stats.lastMonthEarnings) / Math.max(stats.lastMonthEarnings, 1) * 100 || 0).toFixed(1)}%`}
               variant={stats.thisMonthEarnings >= stats.lastMonthEarnings ? 'success' : 'danger'}
               infoText="Penghasilan yang Anda dapatkan dari seluruh aktivitas pengumpulan sampah (10% dari nilai total sampah)"
-            />
+            /> */}
             
             {/* Waste Collection Card */}
             <StatCard
@@ -558,7 +585,32 @@ const MasterCollectorDashboard = () => {
               </div>
               
               <div className="p-3 mb-3 text-sm text-blue-700 border border-blue-100 rounded-lg bg-blue-50">
-                <p><strong>Cara Membaca Grafik:</strong> Garis biru menunjukkan berat sampah (kg), garis hijau menunjukkan penghasilan (Rp). Data ditampilkan untuk 7 hari terakhir.</p>
+                <div className="space-y-2">
+                  <p><strong>Cara Membaca Grafik:</strong></p>
+                  <ul className="ml-4 space-y-1 list-disc">
+                    <li><span className="text-indigo-600">Garis biru</span> menunjukkan berat sampah dalam kilogram (kg)</li>
+                    <li><span className="text-emerald-600">Garis hijau</span> menunjukkan penghasilan dalam Rupiah (Rp)</li>
+                    <li>Sumbu kiri (biru) menunjukkan skala berat dalam kg</li>
+                    <li>Sumbu kanan (hijau) menunjukkan skala penghasilan dalam Rp</li>
+                    <li>Data ditampilkan untuk 7 hari terakhir dari kiri ke kanan</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="mb-3 text-sm text-center text-zinc-500">
+                <div className="flex flex-col items-center gap-2">
+                  <p className="font-medium">Statistik 7 Hari Terakhir</p>
+                  <div className="flex items-center justify-center gap-6">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50">
+                      <div className="w-3 h-3 rounded-full bg-[#6366F1]" />
+                      <span className="text-indigo-700">Berat Sampah (Kg)</span>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50">
+                      <div className="w-3 h-3 rounded-full bg-[#10B981]" />
+                      <span className="text-emerald-700">Penghasilan (Rp)</span>
+                    </div>
+                  </div>
+                </div>
               </div>
               
               <div className="h-80">
@@ -572,28 +624,55 @@ const MasterCollectorDashboard = () => {
                     />
                     <YAxis 
                       yAxisId="left"
-                      stroke="#71717A"
+                      stroke="#6366F1"
                       fontSize={12}
-                      label={{ value: 'Berat (kg)', angle: -90, position: 'insideLeft' }}
+                      label={{ 
+                        value: 'Berat Sampah (kg)', 
+                        angle: -90, 
+                        position: 'insideLeft',
+                        style: { fill: '#6366F1' }
+                      }}
                     />
                     <YAxis 
                       yAxisId="right"
                       orientation="right"
                       stroke="#10B981"
                       fontSize={12}
-                      label={{ value: 'Penghasilan (Rp)', angle: 90, position: 'insideRight' }}
+                      label={{ 
+                        value: 'Penghasilan (Rupiah)', 
+                        angle: 90, 
+                        position: 'insideRight',
+                        style: { fill: '#10B981' }
+                      }}
                     />
                     <Tooltip 
-                      formatter={(value, name) => [
-                        name === 'waste' ? `${value} kg` : `Rp ${value.toLocaleString('id-ID')}`,
-                        name === 'waste' ? 'Berat' : 'Penghasilan'
-                      ]}
+                      contentStyle={{ 
+                        backgroundColor: 'white',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '0.5rem',
+                        padding: '0.75rem'
+                      }}
+                      formatter={(value, name) => {
+                        switch (name) {
+                          case 'waste':
+                            return [`${value.toFixed(1)} kg`, 'Berat Sampah'];
+                          case 'earnings':
+                            return [`Rp ${value.toLocaleString('id-ID')}`, 'Penghasilan'];
+                          default:
+                            return [value, name];
+                        }
+                      }}
+                      labelStyle={{ 
+                        color: '#374151', 
+                        fontWeight: 'bold',
+                        marginBottom: '0.5rem'
+                      }}
                     />
                     <Line 
                       yAxisId="left"
                       type="monotone" 
                       dataKey="waste" 
-                      name="Berat"
+                      name="Berat Sampah"
                       stroke="#6366F1" 
                       strokeWidth={2}
                       dot={{ stroke: '#6366F1', fill: '#fff', strokeWidth: 2, r: 4 }}
@@ -614,7 +693,7 @@ const MasterCollectorDashboard = () => {
               </div>
             </div>
 
-            {/* Waste Distribution - Improved visualization */}
+            {/* Waste Distribution - Enhanced visualization */}
             <div className="p-6 bg-white border rounded-xl border-zinc-200">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -627,7 +706,20 @@ const MasterCollectorDashboard = () => {
               </div>
               
               <div className="p-3 mb-3 text-sm text-blue-700 border border-blue-100 rounded-lg bg-blue-50">
-                <p><strong>Cara Membaca Grafik:</strong> Diagram menunjukkan proporsi jenis sampah yang telah dikumpulkan berdasarkan berat.</p>
+                <div className="space-y-2">
+                  <p><strong>Cara Membaca Diagram:</strong></p>
+                  <ul className="ml-4 space-y-1 list-disc">
+                    <li>Diagram menunjukkan proporsi setiap jenis sampah dari total keseluruhan</li>
+                    <li>Ukuran setiap bagian menggambarkan persentase berat sampah</li>
+                    <li>Hover pada bagian diagram untuk melihat detail:</li>
+                    <ul className="ml-4 space-y-1 list-circle">
+                      <li>Berat dalam kilogram (kg)</li>
+                      <li>Persentase dari total (%)</li>
+                      <li>Nilai penghasilan (Rp)</li>
+                    </ul>
+                    <li>Tabel di bawah menampilkan rangkuman lengkap data</li>
+                  </ul>
+                </div>
               </div>
 
               <div className="h-80">
