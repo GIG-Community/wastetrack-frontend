@@ -26,3 +26,5 @@ export const storage = getStorage(app);
 setPersistence(auth, browserLocalPersistence).catch((err) => {
   console.error("Error setting persistence:", err);
 });
+
+export default app;
