@@ -10,23 +10,30 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDelayPassed(true);
-    }, 2000); 
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, []);
 
   // Cek otorisasi user
   useEffect(() => {
-    const checkAuthorization = () => {
+    const checkAuthorization = async () => {
       if (!currentUser) {
         setAuthStatus('unauthorized');
         return;
       }
 
+      // CEK EMAIL VERIFIKASI - PERBAIKAN: tidak lagi logout otomatis
+      if (!currentUser.emailVerified) {
+        setAuthStatus('unverified');
+        return;
+      }
+
+      // Cek role
       if (allowedRoles && userData) {
         const userRole = userData.role;
         if (!allowedRoles.includes(userRole)) {
-          setAuthStatus('unauthorized');
+          setAuthStatus('forbidden');
           return;
         }
       }
@@ -45,12 +52,27 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     );
   }
 
-  // Redirect jika tidak berhak
+  // Handle berbagai status otentikasi
   if (authStatus === 'unauthorized') {
-    return <Navigate to={currentUser ? '/403' : '/login'} replace />;
+    return <Navigate to="/login" replace />;
   }
 
-  return children;
+  if (authStatus === 'unverified') {
+    // Redirect ke halaman verifikasi email jika status unverified
+    return <Navigate to="/email-verification" state={{ email: currentUser?.email }} replace />;
+  }
+
+  if (authStatus === 'forbidden') {
+    return <Navigate to="/403" replace />;
+  }
+
+  // Jika semua cek lulus, tampilkan children
+  if (authStatus === 'authorized') {
+    return children; // Show the protected content when authorized
+  }
+
+  // Default fallback: redirect to login for any other status
+  return <Navigate to="/login" replace />;
 };
 
 export default ProtectedRoute;
