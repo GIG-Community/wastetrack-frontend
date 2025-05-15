@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getAuth, applyActionCode, verifyPasswordResetCode, confirmPasswordReset } from 'firebase/auth';
-import { app } from '../../lib/firebase'; // Pastikan path ini sesuai dengan struktur folder Anda
+import app from '../../lib/firebase'; // Pastikan Anda mengimpor app dari file firebase Anda
 
 const Verify = () => {
     const [searchParams] = useSearchParams();
