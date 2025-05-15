@@ -13,7 +13,7 @@ import {
   Loader2,
   AlertCircle
 } from 'lucide-react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -98,34 +98,44 @@ const CollectorDashboard = () => {
 
     setLoading(true);
     try {
-      // Bersihkan subscription sebelumnya jika ada
       unsubscribes.forEach(unsubscribe => unsubscribe());
       const newUnsubscribes = [];
 
-      // Buat query untuk mendapatkan semua pengambilan untuk kolektor ini
+      // Add user data subscription for real-time balance updates
+      const userRef = doc(db, 'users', currentUser.uid);
+      const unsubscribeUser = onSnapshot(userRef, (userDoc) => {
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          // Update stats with new balance
+          setStats(prevStats => ({
+            ...prevStats,
+            totalEarnings: userData.balance || 0
+          }));
+        }
+      }, (error) => {
+        console.error('Error fetching user data:', error);
+        setError('Gagal memuat data pengguna');
+      });
+
+      // Existing pickups subscription
       const pickupsQuery = query(
         collection(db, 'pickups'),
         where('collectorId', '==', currentUser.uid)
       );
       
-      // Buat subscription untuk mendapatkan update real-time
-      const unsubscribePickups = onSnapshot(
-        pickupsQuery, 
-        (pickupsSnapshot) => {
-          const pickupsData = pickupsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-          
-          processDashboardData(pickupsData);
-        },
-        (error) => {
-          console.error('Error fetching pickups:', error);
-          setError('Gagal memuat data pengambilan');
-        }
-      );
+      const unsubscribePickups = onSnapshot(pickupsQuery, (pickupsSnapshot) => {
+        const pickupsData = pickupsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        processDashboardData(pickupsData);
+      }, (error) => {
+        console.error('Error fetching pickups:', error);
+        setError('Gagal memuat data pengambilan');
+      });
       
-      newUnsubscribes.push(unsubscribePickups);
+      newUnsubscribes.push(unsubscribeUser, unsubscribePickups);
       setUnsubscribes(newUnsubscribes);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -186,18 +196,26 @@ const CollectorDashboard = () => {
 
       const statusCounts = getStatusCounts(pickupsData);
 
-      setStats({
+      const thisMonthEarnings = thisMonthPickups.reduce((sum, pickup) => 
+        sum + (pickup.collectorEarnings || 0), 0
+      );
+      
+      const lastMonthEarnings = lastMonthPickups.reduce((sum, pickup) => 
+        sum + (pickup.collectorEarnings || 0), 0
+      );
+
+      setStats(prevStats => ({
+        ...prevStats,
         totalPickups: pickupsData.length,
         totalWaste: allTimeTotals.weight,
-        totalEarnings: allTimeTotals.earnings,
         pendingPickups: statusCounts.pending,
         assignedPickups: statusCounts.assigned,
         completedPickups: statusCounts.completed,
         thisMonthWaste: thisMonthTotals.weight,
         lastMonthWaste: lastMonthTotals.weight,
-        thisMonthEarnings: thisMonthTotals.earnings,
-        lastMonthEarnings: lastMonthTotals.earnings
-      });
+        thisMonthEarnings: thisMonthEarnings,
+        lastMonthEarnings: lastMonthEarnings
+      }));
 
       // Proses data tren
       const last7Days = [];
@@ -513,11 +531,11 @@ const CollectorDashboard = () => {
             <StatCard
               icon={DollarSign}
               label="Total Penghasilan"
-              value={`Rp ${stats.totalEarnings.toLocaleString('id-ID')}`}
+              value={`Rp ${(stats.totalEarnings || 0).toLocaleString('id-ID')}`}
               trend="vs bulan lalu"
               trend_value={`${((stats.thisMonthEarnings - stats.lastMonthEarnings) / Math.max(stats.lastMonthEarnings, 1) * 100 || 0).toFixed(1)}%`}
               variant={stats.thisMonthEarnings >= stats.lastMonthEarnings ? 'success' : 'danger'}
-              infoText="Penghasilan yang Anda dapatkan dari seluruh aktivitas pengumpulan sampah (10% dari nilai total sampah)"
+              infoText="Total penghasilan Anda dari aktivitas pengumpulan sampah"
             />
             
             {/* Waste Collection Card */}
@@ -558,9 +576,34 @@ const CollectorDashboard = () => {
               </div>
               
               <div className="p-3 mb-3 text-sm text-blue-700 border border-blue-100 rounded-lg bg-blue-50">
-                <p><strong>Cara Membaca Grafik:</strong> Garis biru menunjukkan berat sampah (kg), garis hijau menunjukkan penghasilan (Rp). Data ditampilkan untuk 7 hari terakhir.</p>
+                <div className="space-y-2">
+                  <p><strong>Cara Membaca Grafik:</strong></p>
+                  <ul className="ml-4 space-y-1 list-disc">
+                    <li><span className="text-indigo-600">Garis biru</span> menunjukkan berat sampah dalam kilogram (kg)</li>
+                    <li><span className="text-emerald-600">Garis hijau</span> menunjukkan penghasilan dalam Rupiah (Rp)</li>
+                    <li>Sumbu kiri (biru) menunjukkan skala berat dalam kg</li>
+                    <li>Sumbu kanan (hijau) menunjukkan skala penghasilan dalam Rp</li>
+                    <li>Data ditampilkan untuk 7 hari terakhir dari kiri ke kanan</li>
+                  </ul>
+                </div>
               </div>
-              
+
+              <div className="mb-3 text-sm text-center text-zinc-500">
+                <div className="flex flex-col items-center gap-2">
+                  <p className="font-medium">Statistik 7 Hari Terakhir</p>
+                  <div className="flex items-center justify-center gap-6">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50">
+                      <div className="w-3 h-3 rounded-full bg-[#6366F1]" />
+                      <span className="text-indigo-700">Berat Sampah (Kg)</span>
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50">
+                      <div className="w-3 h-3 rounded-full bg-[#10B981]" />
+                      <span className="text-emerald-700">Penghasilan (Rp)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={pickupTrends}>
@@ -572,22 +615,49 @@ const CollectorDashboard = () => {
                     />
                     <YAxis 
                       yAxisId="left"
-                      stroke="#71717A"
+                      stroke="#6366F1"
                       fontSize={12}
-                      label={{ value: 'Berat (kg)', angle: -90, position: 'insideLeft' }}
+                      label={{ 
+                        value: 'Berat Sampah (kg)', 
+                        angle: -90, 
+                        position: 'insideLeft',
+                        style: { fill: '#6366F1' }
+                      }}
                     />
                     <YAxis 
                       yAxisId="right"
                       orientation="right"
                       stroke="#10B981"
                       fontSize={12}
-                      label={{ value: 'Penghasilan (Rp)', angle: 90, position: 'insideRight' }}
+                      label={{ 
+                        value: 'Penghasilan (Rupiah)', 
+                        angle: 90, 
+                        position: 'insideRight',
+                        style: { fill: '#10B981' }
+                      }}
                     />
                     <Tooltip 
-                      formatter={(value, name) => [
-                        name === 'waste' ? `${value} kg` : `Rp ${value.toLocaleString('id-ID')}`,
-                        name === 'waste' ? 'Berat' : 'Penghasilan'
-                      ]}
+                      contentStyle={{ 
+                        backgroundColor: 'white',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '0.5rem',
+                        padding: '0.75rem'
+                      }}
+                      formatter={(value, name) => {
+                        switch (name) {
+                          case 'waste':
+                            return [`${value.toFixed(1)} kg`, 'Berat Sampah'];
+                          case 'earnings':
+                            return [`Rp ${value.toLocaleString('id-ID')}`, 'Penghasilan'];
+                          default:
+                            return [value, name];
+                        }
+                      }}
+                      labelStyle={{ 
+                        color: '#374151', 
+                        fontWeight: 'bold',
+                        marginBottom: '0.5rem'
+                      }}
                     />
                     <Line 
                       yAxisId="left"
@@ -614,7 +684,7 @@ const CollectorDashboard = () => {
               </div>
             </div>
 
-            {/* Waste Distribution - Improved visualization */}
+            {/* Waste Distribution - dengan penjelasan yang lebih detail */}
             <div className="p-6 bg-white border rounded-xl border-zinc-200">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -627,7 +697,20 @@ const CollectorDashboard = () => {
               </div>
               
               <div className="p-3 mb-3 text-sm text-blue-700 border border-blue-100 rounded-lg bg-blue-50">
-                <p><strong>Cara Membaca Grafik:</strong> Diagram menunjukkan proporsi jenis sampah yang telah dikumpulkan berdasarkan berat.</p>
+                <div className="space-y-2">
+                  <p><strong>Cara Membaca Diagram:</strong></p>
+                  <ul className="ml-4 space-y-1 list-disc">
+                    <li>Diagram menunjukkan proporsi setiap jenis sampah dari total keseluruhan</li>
+                    <li>Ukuran setiap bagian menggambarkan persentase berat sampah</li>
+                    <li>Hover pada bagian diagram untuk melihat detail:</li>
+                    <ul className="ml-4 space-y-1 list-circle">
+                      <li>Berat dalam kilogram (kg)</li>
+                      <li>Persentase dari total (%)</li>
+                      <li>Nilai penghasilan (Rp)</li>
+                    </ul>
+                    <li>Tabel di bawah menampilkan rangkuman lengkap data</li>
+                  </ul>
+                </div>
               </div>
 
               <div className="h-80">

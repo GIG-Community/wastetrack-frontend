@@ -71,19 +71,20 @@ const Badge = ({ variant = "default", children, className = "", ...props }) => {
 
 // Tooltip component for providing additional information
 const Tooltip = ({ children, content }) => (
-  <div className="relative flex items-center group">
+  <div className="relative flex items-start group">
     {children}
     <div className="absolute z-50 invisible w-48 p-2 mb-2 text-xs text-white transition-all duration-200 transform -translate-x-1/2 rounded-lg opacity-0 bottom-full left-1/2 bg-zinc-800 group-hover:opacity-100 group-hover:visible">
-      {content}
+      <div className="text-left">{content}</div>
       <div className="absolute transform -translate-x-1/2 border-4 border-transparent top-full left-1/2 border-t-zinc-800"></div>
     </div>
   </div>
 );
 
+
 const InfoCard = ({ title, children }) => (
-  <div className="p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+  <div className="flex flex-col p-4 mb-6 text-left border border-blue-100 rounded-lg bg-blue-50">
     <div className="flex items-start gap-3">
-      <Info className="h-5 w-5 text-blue-500 mt-0.5" />
+      <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
       <div>
         <h4 className="mb-1 font-medium text-blue-800">{title}</h4>
         <div className="text-sm text-blue-700">
@@ -98,7 +99,7 @@ const StatCard = ({ icon: Icon, label, value, trend, className = "", tooltip = "
   <div className={`bg-white rounded-xl p-4 border border-zinc-200 ${className}`}>
     <div className="flex items-start justify-between">
       <div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-start gap-1">
           <p className="text-sm font-medium text-zinc-600">{label}</p>
           {tooltip && (
             <Tooltip content={tooltip}>
@@ -113,7 +114,7 @@ const StatCard = ({ icon: Icon, label, value, trend, className = "", tooltip = "
       </div>
     </div>
     {trend && (
-      <div className="flex items-center gap-1 mt-2">
+      <div className="flex items-start gap-1 mt-2">
         <Activity className="w-4 h-4 text-emerald-500" />
         <span className="text-sm text-emerald-600">{trend}</span>
       </div>
@@ -261,13 +262,13 @@ const Employees = () => {
       >
         <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
           {/* Header with Action Button */}
-          <div className="flex flex-col items-start justify-between gap-4 mb-8 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col items-start justify-between gap-4 mb-8 sm:flex-row sm:items-start">
+            <div className="flex items-start gap-4">
               <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
                 <Users className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-zinc-800">
+                <h1 className="text-2xl font-semibold text-left text-zinc-800">
                   Manajemen Petugas
                 </h1>
                 <p className="text-sm text-zinc-500">
@@ -275,10 +276,10 @@ const Employees = () => {
                 </p>
               </div>
             </div>
-            <button className="inline-flex items-center gap-2 px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600">
+            {/* <button className="inline-flex items-center gap-2 px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600">
               <Plus className="w-5 h-5" />
               Tambah Petugas
-            </button>
+            </button> */}
           </div>
 
           {/* Information Card */}
@@ -291,7 +292,7 @@ const Employees = () => {
           </InfoCard>
 
           {/* Stats Overview */}
-          <div className="grid grid-cols-2 gap-4 mb-8 lg:grid-cols-4">
+          <div className="grid justify-start grid-cols-2 gap-4 mb-8 text-center lg:grid-cols-3">
             <StatCard
               icon={Users}
               label="Total Petugas"
@@ -311,70 +312,76 @@ const Employees = () => {
               value={stats.totalPickups || 0}
               tooltip="Jumlah total pengumpulan sampah yang telah dilakukan oleh semua petugas"
             />
-            <StatCard
+            {/* <StatCard
               icon={Star}
               label="Rata-rata Rating"
               value={stats.avgRating || '0.0'}
               tooltip="Nilai rata-rata rating yang diberikan kepada petugas oleh nasabah"
-            />
+            /> */}
           </div>
 
-          {/* Search and Filters */}
-          <div className="flex flex-col gap-4 mb-6 sm:flex-row">
-            <div className="relative flex-1">
-              <Search className="absolute w-5 h-5 -translate-y-1/2 left-3 top-1/2 text-zinc-400" />
-              <Input
-                type="text"
-                placeholder="Cari petugas berdasarkan nama, email, atau telepon..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full sm:w-48"
-            >
-              <option value="all">Semua Status</option>
-              <option value="active">Aktif</option>
-              <option value="inactive">Tidak Aktif</option>
-            </Select>
-          </div>
-
-          {/* Collectors List */}
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <Loader2 className="w-8 h-8 mx-auto mb-4 animate-spin text-emerald-500" />
-                <p className="text-zinc-500">Memuat data petugas...</p>
-              </div>
-            </div>
-          ) : filteredCollectors.length === 0 ? (
-            <div className="py-12 text-center bg-white border rounded-xl border-zinc-200">
-              <UserX className="w-12 h-12 mx-auto mb-4 text-zinc-400" />
-              <h3 className="mb-1 text-lg font-medium text-zinc-800">
-                Tidak ada petugas ditemukan
-              </h3>
-              <p className="max-w-sm mx-auto text-zinc-500">
-                {searchTerm || filterStatus !== 'all' 
-                  ? 'Coba sesuaikan filter atau kata kunci pencarian Anda'
-                  : 'Mulai dengan menambahkan petugas pertama untuk bank sampah Anda'}
-              </p>
-              <button className="inline-flex items-center gap-2 px-4 py-2 mt-4 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600">
-                <Plus className="w-5 h-5" />
-                Tambah Petugas
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {filteredCollectors.map((collector) => (
-                <div 
-                  key={collector.id}
-                  className="p-6 transition-all duration-200 bg-white border rounded-xl border-zinc-200 hover:border-emerald-500/20 hover:shadow-lg"
+          {/* /* Search and Filters */} 
+                <div className="flex flex-col gap-4 mb-6 sm:flex-row">
+                <div className="relative flex-1">
+                  <Search className="absolute w-5 h-5 -translate-y-1/2 left-3 top-1/2 text-zinc-400" />
+                  <Input
+                  type="text"
+                  placeholder="Cari petugas berdasarkan nama, email, atau telepon..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                  />
+                </div>
+                <Select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full sm:w-48"
                 >
-                  {/* Collector Header */}
-                  <div className="flex items-start justify-between mb-6">
+                  <option value="all">Semua Status</option>
+                  <option value="active">Aktif</option>
+                  <option value="inactive">Tidak Aktif</option>
+                </Select>
+                </div>
+
+                {/* Collectors List */}
+                {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                  <Loader2 className="w-8 h-8 mx-auto mb-4 animate-spin text-emerald-500" />
+                  <p className="text-zinc-500">Memuat data petugas...</p>
+                  </div>
+                </div>
+                ) : filteredCollectors.length === 0 ? (
+                <div className="p-8 bg-white border rounded-xl border-zinc-200">
+                  <div className="flex items-start">
+                  <div className="p-3 mr-4 rounded-lg bg-zinc-100">
+                    <UserX className="w-8 h-8 text-zinc-500" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="mb-2 text-lg font-medium text-zinc-800">
+                    Tidak ada petugas ditemukan
+                    </h3>
+                    <p className="mb-4 text-zinc-500">
+                    {searchTerm || filterStatus !== 'all' 
+                      ? 'Coba sesuaikan filter atau kata kunci pencarian Anda'
+                      : 'Mulai dengan menambahkan petugas pertama untuk bank sampah Anda'}
+                    </p>
+                    <button className="inline-flex items-center gap-2 px-4 py-2 text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600">
+                    <Plus className="w-5 h-5" />
+                    Tambah Petugas
+                    </button>
+                  </div>
+                  </div>
+                </div>
+                ) : (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {filteredCollectors.map((collector) => (
+                  <div 
+                    key={collector.id}
+                    className="p-6 transition-all duration-200 bg-white border rounded-xl border-zinc-200 hover:border-emerald-500/20 hover:shadow-lg"
+                  >
+                    {/* Collector Header */}
+                  <div className="flex items-start justify-between mb-6 text-left">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center justify-center w-12 h-12 rounded-full bg-emerald-100">
                         <Users className="w-6 h-6 text-emerald-600" />
@@ -395,13 +402,13 @@ const Employees = () => {
                   </div>
 
                   {/* Info Grid */}
-                  <div className="space-y-4">
+                  <div className="space-y-4 text-start">
                     {/* Location */}
                     <div className="flex items-start gap-3">
                       <MapPin className="flex-shrink-0 w-5 h-5 mt-1 text-zinc-400" />
                       <div>
-                        <p className="text-sm font-medium text-zinc-600">Lokasi</p>
-                        <p className="text-sm text-zinc-800 line-clamp-2">
+                        <p className="text-sm font-medium text-left text-zinc-600">Lokasi</p>
+                        <p className="text-sm text-left text-zinc-800 line-clamp-2">
                           {collector.profile?.location?.address || 'Alamat belum diisi'}
                         </p>
                         <p className="text-sm text-zinc-500">
@@ -414,7 +421,7 @@ const Employees = () => {
                     </div>
 
                     {/* Contact */}
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-3 text-start">
                       <PhoneCall className="flex-shrink-0 w-5 h-5 mt-1 text-zinc-400" />
                       <div>
                         <p className="text-sm font-medium text-zinc-600">Kontak</p>
@@ -458,7 +465,7 @@ const Employees = () => {
                         onClick={() => updateCollectorStatus(
                           collector.id, 
                           collector.status === 'active' ? 'inactive' : 'active'
-                        )}
+                        )}R
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm w-full justify-center ${
                           collector.status === 'active' 
                             ? 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
