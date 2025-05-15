@@ -5,6 +5,7 @@ import Register from '../pages/auth/Register';
 import EmailVerification from '../pages/auth/EmailVerification';
 import ForgotPassword from '../pages/auth/ForgotPassword';
 import ResetPassword from '../pages/auth/ResetPassword';
+import Verify from '../pages/auth/Verify';
 import Dashboard from '../pages/dashboard/Dashboard';
 import ProtectedRoute from '../components/ProtectedRoute';
 import NotFound from '../pages/NotFound';
@@ -96,6 +97,9 @@ const AppRoutes = () => (
 
     {/* Location Correction */}
     <Route path="/pick-location" element={<PickLocation />} />
+
+    {/* Verify */}
+    <Route path="/verify" element={<Verify />} />
 
     {/* Super Admin Routes */}
     <Route path="/dashboard/super-admin/*" element={
