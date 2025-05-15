@@ -9,6 +9,7 @@
  * @param {Object} options.geoOptions - Geolocation API options
  * @param {number} options.maxRetries - Maximum number of retries for low accuracy
  * @param {number} options.minAccuracy - Minimum accuracy in meters (lower is better)
+ * @param {boolean} options.useITSFallback - Whether to use ITS Zero Point Monument as fallback
  * @returns {void}
  */
 const getCurrentLocation = ({
@@ -23,9 +24,33 @@ const getCurrentLocation = ({
         maximumAge: 0
     },
     maxRetries = 3,
-    minAccuracy = 100 // in meters
+    minAccuracy = 100, // in meters
+    useITSFallback = true // Enable ITS Zero Point Monument fallback by default
 } = {}) => {
     let retryCount = 0;
+    
+    // ITS Zero Point Monument coordinates and details
+    const ITS_ZERO_POINT = {
+        coordinates: {
+            lat: "-7.285727",
+            lng: "112.795585"
+        },
+        address: "Monumen Titik Nol ITS, Jalan Teknik Mesin, Keputih, Sukolilo, Surabaya, Jawa Timur, Jawa, 60111, Indonesia",
+        city: "Surabaya",
+        province: "Jawa Timur",
+        country: "Indonesia",
+        postalCode: "60111",
+        addressDetails: {
+            road: "Jalan Teknik Mesin",
+            suburb: "Keputih",
+            city_district: "Sukolilo",
+            city: "Surabaya",
+            state: "Jawa Timur",
+            region: "Jawa",
+            postcode: "60111",
+            country: "Indonesia"
+        }
+    };
 
     const getLocation = () => {
         if (!("geolocation" in navigator)) {
@@ -33,6 +58,17 @@ const getCurrentLocation = ({
             onError(error);
 
             handleDefaultError(error, 'Geolocation tidak didukung oleh browser Anda');
+            
+            // Use ITS Zero Point as fallback if enabled
+            if (useITSFallback) {
+                console.log('Using ITS Zero Point Monument as fallback due to geolocation not being supported');
+                onSuccess({
+                    ...ITS_ZERO_POINT,
+                    accuracy: 0, // Indicate this is a fallback, not real accuracy
+                    timestamp: new Date().toISOString(),
+                    isFallback: true
+                });
+            }
             return;
         }
 
@@ -47,6 +83,19 @@ const getCurrentLocation = ({
                     retryCount++;
                     console.log(`Location accuracy (${accuracy}m) exceeds threshold (${minAccuracy}m). Retrying... (${retryCount}/${maxRetries})`);
                     setTimeout(getLocation, 1000);
+                    return;
+                }
+
+                // If we've reached max retries and accuracy is still poor, use ITS Zero Point if enabled
+                if (accuracy > minAccuracy && retryCount >= maxRetries && useITSFallback) {
+                    console.log(`Max retries (${maxRetries}) reached with poor accuracy (${accuracy}m). Using ITS Zero Point Monument as fallback.`);
+                    onLoading(false);
+                    onSuccess({
+                        ...ITS_ZERO_POINT,
+                        originalAccuracy: accuracy, // Store the original poor accuracy
+                        timestamp: new Date().toISOString(),
+                        isFallback: true
+                    });
                     return;
                 }
 
@@ -135,7 +184,19 @@ const getCurrentLocation = ({
                     errorMessage = 'Waktu mendapatkan lokasi habis. Silakan coba lagi.';
                 }
 
-                handleDefaultError(error, errorMessage);
+                // Use ITS Zero Point as fallback if enabled
+                if (useITSFallback) {
+                    console.log(`Using ITS Zero Point Monument as fallback due to geolocation error: ${error.code}`);
+                    onSuccess({
+                        ...ITS_ZERO_POINT,
+                        accuracy: 0, // Indicate this is a fallback, not real accuracy
+                        timestamp: new Date().toISOString(),
+                        isFallback: true,
+                        originalError: error.code
+                    });
+                } else {
+                    handleDefaultError(error, errorMessage);
+                }
             },
             geoOptions
         );
