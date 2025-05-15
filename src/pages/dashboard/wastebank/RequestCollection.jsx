@@ -322,11 +322,11 @@ const RequestCollection = () => {
       const collectionData = {
         ...formData,
         wasteBankId: currentUser.uid,
-        wasteBankName: userData?.profile?.institution,
+        wasteBankName: userData?.profile?.institution || 'Bank Sampah Tanpa Nama',
         createdAt: Timestamp.now(),
         date: Timestamp.fromDate(new Date(formData.date)),
         wastes: Object.fromEntries(
-          Object.entries(formData.wasteWeights).map(([type, weight]) => [
+          Object.entries(formData.wasteWeights).filter(([_, weight]) => weight > 0).map(([type, weight]) => [
             type,
             { 
               weight,
@@ -336,7 +336,7 @@ const RequestCollection = () => {
           ])
         ),
         wasteQuantities: Object.fromEntries(
-          Object.entries(formData.wasteWeights).map(([type, weight]) => [
+          Object.entries(formData.wasteWeights).filter(([_, weight]) => weight > 0).map(([type, weight]) => [
             type,
             Math.ceil(weight) // Convert to whole number for quantities
           ])
@@ -344,10 +344,19 @@ const RequestCollection = () => {
         status: 'pending',
         completionCallback: {
           collectionIds: collectionUpdates
-        }
+        },
+        // Adding additional useful fields
+        updatedAt: Timestamp.now(),
+        location: formData.location || { 
+          address: formData.address,
+          coordinates: null 
+        },
+        phone: formData.phone || userData?.profile?.phone || ''
       };
 
+      // Submit to masterBankRequests collection instead of industryRequests
       await addDoc(collection(db, 'masterBankRequests'), collectionData);
+
       setSuccess(true);
       setFormData({
         date: '',
@@ -367,14 +376,14 @@ const RequestCollection = () => {
       });
       setStep(1);
     } catch (err) {
-      setError('Gagal menjadwalkan pengambilan');
-      console.error(err);
+      setError('Gagal menjadwalkan pengambilan: ' + (err.message || 'Kesalahan tidak diketahui'));
+      console.error('Error mengirim permintaan:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Update request status  
+  // Update request status - modified to use masterBankRequests collection  
   const updateRequestStatus = async (requestId, newStatus) => {
     try {
       const requestRef = doc(db, 'masterBankRequests', requestId);
