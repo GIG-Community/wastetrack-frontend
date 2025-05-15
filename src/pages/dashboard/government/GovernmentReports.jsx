@@ -131,7 +131,7 @@ const InfoTooltip = ({ children }) => (
   </div>
 );
 
-const WastebankReports = () => {
+const GovernmentReports = () => {
   const { userData } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -508,9 +508,28 @@ const WastebankReports = () => {
     // Calculate monthly trends combining both types
     const monthlyData = {};
     const processTransaction = (transaction, type) => {
+      // Add null check for completedAt
       if (!transaction.completedAt) return;
       
-      const date = new Date(transaction.completedAt.seconds * 1000);
+      // Check if completedAt is a Firebase timestamp or regular date
+      const timestamp = transaction.completedAt;
+      let date;
+      
+      if (timestamp.seconds) {
+        // Firebase Timestamp
+        date = new Date(timestamp.seconds * 1000);
+      } else if (timestamp instanceof Date) {
+        // Regular Date object
+        date = timestamp;
+      } else if (typeof timestamp === 'string' || typeof timestamp === 'number') {
+        // String or number timestamp
+        date = new Date(timestamp);
+      } else {
+        // Invalid timestamp format
+        console.warn('Invalid timestamp format:', timestamp);
+        return;
+      }
+      
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       
       if (!monthlyData[monthKey]) {
@@ -552,16 +571,26 @@ const WastebankReports = () => {
     const monthlyOffset = {};
     const wasteTypeOffset = {};
 
-    // Process carbon offset from small bank pickups
+    // Process carbon offset from small bank pickups with null check
     pickups.forEach(pickup => {
       const impact = calculateImpact(pickup.wastes);
       totalCarbonOffset += impact.carbonOffset;
       totalPotentialCredits += impact.potentialCredits;
 
-      // Calculate monthly offset
-      const date = new Date(pickup.completedAt.seconds * 1000);
-      const monthKey = date.toISOString().slice(0, 7);
-      monthlyOffset[monthKey] = (monthlyOffset[monthKey] || 0) + impact.carbonOffset;
+      // Calculate monthly offset with null check for timestamp
+      if (pickup.completedAt) {
+        let date;
+        if (pickup.completedAt.seconds) {
+          date = new Date(pickup.completedAt.seconds * 1000);
+        } else if (pickup.completedAt instanceof Date) {
+          date = pickup.completedAt;
+        } else {
+          date = new Date(pickup.completedAt);
+        }
+        
+        const monthKey = date.toISOString().slice(0, 7);
+        monthlyOffset[monthKey] = (monthlyOffset[monthKey] || 0) + impact.carbonOffset;
+      }
 
       // Calculate offset by waste type
       Object.entries(pickup.wastes || {}).forEach(([type, data]) => {
@@ -579,16 +608,26 @@ const WastebankReports = () => {
       });
     });
 
-    // Process carbon offset from master requests
+    // Process carbon offset from master requests with null check
     masterRequests.forEach(request => {
       const impact = calculateImpact(request.wastes);
       totalCarbonOffset += impact.carbonOffset;
       totalPotentialCredits += impact.potentialCredits;
 
-      // Add to monthly offset
-      const date = new Date(request.completedAt.seconds * 1000);
-      const monthKey = date.toISOString().slice(0, 7);
-      monthlyOffset[monthKey] = (monthlyOffset[monthKey] || 0) + impact.carbonOffset;
+      // Add to monthly offset with null check
+      if (request.completedAt) {
+        let date;
+        if (request.completedAt.seconds) {
+          date = new Date(request.completedAt.seconds * 1000);
+        } else if (request.completedAt instanceof Date) {
+          date = request.completedAt;
+        } else {
+          date = new Date(request.completedAt);
+        }
+        
+        const monthKey = date.toISOString().slice(0, 7);
+        monthlyOffset[monthKey] = (monthlyOffset[monthKey] || 0) + impact.carbonOffset;
+      }
 
       // Add to waste type offset
       Object.entries(request.wastes || {}).forEach(([type, data]) => {
@@ -1002,7 +1041,7 @@ const WastebankReports = () => {
                       {stats.wasteTypes.map((entry, index) => (
                         <Cell 
                           key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
+                          fill={COLORS[index % COLORS.length] || "#000000"} // Provide fallback color
                         />
                       ))}
                     </Pie>
@@ -1115,4 +1154,4 @@ const WastebankReports = () => {
   );
 };
 
-export default WastebankReports;
+export default GovernmentReports;
