@@ -8,7 +8,7 @@ import {
   Tag,
   ChevronDown
 } from 'lucide-react';
-import { collection, query, getDocs, where } from 'firebase/firestore';
+import { collection, query, getDocs, where, addDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import Swal from 'sweetalert2';
@@ -120,7 +120,10 @@ const CustomerMarketplace = () => {
           : item
       ));
     } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
+      setCart([...cart, { 
+        ...product, 
+        quantity: 1 
+      }]);
     }
   };
 
@@ -141,15 +144,23 @@ const CustomerMarketplace = () => {
     try {
       const orderData = {
         userId: currentUser.uid,
+        customerName: userData?.profile?.fullName || 'Unknown Customer',
+        customerPhone: userData?.phone || 'N/A',
         items: cart.map(item => ({
           productId: item.id,
           quantity: item.quantity,
           price: item.price,
-          name: item.name
+          name: item.name,
+          weight: item.weight || 0
         })),
-        totalAmount: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+        marketplaceId: cart[0]?.sellerId || cart[0]?.marketplaceId,
+        total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
         status: 'pending',
-        createdAt: new Date()
+        createdAt: new Date(),
+        shippingAddress: userData?.location?.address || '',
+        city: userData?.location?.city || '',
+        postalCode: userData?.postalCode || '',
+        notes: ''
       };
 
       await addDoc(collection(db, 'orders'), orderData);
