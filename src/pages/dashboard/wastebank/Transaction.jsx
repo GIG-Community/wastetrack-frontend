@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Building2, 
+import {
+  Building2,
   Search,
   Package,
   Loader2,
@@ -17,6 +17,7 @@ import {
   TreePineIcon,
   BoxSelectIcon,
   ChevronRight,
+  ChevronLeft,
   Info,
   HelpCircle
 } from 'lucide-react';
@@ -25,6 +26,7 @@ import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 import 'sweetalert2/dist/sweetalert2.css';
 
 // Reusable Components
@@ -69,23 +71,15 @@ const Badge = ({ variant = "default", children, className = "", ...props }) => {
 };
 
 // Tooltip component for additional information - modified to be toggle-based instead of hover
-const Tooltip = ({ children, content }) => {
-  const [isVisible, setIsVisible] = useState(false);
-  
-  return (
-    <div className="relative group">
-      <div onClick={() => setIsVisible(!isVisible)} className="cursor-pointer">
-        {children}
-      </div>
-      {isVisible && (
-        <div className="absolute z-20 w-48 px-3 py-2 mb-2 text-xs text-white transform -translate-x-1/2 rounded-lg bg-zinc-800 bottom-full left-1/2">
-          {content}
-          <div className="absolute transform -translate-x-1/2 border-4 border-transparent top-full left-1/2 border-t-zinc-800"></div>
-        </div>
-      )}
+const Tooltip = ({ children, content }) => (
+  <div className="relative flex items-start group">
+    {children}
+    <div className="absolute z-50 invisible w-48 p-2 mb-2 text-xs text-white transition-all duration-200 transform -translate-x-1/2 rounded-lg opacity-0 bottom-full left-1/2 bg-zinc-800 group-hover:opacity-100 group-hover:visible">
+      <div className="text-left">{content}</div>
+      <div className="absolute transform -translate-x-1/2 border-4 border-transparent top-full left-1/2 border-t-zinc-800"></div>
     </div>
-  );
-};
+  </div>
+);
 
 // Hover-based tooltip specifically for help icons (question mark)
 const HoverTooltip = ({ children, content }) => (
@@ -101,18 +95,18 @@ const HoverTooltip = ({ children, content }) => (
 // Information panel component - modified with collapsible behavior
 const InfoPanel = ({ title, children }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   return (
-    <div className="p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+    <div className="text-left p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
       <div className="flex gap-3">
-        <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+        <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
         <div className="flex-1">
           <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
-            <h3 className="text-sm font-medium text-blue-800">{title}</h3>
+            <h3 className="mb-1 font-medium text-blue-800">{title}</h3>
             <ChevronRight className={`w-4 h-4 text-blue-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
           </div>
           {isExpanded && (
-            <div className="mt-1 text-sm text-blue-700">{children}</div>
+            <div className="text-sm text-blue-700">{children}</div>
           )}
         </div>
       </div>
@@ -120,24 +114,28 @@ const InfoPanel = ({ title, children }) => {
   );
 };
 
-const StatusCard = ({ label, count, icon: Icon, description, className, tooltip }) => (
-  <div className={`bg-white p-6 rounded-xl border border-gray-200 hover:shadow-md transition-all cursor-pointer group ${className}`}>
+const StatCard = ({ label, count, icon: Icon, description, className, tooltip }) => (
+  <div className={`bg-white rounded-xl p-4 border border-zinc-200 ${className}`}>
     <div className="flex items-start justify-between">
-      <div>
-        <div className="p-2.5 bg-gray-50 rounded-lg w-fit group-hover:bg-emerald-50 transition-colors">
-          <Icon className="w-5 h-5 text-gray-600 transition-colors group-hover:text-emerald-600" />
-        </div>
-        <div className="flex items-center gap-1.5 mt-3">
-          <p className="text-sm font-medium text-gray-600">{label}</p>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="p-2.5 bg-gray-50 rounded-full">
+            <Icon className="w-5 h-5 text-zinc-600" />
+          </div>
           {tooltip && (
-            <HoverTooltip content={tooltip}>
-              <HelpCircle className="w-3.5 h-3.5 text-gray-400" />
-            </HoverTooltip>
+            <Tooltip content={tooltip}>
+              <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
+            </Tooltip>
           )}
         </div>
-        <p className="mt-1 text-2xl font-semibold text-gray-800">{count}</p>
+        <div>
+          <div className="flex items-start gap-1">
+            <p className="text-sm font-medium text-zinc-600">{label}</p>
+          </div>
+        </div>
+        <p className="mt-1 text-left text-2xl font-semibold text-zinc-800">{count}</p>
         {description && (
-          <p className="mt-1 text-sm text-gray-500">{description}</p>
+          <p className="hidden mt-1 text-sm text-gray-500">{description}</p>
         )}
       </div>
     </div>
@@ -155,7 +153,7 @@ const QuickAction = ({ icon: Icon, label, onClick, variant = "default", tooltip 
   const button = (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium 
+      className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium 
         transition-all hover:shadow-sm ${variants[variant]}`}
     >
       <Icon className="w-4 h-4" />
@@ -192,8 +190,8 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
   };
 
   const formatCurrency = (value) => {
-    return new Intl.NumberFormat('id-ID', { 
-      style: 'currency', 
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
@@ -228,24 +226,24 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
     <div className="overflow-hidden transition-all bg-white border border-gray-200 rounded-xl hover:shadow-md group">
       {/* Status Bar with Delivery Type Indicator */}
       <div className="flex items-center">
-        <div className={`h-1 flex-grow ${statusColors[pickup.status]?.replace('text-', 'bg-').split(' ')[0]}`} />
+        <div className={`h-1 flex-grow ${isDelivery ? 'bg-blue-100' : 'bg-emerald-100'}`} />
         <span className={`px-2 py-0.5 text-xs font-medium ${isDelivery ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
           {isDelivery ? 'Antar Sendiri' : 'Jemput'}
         </span>
       </div>
-      
+
       <div className="p-6">
         {/* Header with toggle */}
         <div className="flex items-start justify-between mb-6 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
           <div className="flex items-start gap-4">
-            <div className="p-3 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50">
+            <div className="p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50">
               <Users className="w-6 h-6 text-gray-600 transition-colors group-hover:text-emerald-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-800 transition-colors group-hover:text-emerald-600">
+              <h3 className=" text-left text-lg font-semibold text-gray-800 transition-colors group-hover:text-emerald-600">
                 {pickup.userName}
               </h3>
-              <div className="flex items-center gap-3 mt-2">
+              <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
                   <PhoneCall className="w-4 h-4 text-gray-400" />
                   <span className="text-sm text-gray-600">
@@ -260,8 +258,8 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
               </div>
             </div>
           </div>
-          
-          <div className="flex items-start gap-4 text-right">
+
+          <div className="flex items-start gap-8 text-right">
             <div>
               <p className="text-xs text-gray-400">Dibuat Pada</p>
               <p className="text-sm font-medium text-gray-600">
@@ -276,8 +274,8 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
                 </>
               )}
             </div>
-            <ChevronRight 
-              className={`w-5 h-5 text-gray-400 transform transition-transform duration-200 mt-2
+            <ChevronRight
+              className={`w-5 h-5 text-gray-400 transform transition-transform duration-200
                 ${isExpanded ? 'rotate-90' : ''}`}
             />
           </div>
@@ -287,11 +285,13 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
         <div className={`transition-all duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>
           {/* Details Grid */}
           <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
-            <div className="flex items-start gap-3 p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50">
-              <Calendar className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
-              <div>
+            <div className="flex transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50 p-4">
+              <div className="flex-shrink-0 mr-3 mt-0.5">
+                <Calendar className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
+              </div>
+              <div className="flex-1 text-left">
                 <p className="text-sm font-medium text-gray-700">Jadwal</p>
-                <p className="mt-1 text-sm text-gray-600">
+                <p className="mt-1 text-sm text-gray-500">
                   {new Date(pickup.date?.seconds * 1000).toLocaleDateString('id-ID', {
                     weekday: 'long',
                     year: 'numeric',
@@ -303,16 +303,19 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50">
-              <MapPin className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
-              <div>
+
+            <div className="flex transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50 p-4">
+              <div className="flex-shrink-0 mr-3 mt-0.5">
+                <MapPin className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
+              </div>
+              <div className="flex-1 text-left">
                 <p className="text-sm font-medium text-gray-700">Lokasi</p>
-                <p className="mt-1 text-sm text-gray-600">{pickup.location}</p>
+                <p className="mt-1 text-sm text-gray-500">{pickup.location || "(-) Antar Sendiri"}</p>
                 {pickup.notes && (
                   <p className="mt-1 text-sm italic text-gray-500">"{pickup.notes}"</p>
                 )}
                 {pickup.coordinates && (
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="hidden mt-1 text-xs text-gray-500">
                     {pickup.coordinates.lat.toFixed(6)}, {pickup.coordinates.lng.toFixed(6)}
                   </p>
                 )}
@@ -322,14 +325,14 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
             {isCompleted ? (
               <div className="flex items-start gap-3 p-4 transition-colors bg-emerald-50 rounded-xl">
                 <TreePine className="w-5 h-5 text-emerald-600" />
-                <div>
+                <div className="text-left">
                   <p className="text-sm font-medium text-emerald-700">Hasil Pengumpulan</p>
-                  <p className="mt-2 text-sm text-emerald-600">
+                  <p className="mt-1 text-sm text-emerald-600">
                     Total Nilai: <span className="font-semibold">{formatCurrency(pickup.totalValue)}</span>
                   </p>
                   {pickup.pointsAmount && (
                     <p className="text-sm text-emerald-600">
-                      Poin Diperoleh: <span className="font-semibold">{pickup.pointsAmount}</span>
+                      Poin Diperoleh: <span className="font-semibold">{pickup.pointsAmount}</span> poin
                     </p>
                   )}
                 </div>
@@ -341,8 +344,8 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
                   <p className="text-sm font-medium text-gray-700">Jenis Sampah</p>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {pickup.wasteTypes?.map((type, index) => (
-                      <span 
-                        key={index} 
+                      <span
+                        key={index}
                         className="px-2 py-1 text-xs border rounded-full bg-emerald-50 text-emerald-700 border-emerald-100"
                       >
                         {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -399,7 +402,7 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
               label="Ubah Status"
               onClick={() => onStatusChange(pickup)}
               variant={pickup.status === 'completed' ? 'success' : 'default'}
-              // tooltip="Ubah status pengumpulan sampah"
+            // tooltip="Ubah status pengumpulan sampah"
             />
             {isCompleted && !pickup.pointsAdded && pickup.wastes && (
               <QuickAction
@@ -417,7 +420,7 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
               </span>
             )}
           </div>
-          
+
           {pickup.status === 'pending' && (
             <QuickAction
               icon={AlertCircle}
@@ -434,6 +437,12 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
 };
 
 const Transaction = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [pickups, setPickups] = useState([]);
@@ -454,14 +463,14 @@ const Transaction = () => {
   useEffect(() => {
     let pickupsUnsubscribe;
     let collectorsUnsubscribe;
-    
+
     if (currentUser?.uid) {
       // Using closures to manage unsubscribe functions
       const unsubscribes = fetchInitialData();
       pickupsUnsubscribe = unsubscribes.pickupsUnsubscribe;
       collectorsUnsubscribe = unsubscribes.collectorsUnsubscribe;
     }
-    
+
     // Cleanup function when component unmounts
     return () => {
       if (pickupsUnsubscribe) pickupsUnsubscribe();
@@ -472,12 +481,12 @@ const Transaction = () => {
   const fetchInitialData = () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       // Setup both listeners
       const pickupsUnsubscribe = setupPickupsListener();
       const collectorsUnsubscribe = setupCollectorsListener();
-      
+
       return { pickupsUnsubscribe, collectorsUnsubscribe };
     } catch (err) {
       setError('Gagal memuat data. Silakan coba lagi.');
@@ -488,22 +497,22 @@ const Transaction = () => {
         confirmButtonColor: '#10B981'
       });
       setLoading(false);
-      return { pickupsUnsubscribe: () => {}, collectorsUnsubscribe: () => {} };
+      return { pickupsUnsubscribe: () => { }, collectorsUnsubscribe: () => { } };
     }
   };
 
   const setupPickupsListener = () => {
     if (!currentUser?.uid) {
       setError('Autentikasi diperlukan');
-      return () => {};
+      return () => { };
     }
-    
+
     try {
       const pickupsQuery = query(
         collection(db, 'pickups'),
         where('wasteBankId', '==', currentUser.uid)
       );
-      
+
       // Using onSnapshot instead of getDocs
       const unsubscribe = onSnapshot(
         pickupsQuery,
@@ -512,7 +521,7 @@ const Transaction = () => {
             id: doc.id,
             ...doc.data()
           }));
-          
+
           setPickups(pickupsData);
           setLoading(false);
         },
@@ -522,12 +531,12 @@ const Transaction = () => {
           setLoading(false);
         }
       );
-      
+
       return unsubscribe;
     } catch (error) {
       console.error('Error menyiapkan listener pengumpulan:', error);
       setLoading(false);
-      return () => {};
+      return () => { };
     }
   };
 
@@ -538,7 +547,7 @@ const Transaction = () => {
         where('role', '==', 'collector'),
         where('profile.institution', '==', userData.id)
       );
-      
+
       // Using onSnapshot instead of getDocs
       const unsubscribe = onSnapshot(
         collectorsQuery,
@@ -553,11 +562,11 @@ const Transaction = () => {
           console.error('Error memantau data petugas:', error);
         }
       );
-      
+
       return unsubscribe;
     } catch (error) {
       console.error('Error menyiapkan listener petugas:', error);
-      return () => {};
+      return () => { };
     }
   };
 
@@ -592,11 +601,11 @@ const Transaction = () => {
             <div class="flex items-center gap-2">
               <span class="text-base">${statusOptions.find(s => s.value === pickup.status)?.icon}</span>
               <span class="font-medium ${statusOptions.find(s => s.value === pickup.status)?.color} px-3 py-1 rounded-lg">
-                ${pickup.status === 'pending' ? 'Menunggu' : 
-                  pickup.status === 'assigned' ? 'Ditugaskan' : 
-                  pickup.status === 'in_progress' ? 'Dalam Proses' : 
-                  pickup.status === 'completed' ? 'Selesai' : 
-                  pickup.status === 'cancelled' ? 'Dibatalkan' : 
+                ${pickup.status === 'pending' ? 'Menunggu' :
+          pickup.status === 'assigned' ? 'Ditugaskan' :
+            pickup.status === 'in_progress' ? 'Dalam Proses' :
+              pickup.status === 'completed' ? 'Selesai' :
+                pickup.status === 'cancelled' ? 'Dibatalkan' :
                   pickup.status.charAt(0).toUpperCase() + pickup.status.slice(1)}
               </span>
             </div>
@@ -635,7 +644,7 @@ const Transaction = () => {
       didOpen: () => {
         const statusSelect = document.getElementById('newStatus');
         const collectorDiv = document.getElementById('collectorSelectDiv');
-        
+
         if (statusSelect && collectorDiv) {
           // Add event listener directly, without depending on external function
           statusSelect.addEventListener('change', (e) => {
@@ -708,7 +717,7 @@ const Transaction = () => {
       setProcessing(true);
       const pickupRef = doc(db, 'pickups', pickup.id);
       const userRef = doc(db, 'users', pickup.userId);
-      
+
       // Calculate points based on actual waste weights
       let totalPoints = 0;
       Object.entries(pickup.wastes).forEach(([type, data]) => {
@@ -765,10 +774,10 @@ const Transaction = () => {
   // Filter pickups based on status, search term, and date range
   const filteredPickups = pickups.filter(pickup => {
     const matchesStatus = filterStatus === 'all' || pickup.status === filterStatus;
-    const matchesSearch = 
+    const matchesSearch =
       pickup.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       pickup.location?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     // Date filtering
     const pickupDate = pickup.date ? new Date(pickup.date.seconds * 1000) : null;
     const matchesDateRange = (!startDate || !endDate || !pickupDate) ? true : (
@@ -817,17 +826,16 @@ const Transaction = () => {
           disabled={currentPage === 1}
           className="px-3 py-1 text-sm bg-white border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
-          Sebelumnya
+          <ChevronLeft />
         </button>
         {[...Array(totalPages)].map((_, index) => (
           <button
             key={index + 1}
             onClick={() => setCurrentPage(index + 1)}
-            className={`px-3 py-1 text-sm border rounded-md ${
-              currentPage === index + 1
-                ? 'bg-emerald-500 text-white'
-                : 'bg-white hover:bg-gray-50'
-            }`}
+            className={`px-3 py-1 text-sm border rounded-md ${currentPage === index + 1
+              ? 'bg-emerald-500 text-white'
+              : 'bg-white hover:bg-gray-50'
+              }`}
           >
             {index + 1}
           </button>
@@ -837,7 +845,7 @@ const Transaction = () => {
           disabled={currentPage === totalPages}
           className="px-3 py-1 text-sm bg-white border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
-          Berikutnya
+          <ChevronRight />
         </button>
       </div>
     </div>
@@ -851,7 +859,7 @@ const Transaction = () => {
 
   return (
     <div className="flex min-h-screen bg-zinc-50/50">
-      <Sidebar 
+      <Sidebar
         role={userData?.role}
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
@@ -859,146 +867,135 @@ const Transaction = () => {
       <main className={`flex-1 transition-all duration-300 ease-in-out
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
       >
-        <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
+        <div className="p-6">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
-                <Package className="w-6 h-6 text-emerald-500" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-800">Pengumpulan Sampah</h1>
-                <p className="mt-1 text-sm text-gray-500">
-                  Kelola dan pantau semua permintaan pengumpulan sampah
-                </p>
-                <button 
-                  className="px-2 py-1 mt-1 text-xs text-blue-600 rounded-md bg-blue-50 hover:bg-blue-100"
-                  onClick={() => document.getElementById('infoPanel').scrollIntoView({ behavior: 'smooth' })}
-                >
-                  Lihat Panduan
-                </button>
-              </div>
+          <div className="flex text-left items-center gap-4 mb-8">
+            <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <Package className="w-6 h-6 text-emerald-500" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-800">Pengumpulan Sampah</h1>
+              <p className="text-sm text-gray-500">
+                Kelola dan pantau semua permintaan pengumpulan sampah
+              </p>
             </div>
           </div>
 
           {/* Information Panel with ID for direct access */}
           <div id="infoPanel">
-            <InfoPanel title="Tentang Pengumpulan Sampah">
-              <p>
-                Halaman ini memungkinkan Anda untuk mengelola semua permintaan pengumpulan sampah. 
-                Data ditampilkan secara real-time dan akan diperbarui otomatis ketika ada perubahan.
+            <InfoPanel title="Informasi">
+              <p className="text-left">
+                Halaman ini untuk mengelola semua permintaan pengumpulan sampah.
                 Anda dapat mengubah status pengumpulan, menugaskan petugas, dan menambahkan poin reward untuk pengguna.
               </p>
+              <div className="mt-4">
+                <span className="font-semibold">Catatan</span>: Data ditampilkan secara real-time dan akan diperbarui secara otomatis ketika terjadi perubahan.
+              </div>
             </InfoPanel>
           </div>
 
           {/* Status Cards - with less intrusive tooltips */}
           <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
-            <StatusCard
+            <StatCard
               label="Total Pengumpulan"
               count={pickups.length}
               icon={Package}
-              description="Total semua pengumpulan"
+              // description="Total semua pengumpulan"
               tooltip="Jumlah keseluruhan permintaan pengumpulan yang tercatat dalam sistem"
             />
-            <StatusCard
+            <StatCard
               label="Menunggu"
               count={statusCounts.pending || 0}
               icon={Clock}
-              description="Belum diproses"
+              // description="Belum diproses"
               className="border-yellow-200"
               tooltip="Permintaan pengumpulan yang belum diproses atau ditugaskan ke petugas"
             />
-            <StatusCard
+            <StatCard
               label="Sedang Diproses"
               count={statusCounts.processing || 0}
               icon={Truck}
-              description="Sedang dalam pengumpulan"
+              // description="Sedang dalam pengumpulan"
               className="border-blue-200"
               tooltip="Permintaan pengumpulan yang sedang dalam proses pengambilan oleh petugas"
             />
-            <StatusCard
+            <StatCard
               label="Selesai"
               count={statusCounts.completed || 0}
               icon={CheckCircle2}
-              description="Berhasil diselesaikan"
+              // description="Berhasil diselesaikan"
               className="border-emerald-200"
               tooltip="Permintaan pengumpulan yang telah berhasil diselesaikan"
             />
           </div>
 
-          {/* Filters, Search, and Sort */}
-          <div className="flex flex-col gap-4 mb-6">
-            <div className="flex flex-col gap-4 sm:flex-row">
-              <div className="flex flex-1 gap-4">
+          {/* Combined Filters, Search, and Sort - Single Row Layout */}
+          <div className="mb-6">
+            <div className="flex flex-col md:flex-row items-center gap-3">
+              {/* Search Field */}
+              <div className="relative flex-grow w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <Input
                   type="text"
                   placeholder="Cari berdasarkan nama pelanggan atau lokasi..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="max-w-md"
+                  className="pl-10 sm:placeholder:text-sm py-3"
                 />
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-40"
-                  />
-                  <span className="text-gray-500">sampai</span>
-                  <Input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-40"
-                  />
-                </div>
               </div>
-              <Select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full sm:w-48"
-              >
-                <option value="all">Semua Status</option>
-                <option value="pending">Menunggu</option>
-                <option value="processing">Diproses</option>
-                <option value="completed">Selesai</option>
-                <option value="cancelled">Dibatalkan</option>
-              </Select>
-            </div>
-            
-            {/* Sort Options */}
-            <div className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-lg">
-              <span className="text-sm font-medium text-gray-600">Urutkan:</span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleSort('createdAt')}
-                  className={`flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-md transition-colors
-                    ${sortBy === 'createdAt' 
-                      ? 'bg-emerald-50 text-emerald-600' 
-                      : 'text-gray-600 hover:bg-gray-50'}`}
+
+              {/* Date Range - Compact Inline Format */}
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  placeholder="mm/dd/yy"
+                  className="w-full md:w-40 py-3"
+                />
+                <span className="text-gray-400">-</span>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  placeholder="mm/dd/yy"
+                  className="w-full md:w-40 py-3"
+                />
+              </div>
+
+              {/* Status Filter with Label */}
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <span className="text-sm text-gray-600 whitespace-nowrap">Status:</span>
+                <Select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full md:w-40 py-3"
                 >
-                  Tanggal Dibuat
-                  {sortBy === 'createdAt' && (
-                    <span className="text-xs">
-                      {sortOrder === 'desc' ? '↓' : '↑'}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => handleSort('completedAt')}
-                  className={`flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-md transition-colors
-                    ${sortBy === 'completedAt' 
-                      ? 'bg-emerald-50 text-emerald-600' 
-                      : 'text-gray-600 hover:bg-gray-50'}`}
+                  <option value="all">Semua</option>
+                  <option value="pending">Menunggu</option>
+                  <option value="processing">Diproses</option>
+                  <option value="completed">Selesai</option>
+                  <option value="cancelled">Dibatalkan</option>
+                </Select>
+              </div>
+
+              {/* Sort Dropdown with Label */}
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <span className="text-sm text-gray-600 whitespace-nowrap">Urutkan:</span>
+                <Select
+                  value={`${sortBy}-${sortOrder}`}
+                  onChange={(e) => {
+                    const [newSortBy, newSortOrder] = e.target.value.split('-');
+                    setSortBy(newSortBy);
+                    setSortOrder(newSortOrder);
+                  }}
+                  className="w-full md:w-40 py-3"
                 >
-                  Tanggal Selesai
-                  {sortBy === 'completedAt' && (
-                    <span className="text-xs">
-                      {sortOrder === 'desc' ? '↓' : '↑'}
-                    </span>
-                  )}
-                </button>
+                  <option value="createdAt-desc">Terbaru Dibuat</option>
+                  <option value="createdAt-asc">Terlama Dibuat</option>
+                  <option value="completedAt-desc">Terbaru Selesai</option>
+                  <option value="completedAt-asc">Terlama Selesai</option>
+                </Select>
               </div>
             </div>
           </div>
@@ -1013,7 +1010,7 @@ const Transaction = () => {
             ) : error ? (
               <div className="py-12 text-center">
                 <p className="text-red-500">{error}</p>
-                <button 
+                <button
                   className="px-4 py-2 mt-4 text-white rounded-lg bg-emerald-500"
                   onClick={fetchInitialData}
                 >
