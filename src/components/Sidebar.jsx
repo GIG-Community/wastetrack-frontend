@@ -140,7 +140,7 @@ const Sidebar = ({ role, onCollapse }) => {
         { label: 'Laporan', path: '/dashboard/wastebank/reports' },
       ],
       collector: [
-        { label: 'Dasbor', path: '/dashboard/collector/dashboard' },
+        { label: 'Dasbor', path: '/dashboard/collector' },
         { label: 'Tugas Saya', path: '/dashboard/collector/assignments' },
         { label: 'Koleksi', path: '/dashboard/collector/collections' },
         { label: 'Rute', path: '/dashboard/collector/routes' }
