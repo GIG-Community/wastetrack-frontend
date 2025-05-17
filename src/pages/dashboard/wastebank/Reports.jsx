@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   BarChart2,
   TreesIcon,
   DropletIcon,
@@ -20,21 +20,22 @@ import {
   DollarSign,
   Scale,
   Wallet,
-  Info
+  Info,
+  ChevronRight
 } from 'lucide-react';
 import { collection, query, onSnapshot, where, orderBy } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
-import { 
-  LineChart, 
+import {
+  LineChart,
   Bar,
   BarChart,
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -45,6 +46,7 @@ import 'jspdf-autotable';
 import moment from 'moment';
 import 'moment/locale/id'; // Import Indonesian locale
 import generateAIReport from '../../../lib/api/generateReport';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 // Set moment to use Indonesian locale
 moment.locale('id');
@@ -105,29 +107,29 @@ const Select = ({ className = "", ...props }) => (
 );
 
 const StatCard = ({ icon: Icon, label, value, subValue, trend, trendValue, trendSuffix = '%', tooltip }) => (
-  <div className="p-6 transition-all bg-white border shadow-sm rounded-xl border-zinc-200 hover:shadow-md group hover:border-emerald-200">
+  <div className="bg-white rounded-xl text-left p-4 border border-zinc-200">
     <div className="flex items-start justify-between">
-      <div>
-        <div className="p-2.5 bg-emerald-50 rounded-lg w-fit group-hover:bg-emerald-100 transition-colors">
-          <Icon className="w-6 h-6 text-emerald-600" />
-        </div>
-        <div className="mt-3">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-zinc-600">{label}</p>
-            {tooltip && <InfoTooltip>{tooltip}</InfoTooltip>}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="p-2.5 bg-gray-50 rounded-full">
+            <Icon className="w-5 h-5 text-zinc-600" />
           </div>
-          <p className="mt-1 text-2xl font-semibold transition-colors text-zinc-800 group-hover:text-emerald-600">
-            {value}
-          </p>
-          {subValue && (
-            <p className="mt-1 text-sm text-zinc-500">{subValue}</p>
-          )}
+          {tooltip && <InfoTooltip>{tooltip}</InfoTooltip>}
         </div>
+        <div>
+          <p className="text-sm font-medium text-zinc-600">{label}</p>
+          <p className="mt-2 text-2xl text-left font-semibold text-zinc-800">{value}</p>
+        </div>
+        <div className="hidden flex items-center gap-2">
+        </div>
+        {subValue && (
+          <p className="mt-1 text-sm text-zinc-500">{subValue}</p>
+        )}
       </div>
       {trend && trendValue !== undefined && (
         <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium
-          ${Number(trendValue) >= 0 
-            ? 'bg-emerald-50 text-emerald-600' 
+          ${Number(trendValue) >= 0
+            ? 'bg-emerald-50 text-emerald-600'
             : 'bg-red-50 text-red-600'}`}
         >
           {Number(trendValue) >= 0 ? (
@@ -168,19 +170,34 @@ const InfoTooltip = ({ children }) => (
 );
 
 // Information panel component
-const InfoPanel = ({ title, children }) => (
-  <div className="p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
-    <div className="flex gap-3">
-      <Info className="flex-shrink-0 w-5 h-5 mt-0.5 text-blue-500" />
-      <div>
-        <h3 className="mb-1 text-sm font-medium text-blue-800">{title}</h3>
-        <div className="text-sm text-blue-700">{children}</div>
+const InfoPanel = ({ title, children }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="text-left p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+      <div className="flex gap-3">
+        <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+        <div className="flex-1">
+          <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+            <h3 className="mb-1 font-medium text-blue-800">{title}</h3>
+            <ChevronRight className={`w-4 h-4 text-blue-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+          </div>
+          {isExpanded && (
+            <div className="text-sm text-blue-700">{children}</div>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Reports = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -211,11 +228,11 @@ const Reports = () => {
 
   useEffect(() => {
     let unsubscribe;
-    
+
     if (currentUser?.uid) {
       unsubscribe = setupReportDataListener();
     }
-    
+
     // Cleanup function to unsubscribe when component unmounts or deps change
     return () => {
       if (unsubscribe) {
@@ -242,7 +259,7 @@ const Reports = () => {
   const setupReportDataListener = () => {
     if (!currentUser?.uid) {
       setError("ID Pengguna tidak ditemukan");
-      return () => {};
+      return () => { };
     }
 
     setLoading(true);
@@ -381,13 +398,13 @@ const Reports = () => {
             }
             return a.monthIndex - b.monthIndex;
           });
-          
+
           reportData.monthlyTrends = sortedMonthlyDataValues.map(monthItem => {
             let monthlyCarbon = 0;
             Object.entries(monthItem.wasteDetails).forEach(([type, weight]) => {
               const factors = IMPACT_FACTORS[type] || IMPACT_FACTORS['default'];
               if (factors && factors.carbon) {
-                 monthlyCarbon += (weight || 0) * factors.carbon;
+                monthlyCarbon += (weight || 0) * factors.carbon;
               }
             });
             return {
@@ -415,7 +432,7 @@ const Reports = () => {
       console.error('Error menyiapkan listener data laporan:', error);
       setError('Gagal memuat data laporan');
       setLoading(false);
-      return () => {};
+      return () => { };
     }
   };
 
@@ -443,7 +460,7 @@ const Reports = () => {
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 15;
     let y = margin;
-    
+
     // Add header
     doc.setFillColor(16, 185, 129); // Emerald-500 color
     doc.rect(0, 0, pageWidth, 40, 'F');
@@ -451,78 +468,78 @@ const Reports = () => {
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
     doc.text('Laporan Bank Sampah', margin, 25);
-    
+
     doc.setFontSize(10);
     doc.text(`Dibuat pada: ${moment().format('D MMMM YYYY')}`, margin, 35);
     doc.text(`Rentang Waktu: ${dateRangeTranslations[dateRange]}`, pageWidth - margin - 50, 35, { align: 'right' });
-    
+
     y = 50;
-    
+
     // Add summary section
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text('Ringkasan', margin, y);
-    
+
     y += 10;
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    
+
     // Add stats in a nice layout
     doc.setDrawColor(220, 220, 220);
     doc.setFillColor(248, 250, 252);
     doc.roundedRect(margin, y, pageWidth - margin * 2, 50, 3, 3, 'FD');
-    
+
     y += 10;
     doc.setFont('helvetica', 'bold');
     doc.text('Total Pendapatan:', margin + 10, y);
     doc.setFont('helvetica', 'normal');
     doc.text(`Rp ${reports.financialStats.totalRevenue.toLocaleString('id-ID')}`, margin + 60, y);
-    
+
     doc.setFont('helvetica', 'bold');
-    doc.text('Total Berat:', margin + pageWidth/2, y);
+    doc.text('Total Berat:', margin + pageWidth / 2, y);
     doc.setFont('helvetica', 'normal');
-    doc.text(`${reports.collectionStats.totalWeight.toFixed(1)} kg`, margin + pageWidth/2 + 50, y);
-    
+    doc.text(`${reports.collectionStats.totalWeight.toFixed(1)} kg`, margin + pageWidth / 2 + 50, y);
+
     y += 10;
     doc.setFont('helvetica', 'bold');
     doc.text('Pengambilan Selesai:', margin + 10, y);
     doc.setFont('helvetica', 'normal');
     doc.text(`${reports.collectionStats.completedPickups}`, margin + 60, y);
-    
+
     doc.setFont('helvetica', 'bold');
-    doc.text('Harga Rata-rata:', margin + pageWidth/2, y);
+    doc.text('Harga Rata-rata:', margin + pageWidth / 2, y);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Rp ${reports.financialStats.averagePerKg.toLocaleString('id-ID')}/kg`, margin + pageWidth/2 + 50, y);
-    
+    doc.text(`Rp ${reports.financialStats.averagePerKg.toLocaleString('id-ID')}/kg`, margin + pageWidth / 2 + 50, y);
+
     y += 10;
     doc.setFont('helvetica', 'bold');
     doc.text('Pengurangan Karbon:', margin + 10, y);
     doc.setFont('helvetica', 'normal');
     doc.text(`${reports.impactStats.carbonReduced.toFixed(1)} kg CO₂`, margin + 60, y);
-    
+
     y += 20;
-    
+
     // Add waste distribution table
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text('Distribusi Sampah', margin, y);
     y += 10;
-    
+
     const wasteColumns = [
       { header: 'Jenis Sampah', dataKey: 'name' },
       { header: 'Berat (kg)', dataKey: 'weight' },
       { header: 'Pendapatan (Rp)', dataKey: 'revenue' },
       { header: 'Harga Rata-rata (Rp/kg)', dataKey: 'averagePrice' }
     ];
-    
+
     const wasteRows = reports.revenueByWasteType.map(waste => ({
       ...waste,
       weight: waste.weight.toFixed(1),
       revenue: waste.revenue.toLocaleString('id-ID'),
       averagePrice: waste.averagePrice.toLocaleString('id-ID')
     }));
-    
+
     doc.autoTable({
       startY: y,
       columns: wasteColumns,
@@ -538,20 +555,20 @@ const Reports = () => {
       },
       margin: { left: margin, right: margin }
     });
-    
+
     y = doc.lastAutoTable.finalY + 15;
-    
+
     // Add monthly trends table
     if (y + 60 > pageHeight) {
       doc.addPage();
       y = margin;
     }
-    
+
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.text('Tren Bulanan', margin, y);
     y += 10;
-    
+
     const trendColumns = [
       { header: 'Bulan', dataKey: 'month' },
       { header: 'Berat (kg)', dataKey: 'weight' },
@@ -559,14 +576,14 @@ const Reports = () => {
       { header: 'Pengambilan', dataKey: 'pickups' },
       { header: 'Pengurangan CO₂ (kg)', dataKey: 'carbon' }
     ];
-    
+
     const trendRows = reports.monthlyTrends.map(trend => ({
       ...trend,
       weight: trend.weight.toFixed(1),
       revenue: trend.revenue.toLocaleString('id-ID'),
       carbon: trend.carbon.toFixed(1)
     }));
-    
+
     doc.autoTable({
       startY: y,
       columns: trendColumns,
@@ -582,32 +599,32 @@ const Reports = () => {
       },
       margin: { left: margin, right: margin }
     });
-    
+
     y = doc.lastAutoTable.finalY + 15;
-    
+
     // Add footer
     if (y + 40 > pageHeight) {
       doc.addPage();
       y = margin;
     }
-    
+
     doc.setFillColor(16, 185, 129, 0.1);
     doc.roundedRect(margin, y, pageWidth - margin * 2, 40, 3, 3, 'FD');
-    
+
     y += 15;
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(16, 85, 66);
     doc.text('Dampak Lingkungan', margin + 10, y);
-    
+
     y += 10;
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Aktivitas daur ulang Anda mencegah sekitar ${reports.impactStats.carbonReduced.toFixed(1)} kg emisi CO₂`, 
+    doc.text(`Aktivitas daur ulang Anda mencegah sekitar ${reports.impactStats.carbonReduced.toFixed(1)} kg emisi CO₂`,
       margin + 10, y);
-    doc.text(`Ini setara dengan ${(reports.impactStats.carbonReduced / 20).toFixed(1)} pohon yang ditanam selama setahun`, 
+    doc.text(`Ini setara dengan ${(reports.impactStats.carbonReduced / 20).toFixed(1)} pohon yang ditanam selama setahun`,
       margin + 10, y + 10);
-    
+
     // Save the PDF
     doc.save(`laporan-bank-sampah-${dateRange}-${new Date().toISOString().split('T')[0]}.pdf`);
   };
@@ -615,7 +632,7 @@ const Reports = () => {
   const downloadAIReport = async () => {
     try {
       setIsGeneratingAIReport(true);
-      
+
       const reportData = {
         generatedAt: new Date().toISOString(),
         dateRange,
@@ -623,7 +640,7 @@ const Reports = () => {
       };
 
       const pdfBlob = await generateAIReport(reportData, dateRange, userData);
-      
+
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
       a.href = url;
@@ -669,22 +686,22 @@ const Reports = () => {
 
   return (
     <div className="flex min-h-screen bg-zinc-50/50">
-      <Sidebar 
+      <Sidebar
         role={userData?.role}
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
       <main className={`flex-1 transition-all duration-300 ease-in-out
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
       >
-        <div className="p-8">
+        <div className="p-6">
           {/* Header */}
           <div className="flex flex-col items-start justify-between gap-4 mb-8 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
+            <div className="flex text-left items-center gap-4">
+              <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
                 <BarChart2 className="w-6 h-6 text-emerald-500" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-zinc-800">Laporan & Analitik</h1>
+                <h1 className="text-2xl font-semibold text-zinc-800">Laporan dan Analitik</h1>
                 <p className="text-sm text-zinc-500">Pantau kinerja pengelolaan sampah Anda</p>
               </div>
             </div>
@@ -736,11 +753,11 @@ const Reports = () => {
           </div>
 
           {/* Info panel */}
-          <InfoPanel title="Tentang Laporan & Analitik">
+          <InfoPanel title="Informasi">
             <p>
-              Halaman ini menampilkan ringkasan dan analisis data bank sampah Anda secara real-time. 
-              Data akan otomatis diperbarui saat ada transaksi baru yang masuk ke sistem. 
-              Gunakan filter rentang waktu untuk melihat data dalam periode yang berbeda. 
+              Halaman ini menampilkan ringkasan dan analisis data bank sampah Anda secara real-time.
+              Data akan otomatis diperbarui saat ada transaksi baru yang masuk ke sistem.
+              Gunakan filter rentang waktu untuk melihat data dalam periode yang berbeda.
               Anda juga dapat mengunduh laporan dalam berbagai format.
             </p>
           </InfoPanel>
@@ -752,7 +769,7 @@ const Reports = () => {
               icon={Wallet}
               label="Total Pendapatan"
               value={`Rp ${reports.financialStats.totalRevenue.toLocaleString('id-ID')}`}
-              subValue="Total pemasukan"
+              // subValue="Total pemasukan"
               trend="vs. bulan lalu"
               trendValue={reports.financialStats.revenueGrowth}
               tooltip="Total pendapatan dari seluruh transaksi pada periode waktu yang dipilih"
@@ -761,7 +778,7 @@ const Reports = () => {
               icon={Scale}
               label="Total Berat"
               value={`${reports.collectionStats.totalWeight.toFixed(1)} kg`}
-              subValue={`${reports.collectionStats.totalPickups} pengambilan selesai`}
+              // subValue={`${reports.collectionStats.totalPickups} pengambilan selesai`}
               trend="Harga rata-rata"
               trendValue={`Rp ${reports.financialStats.averagePerKg.toLocaleString('id-ID')}`}
               trendSuffix="/kg"
@@ -772,14 +789,14 @@ const Reports = () => {
               icon={Recycle}
               label="Pengurangan Karbon"
               value={`${reports.impactStats.carbonReduced.toFixed(1)} kg CO₂`}
-              subValue="Emisi CO₂ yang dicegah"
+              // subValue="Emisi CO₂ yang dicegah"
               tooltip="Jumlah emisi karbon yang berhasil dicegah dengan mendaur ulang sampah"
             />
             <StatCard
               icon={TrendingUp}
               label="Dampak Daur Ulang"
               value={`${(reports.impactStats.carbonReduced / 20).toFixed(1)} pohon`}
-              subValue="Setara dengan pohon yang ditanam selama setahun"
+              // subValue="Setara dengan pohon yang ditanam selama setahun"
               tooltip="Dampak lingkungan yang dihasilkan, dikonversi ke jumlah pohon yang ditanam"
             />
           </div>
@@ -796,14 +813,14 @@ const Reports = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={reports.monthlyTrends}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-                    <XAxis 
-                      dataKey="month" 
+                    <XAxis
+                      dataKey="month"
                       stroke="#71717A"
                       fontSize={12}
                       axisLine={false}
                       tickLine={false}
                     />
-                    <YAxis 
+                    <YAxis
                       yAxisId="left"
                       stroke="#71717A"
                       fontSize={12}
@@ -811,16 +828,16 @@ const Reports = () => {
                       axisLine={false}
                       tickLine={false}
                     />
-                    <YAxis 
+                    <YAxis
                       yAxisId="right"
                       orientation="right"
                       stroke="#71717A"
                       fontSize={12}
-                      tickFormatter={(value) => `Rp ${(value/1000).toFixed(0)}rb`}
+                      tickFormatter={(value) => `Rp ${(value / 1000).toFixed(0)}rb`}
                       axisLine={false}
                       tickLine={false}
                     />
-                    <Tooltip 
+                    <Tooltip
                       formatter={(value, name) => {
                         if (name === 'weight') return [`${value.toFixed(1)} kg`, 'Berat'];
                         if (name === 'revenue') return [`Rp ${value.toLocaleString('id-ID')}`, 'Pendapatan'];
@@ -848,7 +865,7 @@ const Reports = () => {
 
             {/* Carbon Impact Chart */}
             <ChartCard
-              title="Tren Dampak Karbon" 
+              title="Tren Dampak Karbon"
               description="Emisi CO₂ yang dicegah bulanan"
               tooltip="Grafik ini menunjukkan jumlah emisi karbon (CO₂) yang berhasil dicegah setiap bulan"
             >
@@ -858,21 +875,21 @@ const Reports = () => {
                     data={reports.monthlyTrends}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-                    <XAxis 
-                      dataKey="month" 
+                    <XAxis
+                      dataKey="month"
                       stroke="#71717A"
                       fontSize={12}
                       axisLine={false}
                       tickLine={false}
                     />
-                    <YAxis 
+                    <YAxis
                       stroke="#71717A"
                       fontSize={12}
                       tickFormatter={(value) => `${value.toFixed(0)} kg`}
                       axisLine={false}
                       tickLine={false}
                     />
-                    <Tooltip 
+                    <Tooltip
                       formatter={(value, name) => {
                         if (name === 'carbon') return [`${Number(value).toFixed(1)} kg CO₂`, 'Pengurangan Karbon'];
                         return [value, name];
@@ -902,7 +919,7 @@ const Reports = () => {
 
             {/* Waste Types Distribution */}
             <ChartCard
-              title="Distribusi Sampah" 
+              title="Distribusi Sampah"
               description="Pendapatan berdasarkan jenis sampah"
               tooltip="Grafik ini menunjukkan persentase pendapatan dari setiap jenis sampah yang dikumpulkan"
             >
@@ -913,18 +930,18 @@ const Reports = () => {
                       data={reports.revenueByWasteType.filter(item => item.revenue > 0)}
                       innerRadius={60}
                       outerRadius={80}
-                      paddingAngle={5}
+                      paddingAngle={0}
                       dataKey="revenue"
                       nameKey="name"
                     >
                       {reports.revenueByWasteType.filter(item => item.revenue > 0).map((entry, index) => (
-                        <Cell 
+                        <Cell
                           key={`cell-${index}`}
                           fill={COLORS[index % COLORS.length]}
                         />
                       ))}
                     </Pie>
-                    <Tooltip 
+                    <Tooltip
                       formatter={(value, name, entry) => [
                         `Rp ${Number(value).toLocaleString('id-ID')}`,
                         `${entry.payload.name} (${Number(entry.payload.weight).toFixed(1)} kg)`
@@ -939,7 +956,7 @@ const Reports = () => {
                   {reports.revenueByWasteType.map((type, index) => (
                     <div key={type.name} className="flex items-center justify-between py-2 border-b border-zinc-100 last:border-b-0">
                       <div className="flex items-center gap-2">
-                        <div 
+                        <div
                           className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: COLORS[index % COLORS.length] }}
                         />
@@ -962,31 +979,29 @@ const Reports = () => {
 
           {/* Impact Summary */}
           <div className="p-6 border bg-emerald-50 rounded-xl border-emerald-200">
-            <div className="flex items-start gap-4">
-              <div className="p-2 rounded-lg bg-emerald-100">
-                <Recycle className="w-5 h-5 text-emerald-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-emerald-800">Ringkasan Dampak Lingkungan</h3>
-                <p className="mt-1 text-sm text-emerald-700">
-                  Aktivitas pengelolaan sampah Anda telah berkontribusi untuk:
+            {/* Header - Centered */}
+            <div className="text-center mb-4">
+              <h3 className="text-lg font-semibold text-emerald-800">Ringkasan Dampak Lingkungan</h3>
+              <p className="mt-1 text-sm text-emerald-700">
+                Aktivitas pengelolaan sampah Anda telah berkontribusi untuk:
+              </p>
+            </div>
+
+            {/* Carbon Stats - Full Width */}
+            <div className="w-full p-4 bg-white/50 rounded-lg my-6">
+              <div className="flex flex-col items-center">
+                <p className="text-2xl font-bold text-emerald-900">
+                  {reports.impactStats.carbonReduced.toFixed(1)} kg CO<sub>2</sub>
                 </p>
-                <div className="grid grid-cols-1 gap-4 mt-4">
-                  <div className="p-4 rounded-lg bg-white/50">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Recycle className="w-5 h-5 text-emerald-600" />
-                      <span className="text-sm font-medium text-emerald-800">Dampak Karbon</span>
-                    </div>
-                    <p className="text-lg font-semibold text-emerald-900">
-                      {reports.impactStats.carbonReduced.toFixed(1)} kg CO₂
-                    </p>
-                    <p className="mt-1 text-xs text-emerald-700">emisi yang dicegah</p>
-                  </div>
-                </div>
-                <p className="mt-4 text-sm text-emerald-700">
-                  <strong>Catatan:</strong> Data ini diperbarui secara real-time dan menunjukkan dampak positif dari kegiatan daur ulang sampah Anda terhadap lingkungan. Teruskan kerja baik Anda!
-                </p>
+                <p className="mt-1 text-sm text-emerald-700">emisi yang dicegah</p>
               </div>
+            </div>
+
+            {/* Footer Note */}
+            <div className="mt-4">
+              <p className="text-sm text-emerald-700">
+                <span className="font-semibold">Catatan:</span> Data ini diperbarui secara real-time dan menunjukkan dampak positif dari kegiatan daur ulang sampah Anda terhadap lingkungan. Teruskan kerja baik Anda!
+              </p>
             </div>
           </div>
         </div>

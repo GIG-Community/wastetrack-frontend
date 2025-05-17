@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
-import { 
-  Calendar, 
+import {
+  Calendar,
   Clock,
   Building2,
   Truck,
   Package,
-  AlertCircle,  
+  AlertCircle,
   CheckCircle2,
   Plus,
   Minus,
@@ -18,37 +18,54 @@ import {
   Phone,
   MapPin,
   Navigation,
-  Info
+  Info,
+  ChevronRight
 } from 'lucide-react';
-import { 
-  collection, 
-  addDoc, 
-  Timestamp, 
-  query, 
-  where, 
-  getDoc, 
-  updateDoc, 
-  doc, 
+import {
+  collection,
+  addDoc,
+  Timestamp,
+  query,
+  where,
+  getDoc,
+  updateDoc,
+  doc,
   onSnapshot,
-  writeBatch 
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { wasteTypes, calculateStorageFromCollections } from '../../../lib/constants';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
-// Helper component for information tooltips/panels
-const InfoPanel = ({ title, children }) => (
-  <div className="p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
-    <div className="flex gap-3">
-      <Info className="w-5 h-5 mt-0.5 text-blue-500 flex-shrink-0" />
-      <div>
-        <h3 className="mb-1 text-sm font-medium text-blue-800">{title}</h3>
-        <div className="text-sm text-blue-700">{children}</div>
+// Information panel component - modified with collapsible behavior
+const InfoPanel = ({ title, children }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="text-left p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+      <div className="flex gap-3">
+        <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+        <div className="flex-1">
+          <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+            <h3 className="mb-1 font-medium text-blue-800">{title}</h3>
+            <ChevronRight className={`w-4 h-4 text-blue-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+          </div>
+          {isExpanded && (
+            <div className="text-sm text-blue-700">{children}</div>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const RequestCollection = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -84,21 +101,21 @@ const RequestCollection = () => {
   // Fetch master wastebanks - Changed to onSnapshot
   useEffect(() => {
     let unsubscribe;
-    
+
     const fetchMasterBanks = () => {
       try {
         const q = query(
           collection(db, 'users'),
           where('role', '==', 'wastebank_master')
         );
-        
+
         // Using onSnapshot instead of getDocs
         unsubscribe = onSnapshot(q, (snapshot) => {
           const masterBankData = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           }));
-          
+
           setMasterBanks(masterBankData);
           setLoadingMasterBanks(false);
         }, (error) => {
@@ -112,7 +129,7 @@ const RequestCollection = () => {
     };
 
     fetchMasterBanks();
-    
+
     // Cleanup function
     return () => {
       if (unsubscribe) unsubscribe();
@@ -122,10 +139,10 @@ const RequestCollection = () => {
   // Fetch completed collections - Changed to onSnapshot
   useEffect(() => {
     let unsubscribe;
-    
+
     const fetchCollections = () => {
       if (!currentUser?.uid) return;
-      
+
       try {
         const q = query(
           collection(db, 'pickups'),
@@ -133,7 +150,7 @@ const RequestCollection = () => {
           where('status', '==', 'completed'),
           where('pointsAdded', '==', true)
         );
-        
+
         // Using onSnapshot instead of getDocs
         unsubscribe = onSnapshot(q, (snapshot) => {
           const collectionsData = snapshot.docs.map(doc => ({
@@ -153,7 +170,7 @@ const RequestCollection = () => {
     };
 
     fetchCollections();
-    
+
     // Cleanup function
     return () => {
       if (unsubscribe) unsubscribe();
@@ -163,7 +180,7 @@ const RequestCollection = () => {
   // Fetch requests
   useEffect(() => {
     if (!currentUser?.uid) return;
-    
+
     let unsubscribe;
 
     try {
@@ -196,7 +213,7 @@ const RequestCollection = () => {
   // Calculate storage from collections - modified to use wastes field
   const storage = useMemo(() => {
     if (!collections.length) return {};
-    
+
     return collections.reduce((acc, collection) => {
       if (collection.wastes) {
         Object.entries(collection.wastes).forEach(([type, data]) => {
@@ -279,12 +296,12 @@ const RequestCollection = () => {
     try {
       const wastesToReduce = {};
       let remainingWeights = { ...formData.wasteWeights };
-      const sortedCollections = [...collections].sort((a, b) => 
+      const sortedCollections = [...collections].sort((a, b) =>
         (a.completedAt?.seconds || 0) - (b.completedAt?.seconds || 0)
       );
 
       const collectionUpdates = [];
-      
+
       for (const collection of sortedCollections) {
         if (Object.values(remainingWeights).every(w => w <= 0)) break;
 
@@ -296,15 +313,15 @@ const RequestCollection = () => {
         // Check both wastes and wasteQuantities
         Object.entries(collection.wastes || {}).forEach(([type, data]) => {
           if (!formData.wasteTypes.includes(type)) return;
-          
+
           const requestedWeight = remainingWeights[type] || 0;
           if (requestedWeight <= 0) return;
 
           const availableWeight = Number(data.weight) || 0;
           const weightToReduce = Math.min(availableWeight, requestedWeight);
-          
+
           if (weightToReduce > 0) {
-            collectionUpdate.wastes[type] = { 
+            collectionUpdate.wastes[type] = {
               weightToReduce,
               // Include other waste data for reference
               points: data.points || 0,
@@ -328,7 +345,7 @@ const RequestCollection = () => {
         wastes: Object.fromEntries(
           Object.entries(formData.wasteWeights).filter(([_, weight]) => weight > 0).map(([type, weight]) => [
             type,
-            { 
+            {
               weight,
               points: 0,
               value: 0
@@ -347,9 +364,9 @@ const RequestCollection = () => {
         },
         // Adding additional useful fields
         updatedAt: Timestamp.now(),
-        location: formData.location || { 
+        location: formData.location || {
           address: formData.address,
-          coordinates: null 
+          coordinates: null
         },
         phone: formData.phone || userData?.profile?.phone || ''
       };
@@ -391,9 +408,9 @@ const RequestCollection = () => {
       const requestData = requestSnapshot.data();
       const previousStatus = requestData.status;
 
-      await updateDoc(requestRef, { 
-        status: newStatus, 
-        updatedAt: Timestamp.now() 
+      await updateDoc(requestRef, {
+        status: newStatus,
+        updatedAt: Timestamp.now()
       });
 
       // If status changed to completed
@@ -451,16 +468,16 @@ const RequestCollection = () => {
   // Available waste types (showing only what's in storage)
   const availableWasteTypes = useMemo(() => {
     if (loadingCollections) return [];
-    
+
     return Object.entries(storage)
-      .filter(([_, quantity]) => quantity > 0) 
-      .map(([typeId, quantity]) => { 
+      .filter(([_, quantity]) => quantity > 0)
+      .map(([typeId, quantity]) => {
         // Find the waste type details
         for (const category of wasteTypes) {
           if (category.subcategories) {
             for (const subcat of category.subcategories) {
               const found = subcat.types.find(t => t.id === typeId);
-              if (found) return { ...found, currentStock: quantity };  
+              if (found) return { ...found, currentStock: quantity };
             }
           } else {
             const found = category.types.find(t => t.id === typeId);
@@ -484,31 +501,29 @@ const RequestCollection = () => {
   };
 
   return (
-    <div className="flex h-screen bg-zinc-50/50">
-      <Sidebar 
+    <div className="flex min-h-screen bg-zinc-50/50">
+      <Sidebar
         role={userData?.role}
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
-      
+
       <main className={`flex-1 transition-all duration-300 ease-in-out overflow-auto
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
       >
         <div className="p-6">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
-                <Truck className="w-6 h-6 text-emerald-500" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-zinc-800">Permintaan Pengambilan</h1>
-                <p className="text-sm text-zinc-500">Jadwalkan pengambilan dari bank sampah induk</p>
-              </div>
+          <div className="flex text-left items-center gap-4 mb-8">
+            <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <Truck className="w-6 h-6 text-emerald-500" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-zinc-800">Permintaan Pengambilan</h1>
+              <p className="text-sm text-zinc-500">Jadwalkan pengambilan dari bank sampah induk</p>
             </div>
           </div>
 
           {/* Information Panel */}
-          <InfoPanel title="Tentang Permintaan Pengambilan">
+          <InfoPanel title="Informasi">
             <p>
               Halaman ini memungkinkan Anda untuk meminta pengambilan sampah dari penyimpanan Anda ke bank sampah induk.
               Data akan diperbarui secara real-time. Ikuti langkah-langkah berikut untuk membuat permintaan:
@@ -537,7 +552,7 @@ const RequestCollection = () => {
               <div className="w-full h-2 rounded-full bg-zinc-200">
                 <div
                   className="h-2 transition-all duration-300 rounded-full bg-emerald-500"
-                  style={{ width: `${(step / 4) * 100}%` }}
+                  style={{ width: `${((step - 1) / (4 - 1)) * 100}%` }}
                 />
               </div>
               <div className="absolute left-0 flex justify-between w-full -top-2">
@@ -548,8 +563,8 @@ const RequestCollection = () => {
                       className={`w-6 h-6 rounded-full flex items-center justify-center text-sm
                         transition-all duration-300 -ml-3 first:ml-0 last:ml-0
                         ${step > index + 1 ? 'bg-emerald-500 text-white' :
-                        step === index + 1 ? 'bg-emerald-500 text-white' :
-                        'bg-zinc-200 text-zinc-500'}`}
+                          step === index + 1 ? 'bg-emerald-500 text-white' :
+                            'bg-zinc-200 text-zinc-500'}`}
                     >
                       {step > index + 1 ? (
                         <Check className="w-4 h-4" />
@@ -557,34 +572,33 @@ const RequestCollection = () => {
                         <span className="text-xs">{index + 1}</span>
                       )}
                     </div>
-                ))}
+                  ))}
               </div>
             </div>
-            <div className="flex justify-between px-1 text-xs text-gray-600">
+            <div className="hidden flex justify-between px-1 text-xs text-gray-600">
               {['Bank Sampah Induk', 'Jadwal', 'Detail Sampah', 'Konfirmasi'].map((text) => (
                 <div key={text} className="flex-1 text-center">{text}</div>
               ))}
             </div>
           </div>
 
-          <form 
+          <form
             onSubmit={(e) => {
               // Prevent form submission unless explicitly triggered from submit button
               e.preventDefault();
-            }} 
+            }}
             className="space-y-6"
           >
             {/* Step 1: Master Bank Selection */}
             {step === 1 && (
               <div className="overflow-hidden bg-white border shadow-sm rounded-xl border-zinc-200">
-                <div className="p-6 border-b border-zinc-100">
+                <div className="p-6 border-b border-zinc-100 flex flex-col items-center justify-center text-center">
                   <div className="flex items-center gap-2">
-                    <Building2 className="w-5 h-5 text-emerald-500" />
                     <h2 className="text-xl font-semibold text-gray-800">Pilih Bank Sampah Induk</h2>
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">Pilih bank sampah induk untuk pengambilan</p>
+                  <p className="mt-3 text-sm text-gray-500">Pilih bank sampah induk untuk pengambilan</p>
                 </div>
-                
+
                 <div className="divide-y divide-gray-100">
                   {loadingMasterBanks ? (
                     <div className="flex justify-center p-6">
@@ -602,7 +616,7 @@ const RequestCollection = () => {
                       masterBanks.map((bank) => (
                         <label
                           key={bank.id}
-                          className={`flex items-start p-6 cursor-pointer hover:bg-emerald-50/50 transition-all
+                          className={`flex items-start text-left p-6 cursor-pointer hover:bg-emerald-50/50 transition-all
                             ${formData.masterBankId === bank.id ? 'bg-emerald-50' : ''}`}
                         >
                           <input
@@ -623,14 +637,14 @@ const RequestCollection = () => {
                                   ${formData.masterBankId === bank.id ? 'bg-emerald-100' : 'bg-gray-100'}`}
                                 >
                                   <Building2 className={`w-6 h-6 
-                                    ${formData.masterBankId === bank.id ? 'text-emerald-600' : 'text-gray-600'}`} 
+                                    ${formData.masterBankId === bank.id ? 'text-emerald-600' : 'text-gray-600'}`}
                                   />
                                 </div>
                                 <div>
                                   <h3 className="font-medium text-gray-900">
                                     {bank.profile?.institution || 'Bank Sampah Tanpa Nama'}
                                   </h3>
-                                  <p className="text-sm text-gray-500">{bank.profile?.address || 'Alamat tidak tersedia'}</p>
+                                  <p className="text-sm text-gray-500">{bank.profile?.location?.address || 'Alamat tidak tersedia'}</p>
                                 </div>
                               </div>
                               {formData.masterBankId === bank.id && (
@@ -653,12 +667,11 @@ const RequestCollection = () => {
               <div className="space-y-6">
                 {/* Date Selection */}
                 <div className="overflow-hidden bg-white border shadow-sm rounded-xl border-zinc-200">
-                  <div className="p-6 border-b border-zinc-100">
+                  <div className="p-6 border-b border-zinc-100 flex flex-col items-center justify-center text-center">
                     <div className="flex items-center gap-2">
-                      <Calendar className="w-5 h-5 text-emerald-500" />
                       <h2 className="text-xl font-semibold text-gray-800">Pilih Tanggal</h2>
                     </div>
-                    <p className="mt-1 text-sm text-gray-500">Pilih tanggal pengambilan yang diinginkan</p>
+                    <p className="mt-3 text-sm text-gray-500">Pilih tanggal pengambilan yang diinginkan</p>
                   </div>
                   <div className="p-6">
                     <input
@@ -666,7 +679,7 @@ const RequestCollection = () => {
                       value={formData.date}
                       onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                       min={new Date().toISOString().split('T')[0]}
-                      className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      className="w-full p-3 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                       required
                     />
                   </div>
@@ -674,12 +687,11 @@ const RequestCollection = () => {
 
                 {/* Time Selection */}
                 <div className="overflow-hidden bg-white border shadow-sm rounded-xl border-zinc-200">
-                  <div className="p-6 border-b border-gray-100">
+                  <div className="p-6 border-b border-zinc-100 flex flex-col items-center justify-center text-center">
                     <div className="flex items-center gap-2">
-                      <Clock className="w-5 h-5 text-emerald-500" />
                       <h2 className="text-xl font-semibold text-gray-800">Pilih Waktu</h2>
                     </div>
-                    <p className="mt-1 text-sm text-gray-500">Pilih rentang waktu pengambilan yang diinginkan</p>
+                    <p className="mt-2 text-sm text-gray-500">Pilih rentang waktu pengambilan yang diinginkan</p>
                   </div>
                   <div className="p-6">
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -709,12 +721,11 @@ const RequestCollection = () => {
             {/* Step 3: Waste Details - Modified for weight input */}
             {step === 3 && (
               <div className="overflow-hidden bg-white border shadow-sm rounded-xl border-zinc-200">
-                <div className="p-6 border-b border-gray-100">
+                <div className="p-6 border-b border-zinc-100 flex flex-col items-center justify-center text-center">
                   <div className="flex items-center gap-2">
-                    <Package className="w-5 h-5 text-emerald-500" />
                     <h2 className="text-xl font-semibold text-gray-800">Pilih Jenis Sampah</h2>
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">Pilih jenis sampah dari penyimpanan Anda</p>
+                  <p className="mt-3 text-sm text-gray-500">Pilih jenis sampah dari penyimpanan Anda</p>
                 </div>
                 <div className="p-6">
                   {loadingCollections ? (
@@ -786,30 +797,30 @@ const RequestCollection = () => {
             {/* Step 4: Confirmation */}
             {step === 4 && (
               <div className="overflow-hidden bg-white border shadow-sm rounded-xl border-zinc-200">
-                <div className="p-6 border-b border-gray-100">
+                <div className="p-6 border-b border-zinc-100 flex flex-col items-center justify-center text-center">
                   <h2 className="text-xl font-semibold text-gray-800">Tinjau Permintaan Pengambilan</h2>
-                  <p className="mt-1 text-sm text-gray-500">Silakan konfirmasi detail permintaan Anda</p>
+                  <p className="mt-3 text-sm text-gray-500">Silakan konfirmasi detail permintaan Anda</p>
                 </div>
                 <div className="p-6 space-y-6">
                   {/* Master Bank Info */}
-                  <div className="flex items-start gap-4">
+                  <div className="flex text-left items-start gap-4">
                     <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
                       <Building2 className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Bank Sampah Induk Terpilih</p>
-                      <p className="font-medium text-gray-900">{formData.masterBankName}</p>
+                      <p className="text-gray-900 text-sm font-semibold">{formData.masterBankName}</p>
                     </div>
                   </div>
 
                   {/* Schedule Info */}
-                  <div className="flex items-start gap-4">
+                  <div className="flex text-left items-start gap-4">
                     <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
                       <Calendar className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Jadwal</p>
-                      <p className="text-gray-900">
+                      <p className="text-gray-900 text-sm font-semibold">
                         {new Date(formData.date).toLocaleDateString('id-ID', {
                           weekday: 'long',
                           year: 'numeric',
@@ -824,16 +835,13 @@ const RequestCollection = () => {
 
                   {/* Waste Details */}
                   <div className="flex items-start gap-4">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
-                      <Package className="w-5 h-5 text-emerald-600" />
-                    </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-500">Sampah Terpilih</p>
-                      <div className="mt-2 space-y-2">
+                      <div className="mt-2 space-y-2 text-sm text-gray-900 font-semibold">
                         {formData.wasteTypes.map(typeId => {
                           const waste = availableWasteTypes.find(w => w.id === typeId);
                           return waste ? (
-                            <div key={typeId} className="flex justify-between text-gray-700">
+                            <div key={typeId} className="flex justify-between">
                               <span>{waste.name}</span>
                               <span>{formData.wasteWeights[typeId]} kg</span>
                             </div>
@@ -844,44 +852,41 @@ const RequestCollection = () => {
                   </div>
 
                   {/* Contact Information */}
-                  <div className="flex items-start gap-4">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
-                      <Phone className="w-5 h-5 text-emerald-600" />
-                    </div>
+                  <div className="flex items-start gap-4 mt-4">
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-500">Informasi Kontak</p>
+                      <p className="text-sm font-medium text-gray-500">Informasi Kontak dan Lokasi</p>
                       <div className="mt-2 space-y-3">
                         <div>
-                          <label htmlFor="bankName" className="block mb-1 text-sm text-gray-600">Nama Bank Sampah</label>
+                          <label htmlFor="bankName" className="block mb-1 text-left text-sm text-gray-500">Nama Bank Sampah</label>
                           <input
                             id="bankName"
                             type="text"
                             value={userData?.profile?.institution || ''}
-                            className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50"
+                            className="w-full p-3 border text-sm border-gray-200 rounded-lg bg-gray-50"
                             disabled
                           />
                         </div>
                         <div>
-                          <label htmlFor="phone" className="block mb-1 text-sm text-gray-600">Nomor Telepon</label>
+                          <label htmlFor="phone" className="block mb-1 text-sm text-left text-gray-500">Nomor Telepon</label>
                           <input
                             id="phone"
                             type="tel"
-                            value={formData.phone}
+                            value={userData?.profile?.phone || formData.phone}
                             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                            className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                            className="w-full p-3 border text-sm text-gray-900 border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                             placeholder="Masukkan nomor telepon kontak"
                             required
                           />
                         </div>
-                        
+
                         <div>
-                          <label htmlFor="address" className="block mb-1 text-sm text-gray-600">Alamat</label>
+                          <label htmlFor="address" className="block mb-1 text-sm text-left text-gray-500">Alamat (Lokasi Pengambilan)</label>
                           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
                             <textarea
                               id="address"
                               value={formData.address}
                               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                              className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                              className="w-full p-3 text-sm border text-gray-900 border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                               rows="2"
                               placeholder="Masukkan alamat pengambilan"
                               required
@@ -889,7 +894,7 @@ const RequestCollection = () => {
                             <button
                               type="button"
                               onClick={getCurrentLocation}
-                              className="flex items-center flex-shrink-0 gap-2 px-4 py-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200"
+                              className="flex items-center text-sm flex-shrink-0 gap-2 px-4 py-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200"
                             >
                               {gettingLocation ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -905,12 +910,12 @@ const RequestCollection = () => {
                   </div>
 
                   {/* Location Info */}
-                  <div className="flex items-start gap-4">
+                  <div className="hidden flex items-start gap-4">
                     <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-100">
                       <MapPin className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-500">Lokasi Pengambilan</p>
+                      <p className="text-sm font-medium text-left text-gray-500">Lokasi Pengambilan</p>
                       <p className="text-gray-900">
                         {typeof formData.address === 'object' ? formData.address.address : formData.address}
                       </p>
@@ -936,13 +941,13 @@ const RequestCollection = () => {
 
                   {/* Notes */}
                   <div className="mt-4">
-                    <label className="block mb-2 text-sm font-medium text-gray-700">
+                    <label className="block mb-2 text-sm font-medium text-gray-500">
                       Catatan Tambahan (Opsional)
                     </label>
                     <textarea
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      className="w-full text-sm p-3 text-gray-900 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                       rows="3"
                       placeholder="Instruksi khusus atau detail lain tentang pengambilan..."
                     />
@@ -957,13 +962,13 @@ const RequestCollection = () => {
                 <button
                   type="button"
                   onClick={() => setStep(step - 1)}
-                  className="px-6 py-2.5 bg-zinc-100 text-zinc-700 rounded-lg hover:bg-zinc-200 flex items-center gap-2 transition-colors"
+                  className="px-6 py-3 text-sm text-zinc-700 rounded-lg hover:bg-zinc-200 flex items-center gap-2 transition-colors"
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="w-5 h-5" />
                   Kembali
                 </button>
               )}
-              
+
               {step < 4 ? (
                 <button
                   type="button"
@@ -1002,7 +1007,7 @@ const RequestCollection = () => {
                     setError('');
                     setStep(step + 1);
                   }}
-                  className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 ml-auto flex items-center gap-2 transition-colors focus:ring-4 focus:ring-emerald-300"
+                  className="px-6 py-3 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 ml-auto flex items-center gap-2 transition-colors focus:ring-4 focus:ring-emerald-300"
                 >
                   Lanjutkan
                   <ArrowRight className="w-4 h-4" />
@@ -1012,7 +1017,7 @@ const RequestCollection = () => {
                   type="button" // Changed from type="submit"
                   onClick={handleSubmit} // Explicitly call handleSubmit
                   disabled={loading}
-                  className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 ml-auto flex items-center gap-2 transition-colors focus:ring-4 focus:ring-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-3 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 ml-auto flex items-center gap-2 transition-colors focus:ring-4 focus:ring-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <>
@@ -1020,7 +1025,7 @@ const RequestCollection = () => {
                       Memproses...
                     </>
                   ) : (
-                    'Kirim Permintaan'
+                    'Kirim'
                   )}
                 </button>
               )}
@@ -1032,9 +1037,6 @@ const RequestCollection = () => {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
               <div className="w-full max-w-md p-6 bg-white rounded-xl">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-emerald-100">
-                    <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                  </div>
                   <div>
                     <h3 className="text-lg font-semibold text-zinc-800">Permintaan Terkirim!</h3>
                     <p className="text-zinc-500">Permintaan pengambilan Anda telah berhasil dikirim.</p>
@@ -1061,7 +1063,7 @@ const RequestCollection = () => {
                       }, // Reset location field
                     });
                   }}
-                  className="w-full px-4 py-2 text-white transition-colors rounded-lg bg-emerald-600 hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300"
+                  className="w-full text-sm px-4 py-3 font-medium text-white transition-colors rounded-lg bg-emerald-600 hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300"
                 >
                   Buat Permintaan Lain
                 </button>
@@ -1070,10 +1072,10 @@ const RequestCollection = () => {
           )}
 
           {/* Debug Panel - Request Status */}
-          <div className="mt-8">
+          <div className="hidden mt-8">
             <div className="p-6 bg-white border shadow-sm rounded-xl border-zinc-200">
               <h2 className="mb-4 text-lg font-semibold text-gray-800">Panel Status Permintaan</h2>
-              
+
               {loadingRequests ? (
                 <div className="flex justify-center">
                   <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
@@ -1107,12 +1109,11 @@ const RequestCollection = () => {
                         </div>
                         <div className="space-y-2">
                           <p className="text-sm text-gray-500">
-                            Status Saat Ini: <span className={`font-medium ${
-                              request.status === 'completed' ? 'text-emerald-600' :
+                            Status Saat Ini: <span className={`font-medium ${request.status === 'completed' ? 'text-emerald-600' :
                               request.status === 'pending' ? 'text-amber-600' :
-                              request.status === 'cancelled' ? 'text-red-600' :
-                              'text-gray-600'
-                            }`}>{translateStatus(request.status)}</span>
+                                request.status === 'cancelled' ? 'text-red-600' :
+                                  'text-gray-600'
+                              }`}>{translateStatus(request.status)}</span>
                           </p>
                           <select
                             value={request.status}
