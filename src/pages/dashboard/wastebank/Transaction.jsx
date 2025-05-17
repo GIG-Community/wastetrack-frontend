@@ -314,11 +314,11 @@ const PickupCard = ({ pickup, onStatusChange, onUpdatePoints, isProcessing }) =>
                 {pickup.notes && (
                   <p className="mt-1 text-sm italic text-gray-500">"{pickup.notes}"</p>
                 )}
-                {pickup.coordinates && (
+                {/* {pickup.coordinates && (
                   <p className="hidden mt-1 text-xs text-gray-500">
                     {pickup.coordinates.lat.toFixed(6)}, {pickup.coordinates.lng.toFixed(6)}
                   </p>
-                )}
+                )} */}
               </div>
             </div>
 
