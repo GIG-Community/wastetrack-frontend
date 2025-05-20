@@ -33,6 +33,8 @@ import {
   Cell
 } from 'recharts';
 
+import AiReportButton from '../../../components/AiReportButton';
+
 // Enhanced Environmental Impact Constants
 const IMPACT_FACTORS = {
   organic: { 
@@ -76,6 +78,20 @@ const IMPACT_FACTORS = {
 };
 
 const COLORS = ['#10B981', '#6366F1', '#F59E0B', '#EF4444'];
+const TRANSACTION_COLORS = {
+  pickup: '#10B981',        // emerald for pickups
+  masterRequest: '#6366F1', // indigo for master bank requests
+  industryRequest: '#F59E0B' // amber for industry requests
+};
+
+// User Role Colors
+const USER_ROLE_COLORS = {
+  wastebank_admin: '#10B981',  // emerald for waste banks
+  wastebank_master: '#6366F1', // indigo for master banks  
+  industry: '#F59E0B',         // amber for industry
+  government: '#EF4444',       // red for government
+  default: '#71717A'           // gray for unknown roles
+};
 
 // Base Components
 const Select = ({ className = "", ...props }) => (
@@ -88,6 +104,87 @@ const Select = ({ className = "", ...props }) => (
     {...props}
   />
 );
+
+// Filter Button Component
+const FilterButton = ({ active, onClick, color = 'emerald', children }) => {
+  const colorClasses = {
+    emerald: active ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'text-gray-600 hover:bg-gray-50',
+    indigo: active ? 'bg-indigo-100 text-indigo-800 border-indigo-300' : 'text-gray-600 hover:bg-gray-50',
+    amber: active ? 'bg-amber-100 text-amber-800 border-amber-300' : 'text-gray-600 hover:bg-gray-50',
+    gray: active ? 'bg-gray-200 text-gray-800 border-gray-300' : 'text-gray-600 hover:bg-gray-50',
+    red: active ? 'bg-red-100 text-red-800 border-red-300' : 'text-gray-600 hover:bg-gray-50',
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      className={`px-2 py-1 text-xs rounded-md border ${active ? 'font-medium border' : 'border-transparent'} ${colorClasses[color]}`}
+    >
+      {children}
+    </button>
+  );
+};
+
+// Standalone calculateImpact function to avoid reference error
+const calculateEnvironmentalImpact = (wastes = {}) => {
+  try {
+    let impact = {
+      carbon: 0,
+      water: 0,
+      trees: 0,
+      landfill: 0,
+      carbonOffset: 0,
+      potentialCredits: 0
+    };
+
+    // Check if wastes is null or undefined
+    if (!wastes) {
+      console.warn('Waste data is missing. Using dummy values.');
+      // Return dummy values if wastes data is missing
+      return {
+        carbon: 0.5,
+        water: 100,
+        trees: 0.1,
+        landfill: 0.05,
+        carbonOffset: 0.2,
+        potentialCredits: 0.01
+      };
+    }
+
+    // Process each waste type
+    Object.entries(wastes).forEach(([type, data]) => {
+      if (!data || !data.weight) return;
+      
+      // Get impact factors for this waste type
+      const factors = IMPACT_FACTORS[type] || IMPACT_FACTORS.plastic; // Default to plastic if type not found
+
+      // Calculate impacts
+      impact.carbon += factors.carbon * data.weight;
+      impact.water += factors.water * data.weight;
+      impact.landfill += factors.landfill * data.weight;
+      impact.carbonOffset += factors.carbonOffset * data.weight;
+      impact.potentialCredits += (factors.carbonOffset * data.weight * 0.001); // Convert to tons
+
+      // Add tree impact if applicable
+      if (factors.trees) {
+        impact.trees += factors.trees * data.weight;
+      }
+    });
+
+    return impact;
+  } catch (error) {
+    console.error('Error calculating impact:', error);
+    // Return default values in case of error
+    return {
+      carbon: 1,
+      water: 200,
+      trees: 0.2,
+      landfill: 0.1,
+      carbonOffset: 0.3,
+      potentialCredits: 0.02
+    };
+  }
+};
 
 const StatCard = ({ icon: Icon, label, value, subValue }) => (
   <div className="p-6 bg-white border border-gray-200 shadow-sm rounded-xl">
@@ -138,10 +235,16 @@ const GovernmentReports = () => {
   const [error, setError] = useState(null);
   const [pickupData, setPickupData] = useState([]);
   const [masterRequests, setMasterRequests] = useState([]);
+  const [industryRequests, setIndustryRequests] = useState([]);
   const [wasteBanks, setWasteBanks] = useState([]);
   const [masterBanks, setMasterBanks] = useState([]);
+  const [industryUsers, setIndustryUsers] = useState([]);
   const [mapCenter] = useState([-7.2575, 112.7521]); // Default: Surabaya
   const [dateRange, setDateRange] = useState('month');
+  const [transactionFilters, setTransactionFilters] = useState([]);
+  const [facilityFilters, setFacilityFilters] = useState([]);
+  const [showBankLocations, setShowBankLocations] = useState(true);
+  const [mapError, setMapError] = useState(null);
   const [stats, setStats] = useState({
     totalImpact: {
       carbon: 0,
@@ -165,7 +268,8 @@ const GovernmentReports = () => {
         avgTransactionValue: 0,
         topPerformers: []
       }
-    }
+    },
+    transactionLocations: []
   });
 
   const [carbonStats, setCarbonStats] = useState({
@@ -177,32 +281,28 @@ const GovernmentReports = () => {
     carbonEfficiency: 0
   });
 
-  // Enhanced impact calculation
-  const calculateImpact = (wastes = {}) => {
-    let impact = {
-      carbon: 0,
-      water: 0,
-      trees: 0,
-      landfill: 0,
-      carbonOffset: 0,
-      potentialCredits: 0
-    };
+  // Toggle function for transaction filters
+  const toggleTransactionFilter = (filter) => {
+    if (transactionFilters.includes(filter)) {
+      setTransactionFilters(transactionFilters.filter(f => f !== filter));
+    } else {
+      setTransactionFilters([...transactionFilters, filter]);
+    }
+  };
 
-    Object.entries(wastes).forEach(([type, data]) => {
-      const factors = IMPACT_FACTORS[type];
-      if (factors && data.weight) {
-        impact.carbon += factors.carbon * data.weight;
-        impact.water += factors.water * data.weight;
-        impact.landfill += factors.landfill * data.weight;
-        impact.carbonOffset += factors.carbonOffset * data.weight;
-        impact.potentialCredits += (factors.carbonOffset * data.weight * 0.001); // Convert to tons
-        if (factors.trees) {
-          impact.trees += factors.trees * data.weight;
-        }
-      }
-    });
+  // Toggle function for facility filters
+  const toggleFacilityFilter = (filter) => {
+    if (facilityFilters.includes(filter)) {
+      setFacilityFilters(facilityFilters.filter(f => f !== filter));
+    } else {
+      setFacilityFilters([...facilityFilters, filter]);
+    }
+  };
 
-    return impact;
+  // Helper function to clear all filters
+  const clearFilters = () => {
+    setTransactionFilters([]);
+    setFacilityFilters([]);
   };
 
   // Fetch data
@@ -219,8 +319,13 @@ const GovernmentReports = () => {
         collection(db, 'users'),
         where('role', '==', 'wastebank_master')
       );
+      const industryQuery = query(
+        collection(db, 'users'),
+        where('role', '==', 'industry')
+      );
       const pickupsQuery = query(collection(db, 'pickups'));
       const masterRequestsQuery = query(collection(db, 'masterBankRequests'));
+      const industryRequestsQuery = query(collection(db, 'industryRequests')); 
       
       // Create unsubscribe functions array for cleanup
       const unsubscribes = [];
@@ -228,12 +333,14 @@ const GovernmentReports = () => {
       // Data containers
       let wasteBankData = [];
       let masterBankData = [];
+      let industryData = [];
       let pickupsData = [];
       let masterRequestsData = [];
+      let industryRequestsData = []; 
       
       // Counter to track when all data sources are loaded
       let dataSourcesLoaded = 0;
-      const totalDataSources = 4;
+      const totalDataSources = 6; // Updated to 6 to include industry users
       
       // Process data once all sources are loaded
       const processData = () => {
@@ -245,14 +352,26 @@ const GovernmentReports = () => {
         // Filter completed master requests
         const completedMasterRequests = masterRequestsData.filter(request => request.status === 'completed');
         
+        // Filter completed industry requests
+        const completedIndustryRequests = industryRequestsData.filter(request => request.status === 'completed');
+        
         // Set the data states
         setWasteBanks(wasteBankData);
         setMasterBanks(masterBankData);
+        setIndustryUsers(industryData);
         setPickupData(completedPickups);
         setMasterRequests(completedMasterRequests);
+        setIndustryRequests(completedIndustryRequests);
         
         // Process statistics with all data
-        calculateStatistics(wasteBankData, masterBankData, completedPickups, completedMasterRequests);
+        calculateStatistics(
+          wasteBankData, 
+          masterBankData, 
+          industryData,
+          completedPickups, 
+          completedMasterRequests, 
+          completedIndustryRequests
+        );
         
         setLoading(false);
       };
@@ -297,6 +416,25 @@ const GovernmentReports = () => {
       );
       unsubscribes.push(masterBankUnsubscribe);
       
+      // Listen for industry users
+      const industryUnsubscribe = onSnapshot(
+        industryQuery,
+        (snapshot) => {
+          industryData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          dataSourcesLoaded++;
+          processData();
+        },
+        (error) => {
+          console.error('Error fetching industry users:', error);
+          setError('Failed to load industry user data');
+          setLoading(false);
+        }
+      );
+      unsubscribes.push(industryUnsubscribe);
+      
       // Listen for pickups
       const pickupsUnsubscribe = onSnapshot(
         pickupsQuery,
@@ -335,6 +473,25 @@ const GovernmentReports = () => {
       );
       unsubscribes.push(masterRequestsUnsubscribe);
       
+      // Listen for industry requests
+      const industryRequestsUnsubscribe = onSnapshot(
+        industryRequestsQuery,
+        (snapshot) => {
+          industryRequestsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          dataSourcesLoaded++;
+          processData();
+        },
+        (error) => {
+          console.error('Error fetching industry requests:', error);
+          setError('Failed to load industry request data');
+          setLoading(false);
+        }
+      );
+      unsubscribes.push(industryRequestsUnsubscribe);
+      
       // Cleanup function to unsubscribe from all listeners when component unmounts
       return () => {
         unsubscribes.forEach(unsubscribe => unsubscribe());
@@ -347,348 +504,695 @@ const GovernmentReports = () => {
     }
   }, [dateRange]);
 
-  // Calculate statistics with enhanced analytics
-  const calculateStatistics = (wasteBanks, masterBanks, pickups, masterRequests) => {
-    // Calculate waste bank performance
-    const bankPerformance = {
-      small: {
-        totalTransactions: pickups.length,
-        totalValue: pickups.reduce((acc, pickup) => acc + (pickup.totalValue || 0), 0),
-        avgTransactionValue: 0,
-        topPerformers: []
-      },
-      master: {
-        totalTransactions: masterRequests.length,
-        totalValue: masterRequests.reduce((acc, request) => acc + (request.totalValue || 0), 0),
-        avgTransactionValue: 0,
-        topPerformers: []
-      }
-    };
-
-    // Calculate averages
-    bankPerformance.small.avgTransactionValue = 
-      bankPerformance.small.totalValue / (bankPerformance.small.totalTransactions || 1);
-    bankPerformance.master.avgTransactionValue = 
-      bankPerformance.master.totalValue / (bankPerformance.master.totalTransactions || 1);
-
-    // Calculate top performing waste banks
-    const smallBankStats = {};
-    pickups.forEach(pickup => {
-      if (!smallBankStats[pickup.wasteBankId]) {
-        smallBankStats[pickup.wasteBankId] = {
-          id: pickup.wasteBankId,
-          name: pickup.wasteBankName,
-          transactions: 0,
-          totalValue: 0,
-          totalWeight: 0
-        };
-      }
-
-      smallBankStats[pickup.wasteBankId].transactions += 1;
-      smallBankStats[pickup.wasteBankId].totalValue += pickup.totalValue || 0;
-      
-      Object.values(pickup.wastes || {}).forEach(waste => {
-        smallBankStats[pickup.wasteBankId].totalWeight += waste.weight || 0;
-      });
-    });
-
-    // Calculate top performing master banks
-    const masterBankStats = {};
-    masterRequests.forEach(request => {
-      if (!masterBankStats[request.masterBankId]) {
-        masterBankStats[request.masterBankId] = {
-          id: request.masterBankId,
-          name: request.masterBankName,
-          transactions: 0,
-          totalValue: 0,
-          totalWeight: 0
-        };
-      }
-
-      masterBankStats[request.masterBankId].transactions += 1;
-      masterBankStats[request.masterBankId].totalValue += request.totalValue || 0;
-      
-      Object.values(request.wastes || {}).forEach(waste => {
-        masterBankStats[request.masterBankId].totalWeight += waste.weight || 0;
-      });
-    });
-
-    // Sort and set top performers
-    bankPerformance.small.topPerformers = Object.values(smallBankStats)
-      .sort((a, b) => b.totalValue - a.totalValue)
-      .slice(0, 5);
-    bankPerformance.master.topPerformers = Object.values(masterBankStats)
-      .sort((a, b) => b.totalValue - a.totalValue)
-      .slice(0, 5);
-
-    // Calculate total environmental impact from all transactions
-    const totalImpact = {
-      carbon: 0,
-      water: 0,
-      trees: 0,
-      landfill: 0
-    };
-
-    // Process small bank pickups
-    pickups.forEach(pickup => {
-      const impact = calculateImpact(pickup.wastes);
-      totalImpact.carbon += impact.carbon;
-      totalImpact.water += impact.water;
-      totalImpact.trees += impact.trees;
-      totalImpact.landfill += impact.landfill;
-    });
-
-    // Process master bank requests
-    masterRequests.forEach(request => {
-      const impact = calculateImpact(request.wastes);
-      totalImpact.carbon += impact.carbon;
-      totalImpact.water += impact.water;
-      totalImpact.trees += impact.trees;
-      totalImpact.landfill += impact.landfill;
-    });
-
-    // Calculate waste type distribution combining both pickups and master requests
-    const wasteTypes = {};
-    const processWastes = (wastes, source) => {
-      Object.entries(wastes || {}).forEach(([type, data]) => {
-        if (!wasteTypes[type]) {
-          wasteTypes[type] = { weight: 0, impact: 0, sources: { small: 0, master: 0 } };
-        }
-        wasteTypes[type].weight += data.weight || 0;
-        wasteTypes[type].impact += calculateImpact({ [type]: data }).carbon;
-        wasteTypes[type].sources[source] += data.weight || 0;
-      });
-    };
-
-    pickups.forEach(pickup => processWastes(pickup.wastes, 'small'));
-    masterRequests.forEach(request => processWastes(request.wastes, 'master'));
-
-    // Update all locations data combining both types of facilities
-    const locations = [
-      ...wasteBanks.map(bank => {
-        const coordinates = bank.profile?.location?.coordinates;
-        return {
-          id: bank.id,
-          name: bank.profile?.institution || 'Unknown Bank',
-          type: 'small',
-          coordinates: coordinates ? {
-            lat: coordinates._lat || coordinates[0],
-            lng: coordinates._long || coordinates[1]
-          } : null,
-          address: bank.profile?.location?.address,
-          city: bank.profile?.location?.city,
-          stats: smallBankStats[bank.id] || {
-            transactions: 0,
-            totalValue: 0,
-            totalWeight: 0
-          }
-        };
-      }),
-      ...masterBanks.map(bank => {
-        const coordinates = bank.profile?.location?.coordinates;
-        return {
-          id: bank.id,
-          name: bank.profile?.institution || 'Unknown Master Bank',
-          type: 'master',
-          coordinates: coordinates ? {
-            lat: coordinates._lat || coordinates[0],
-            lng: coordinates._long || coordinates[1]
-          } : null,
-          address: bank.profile?.location?.address,
-          city: bank.profile?.location?.city,
-          stats: masterBankStats[bank.id] || {
-            transactions: 0,
-            totalValue: 0,
-            totalWeight: 0
-          }
-        };
-      })
-    ].filter(location => location.coordinates && location.coordinates.lat && location.coordinates.lng);
-
-    // Calculate monthly trends combining both types
-    const monthlyData = {};
-    const processTransaction = (transaction, type) => {
-      // Add null check for completedAt
-      if (!transaction.completedAt) return;
-      
-      // Check if completedAt is a Firebase timestamp or regular date
-      const timestamp = transaction.completedAt;
-      let date;
-      
-      if (timestamp.seconds) {
-        // Firebase Timestamp
-        date = new Date(timestamp.seconds * 1000);
-      } else if (timestamp instanceof Date) {
-        // Regular Date object
-        date = timestamp;
-      } else if (typeof timestamp === 'string' || typeof timestamp === 'number') {
-        // String or number timestamp
-        date = new Date(timestamp);
-      } else {
-        // Invalid timestamp format
-        console.warn('Invalid timestamp format:', timestamp);
-        return;
-      }
-      
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      
-      if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = {
-          month: date.toLocaleString('default', { month: 'short' }),
-          weight: 0,
-          impact: 0,
-          smallBankValue: 0,
-          masterBankValue: 0,
-          transactions: {
-            small: 0,
-            master: 0
-          }
-        };
-      }
-
-      const impact = calculateImpact(transaction.wastes);
-      monthlyData[monthKey].impact += impact.carbon;
-
-      if (type === 'small') {
-        monthlyData[monthKey].smallBankValue += transaction.totalValue || 0;
-        monthlyData[monthKey].transactions.small += 1;
-      } else {
-        monthlyData[monthKey].masterBankValue += transaction.totalValue || 0;
-        monthlyData[monthKey].transactions.master += 1;
-      }
-
-      Object.values(transaction.wastes || {}).forEach(waste => {
-        monthlyData[monthKey].weight += waste.weight || 0;
-      });
-    };
-
-    pickups.forEach(pickup => processTransaction(pickup, 'small'));
-    masterRequests.forEach(request => processTransaction(request, 'master'));
-
-    // Enhanced carbon offset calculations
-    let totalCarbonOffset = 0;
-    let totalPotentialCredits = 0;
-    const monthlyOffset = {};
-    const wasteTypeOffset = {};
-
-    // Process carbon offset from small bank pickups with null check
-    pickups.forEach(pickup => {
-      const impact = calculateImpact(pickup.wastes);
-      totalCarbonOffset += impact.carbonOffset;
-      totalPotentialCredits += impact.potentialCredits;
-
-      // Calculate monthly offset with null check for timestamp
-      if (pickup.completedAt) {
-        let date;
-        if (pickup.completedAt.seconds) {
-          date = new Date(pickup.completedAt.seconds * 1000);
-        } else if (pickup.completedAt instanceof Date) {
-          date = pickup.completedAt;
-        } else {
-          date = new Date(pickup.completedAt);
-        }
-        
-        const monthKey = date.toISOString().slice(0, 7);
-        monthlyOffset[monthKey] = (monthlyOffset[monthKey] || 0) + impact.carbonOffset;
-      }
-
-      // Calculate offset by waste type
-      Object.entries(pickup.wastes || {}).forEach(([type, data]) => {
-        if (!wasteTypeOffset[type]) {
-          wasteTypeOffset[type] = {
-            offset: 0,
-            credits: 0,
-            weight: 0
-          };
-        }
-        const typeImpact = calculateImpact({ [type]: data });
-        wasteTypeOffset[type].offset += typeImpact.carbonOffset;
-        wasteTypeOffset[type].credits += typeImpact.potentialCredits;
-        wasteTypeOffset[type].weight += data.weight || 0;
-      });
-    });
-
-    // Process carbon offset from master requests with null check
-    masterRequests.forEach(request => {
-      const impact = calculateImpact(request.wastes);
-      totalCarbonOffset += impact.carbonOffset;
-      totalPotentialCredits += impact.potentialCredits;
-
-      // Add to monthly offset with null check
-      if (request.completedAt) {
-        let date;
-        if (request.completedAt.seconds) {
-          date = new Date(request.completedAt.seconds * 1000);
-        } else if (request.completedAt instanceof Date) {
-          date = request.completedAt;
-        } else {
-          date = new Date(request.completedAt);
-        }
-        
-        const monthKey = date.toISOString().slice(0, 7);
-        monthlyOffset[monthKey] = (monthlyOffset[monthKey] || 0) + impact.carbonOffset;
-      }
-
-      // Add to waste type offset
-      Object.entries(request.wastes || {}).forEach(([type, data]) => {
-        if (!wasteTypeOffset[type]) {
-          wasteTypeOffset[type] = {
-            offset: 0,
-            credits: 0,
-            weight: 0
-          };
-        }
-        const typeImpact = calculateImpact({ [type]: data });
-        wasteTypeOffset[type].offset += typeImpact.carbonOffset;
-        wasteTypeOffset[type].credits += typeImpact.potentialCredits;
-        wasteTypeOffset[type].weight += data.weight || 0;
-      });
-    });
-
-    // Calculate projected savings (simple linear projection)
-    const monthlyOffsetArray = Object.entries(monthlyOffset)
-      .map(([month, offset]) => ({
-        month,
-        offset
-      }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-
-    let projectedSavings = 0;
-    if (monthlyOffsetArray.length > 0) {
-      const avgMonthlyOffset = monthlyOffsetArray.reduce((sum, item) => sum + item.offset, 0) / monthlyOffsetArray.length;
-      projectedSavings = avgMonthlyOffset * 12; // Annual projection
-    }
-
-    // Calculate carbon efficiency (offset per kg of waste)
-    const totalWeight = Object.values(wasteTypeOffset).reduce((sum, type) => sum + type.weight, 0);
-    const carbonEfficiency = totalWeight > 0 ? totalCarbonOffset / totalWeight : 0;
-
-    // Update carbon stats
-    setCarbonStats({
-      totalOffset: totalCarbonOffset,
-      potentialCredits: totalPotentialCredits,
-      monthlyOffset: monthlyOffsetArray,
-      wasteTypeOffset: Object.entries(wasteTypeOffset).map(([type, data]) => ({
-        type,
-        ...data
-      })),
-      projectedSavings,
-      carbonEfficiency
-    });
-
-    // Update stats state with all calculated data
-    setStats({
-      totalImpact,
-      wasteTypes: Object.entries(wasteTypes).map(([type, data]) => ({
-        name: type.charAt(0).toUpperCase() + type.slice(1),
-        ...data
-      })),
-      locations,
-      monthlyTrends: Object.values(monthlyData),
-      bankPerformance
-    });
+  // Enhanced impact calculation - reference the standalone function
+  const calculateImpact = (wastes = {}) => {
+    return calculateEnvironmentalImpact(wastes);
   };
 
+  // Calculate statistics with enhanced analytics
+  const calculateStatistics = (wasteBanks, masterBanks, industries, pickups, masterRequests, industryRequests) => {
+    try {
+      // Calculate waste bank performance
+      const bankPerformance = {
+        small: {
+          totalTransactions: pickups.length,
+          totalValue: pickups.reduce((acc, pickup) => acc + (pickup.totalValue || 0), 0),
+          avgTransactionValue: 0,
+          topPerformers: []
+        },
+        master: {
+          totalTransactions: masterRequests.length,
+          totalValue: masterRequests.reduce((acc, request) => acc + (request.totalValue || 0), 0),
+          avgTransactionValue: 0,
+          topPerformers: []
+        }
+      };
+
+      // Calculate averages
+      bankPerformance.small.avgTransactionValue = 
+        bankPerformance.small.totalValue / (bankPerformance.small.totalTransactions || 1);
+      bankPerformance.master.avgTransactionValue = 
+        bankPerformance.master.totalValue / (bankPerformance.master.totalTransactions || 1);
+
+      // Calculate top performing waste banks
+      const smallBankStats = {};
+      pickups.forEach(pickup => {
+        if (!smallBankStats[pickup.wasteBankId]) {
+          smallBankStats[pickup.wasteBankId] = {
+            id: pickup.wasteBankId,
+            name: pickup.wasteBankName,
+            transactions: 0,
+            totalValue: 0,
+            totalWeight: 0
+          };
+        }
+
+        smallBankStats[pickup.wasteBankId].transactions += 1;
+        smallBankStats[pickup.wasteBankId].totalValue += pickup.totalValue || 0;
+        
+        Object.values(pickup.wastes || {}).forEach(waste => {
+          smallBankStats[pickup.wasteBankId].totalWeight += waste.weight || 0;
+        });
+      });
+
+      // Calculate top performing master banks
+      const masterBankStats = {};
+      masterRequests.forEach(request => {
+        if (!masterBankStats[request.masterBankId]) {
+          masterBankStats[request.masterBankId] = {
+            id: request.masterBankId,
+            name: request.masterBankName,
+            transactions: 0,
+            totalValue: 0,
+            totalWeight: 0
+          };
+        }
+
+        masterBankStats[request.masterBankId].transactions += 1;
+        masterBankStats[request.masterBankId].totalValue += request.totalValue || 0;
+        
+        Object.values(request.wastes || {}).forEach(waste => {
+          masterBankStats[request.masterBankId].totalWeight += waste.weight || 0;
+        });
+      });
+
+      // Sort and set top performers
+      bankPerformance.small.topPerformers = Object.values(smallBankStats)
+        .sort((a, b) => b.totalValue - a.totalValue)
+        .slice(0, 5);
+      bankPerformance.master.topPerformers = Object.values(masterBankStats)
+        .sort((a, b) => b.totalValue - a.totalValue)
+        .slice(0, 5);
+
+      // Calculate total environmental impact from all transactions
+      const totalImpact = {
+        carbon: 0,
+        water: 0,
+        trees: 0,
+        landfill: 0
+      };
+
+      // Process small bank pickups
+      pickups.forEach(pickup => {
+        const impact = calculateImpact(pickup.wastes);
+        totalImpact.carbon += impact.carbon;
+        totalImpact.water += impact.water;
+        totalImpact.trees += impact.trees;
+        totalImpact.landfill += impact.landfill;
+      });
+
+      // Process master bank requests
+      masterRequests.forEach(request => {
+        const impact = calculateImpact(request.wastes);
+        totalImpact.carbon += impact.carbon;
+        totalImpact.water += impact.water;
+        totalImpact.trees += impact.trees;
+        totalImpact.landfill += impact.landfill;
+      });
+
+      // Calculate waste type distribution combining both pickups and master requests
+      const wasteTypes = {};
+      const processWastes = (wastes, source) => {
+        Object.entries(wastes || {}).forEach(([type, data]) => {
+          if (!wasteTypes[type]) {
+            wasteTypes[type] = { weight: 0, impact: 0, sources: { small: 0, master: 0 } };
+          }
+          wasteTypes[type].weight += data.weight || 0;
+          wasteTypes[type].impact += calculateImpact({ [type]: data }).carbon;
+          wasteTypes[type].sources[source] += data.weight || 0;
+        });
+      };
+
+      pickups.forEach(pickup => processWastes(pickup.wastes, 'small'));
+      masterRequests.forEach(request => processWastes(request.wastes, 'master'));
+
+      // Update all locations data combining all types of facilities
+      const locations = [
+        ...wasteBanks.map(bank => {
+          const coordinates = bank.profile?.location?.coordinates;
+          return {
+            id: bank.id,
+            name: bank.profile?.institution || 'Unknown Bank',
+            type: 'wastebank_admin',
+            role: 'wastebank_admin',
+            coordinates: coordinates ? {
+              lat: coordinates.latitude || coordinates._lat || coordinates[0],
+              lng: coordinates.longitude || coordinates._long || coordinates[1]
+            } : null,
+            address: bank.profile?.location?.address,
+            city: bank.profile?.location?.city,
+            province: bank.profile?.location?.province,
+            phone: bank.profile?.phone,
+            stats: smallBankStats[bank.id] || {
+              transactions: 0,
+              totalValue: 0,
+              totalWeight: 0
+            }
+          };
+        }),
+        ...masterBanks.map(bank => {
+          const coordinates = bank.profile?.location?.coordinates;
+          return {
+            id: bank.id,
+            name: bank.profile?.institution || 'Unknown Master Bank',
+            type: 'wastebank_master',
+            role: 'wastebank_master',
+            coordinates: coordinates ? {
+              lat: coordinates.latitude || coordinates._lat || coordinates[0],
+              lng: coordinates.longitude || coordinates._long || coordinates[1]
+            } : null,
+            address: bank.profile?.location?.address,
+            city: bank.profile?.location?.city,
+            province: bank.profile?.location?.province,
+            phone: bank.profile?.phone,
+            stats: masterBankStats[bank.id] || {
+              transactions: 0,
+              totalValue: 0,
+              totalWeight: 0
+            }
+          };
+        }),
+        ...industries.map(industry => {
+          const coordinates = industry.profile?.location?.coordinates;
+          return {
+            id: industry.id,
+            name: industry.profile?.institution || industry.profile?.institutionName || 'Unknown Industry',
+            type: 'industry',
+            role: 'industry',
+            coordinates: coordinates ? {
+              lat: coordinates.latitude || coordinates._lat || coordinates[0],
+              lng: coordinates.longitude || coordinates._long || coordinates[1]
+            } : null,
+            address: industry.profile?.location?.address,
+            city: industry.profile?.location?.city,
+            province: industry.profile?.location?.province,
+            phone: industry.profile?.phone,
+            stats: {
+              transactions: 0, // We can calculate this if needed
+              totalValue: 0,
+              totalWeight: 0
+            }
+          };
+        })
+      ].filter(location => location.coordinates && location.coordinates.lat && location.coordinates.lng);
+
+      // Create array to store all transaction locations
+      const transactionLocations = [];
+
+      // Process pickup locations
+      pickups.forEach(pickup => {
+        if (pickup.coordinates && pickup.coordinates.lat && pickup.coordinates.lng) {
+          const totalWeight = Object.values(pickup.wastes || {}).reduce((sum, waste) => sum + (Number(waste.weight) || 0), 0);
+          
+          transactionLocations.push({
+            id: pickup.id,
+            type: 'pickup',
+            coordinates: {
+              lat: pickup.coordinates.lat,
+              lng: pickup.coordinates.lng
+            },
+            address: pickup.location || '',
+            date: pickup.completedAt,
+            totalValue: pickup.totalValue || 0,
+            totalWeight,
+            wasteBankName: pickup.wasteBankName || 'Unknown Bank',
+            userName: pickup.userName || 'Unknown User'
+          });
+        }
+      });
+
+      // Process master bank request locations
+      masterRequests.forEach(request => {
+        if (request.location && request.location.coordinates && 
+            request.location.coordinates.lat && request.location.coordinates.lng) {
+          
+          const totalWeight = Object.values(request.wastes || {}).reduce((sum, waste) => sum + (Number(waste.weight) || 0), 0);
+          
+          transactionLocations.push({
+            id: request.id,
+            type: 'masterRequest',
+            coordinates: {
+              lat: request.location.coordinates.lat,
+              lng: request.location.coordinates.lng
+            },
+            address: request.location.address || '',
+            date: request.completedAt,
+            totalValue: request.totalValue || 0,
+            totalWeight,
+            wasteBankName: request.wasteBankName || 'Unknown Bank',
+            masterBankName: request.masterBankName || 'Unknown Master Bank'
+          });
+        }
+      });
+
+      // Process industry request locations
+      industryRequests.forEach(request => {
+        if (request.location && request.location.coordinates && 
+            request.location.coordinates.lat && request.location.coordinates.lng) {
+          
+          const totalWeight = request.totalWeight || 
+            Object.values(request.wastes || {}).reduce((sum, waste) => sum + (Number(waste.weight) || 0), 0);
+          
+          transactionLocations.push({
+            id: request.id,
+            type: 'industryRequest',
+            coordinates: {
+              lat: request.location.coordinates.lat,
+              lng: request.location.coordinates.lng
+            },
+            address: request.location.address || request.address || '',
+            date: request.completedAt,
+            totalValue: request.totalValue || 0,
+            totalWeight,
+            industryName: request.industryName || 'Unknown Industry',
+            masterBankName: request.masterBankName || 'Unknown Master Bank'
+          });
+        }
+      });
+
+      // Calculate monthly trends combining both types
+      const monthlyData = {};
+      const processTransaction = (transaction, type) => {
+        // Add null check for completedAt
+        if (!transaction.completedAt) return;
+        
+        // Check if completedAt is a Firebase timestamp or regular date
+        const timestamp = transaction.completedAt;
+        let date;
+        
+        if (timestamp.seconds) {
+          // Firebase Timestamp
+          date = new Date(timestamp.seconds * 1000);
+        } else if (timestamp instanceof Date) {
+          // Regular Date object
+          date = timestamp;
+        } else if (typeof timestamp === 'string' || typeof timestamp === 'number') {
+          // String or number timestamp
+          date = new Date(timestamp);
+        } else {
+          // Invalid timestamp format
+          console.warn('Invalid timestamp format:', timestamp);
+          return;
+        }
+        
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        
+        if (!monthlyData[monthKey]) {
+          monthlyData[monthKey] = {
+            month: date.toLocaleString('default', { month: 'short' }),
+            weight: 0,
+            impact: 0,
+            smallBankValue: 0,
+            masterBankValue: 0,
+            transactions: {
+              small: 0,
+              master: 0
+            }
+          };
+        }
+
+        const impact = calculateImpact(transaction.wastes);
+        monthlyData[monthKey].impact += impact.carbon;
+
+        if (type === 'small') {
+          monthlyData[monthKey].smallBankValue += transaction.totalValue || 0;
+          monthlyData[monthKey].transactions.small += 1;
+        } else {
+          monthlyData[monthKey].masterBankValue += transaction.totalValue || 0;
+          monthlyData[monthKey].transactions.master += 1;
+        }
+
+        Object.values(transaction.wastes || {}).forEach(waste => {
+          monthlyData[monthKey].weight += waste.weight || 0;
+        });
+      };
+
+      pickups.forEach(pickup => processTransaction(pickup, 'small'));
+      masterRequests.forEach(request => processTransaction(request, 'master'));
+
+      // Enhanced carbon offset calculations
+      let totalCarbonOffset = 0;
+      let totalPotentialCredits = 0;
+      const monthlyOffset = {};
+      const wasteTypeOffset = {};
+
+      // Process carbon offset from small bank pickups with null check
+      pickups.forEach(pickup => {
+        const impact = calculateImpact(pickup.wastes);
+        totalCarbonOffset += impact.carbonOffset;
+        totalPotentialCredits += impact.potentialCredits;
+
+        // Calculate monthly offset with null check for timestamp
+        if (pickup.completedAt) {
+          let date;
+          if (pickup.completedAt.seconds) {
+            date = new Date(pickup.completedAt.seconds * 1000);
+          } else if (pickup.completedAt instanceof Date) {
+            date = pickup.completedAt;
+          } else {
+            date = new Date(pickup.completedAt);
+          }
+          
+          const monthKey = date.toISOString().slice(0, 7);
+          monthlyOffset[monthKey] = (monthlyOffset[monthKey] || 0) + impact.carbonOffset;
+        }
+
+        // Calculate offset by waste type
+        Object.entries(pickup.wastes || {}).forEach(([type, data]) => {
+          if (!wasteTypeOffset[type]) {
+            wasteTypeOffset[type] = {
+              offset: 0,
+              credits: 0,
+              weight: 0
+            };
+          }
+          const typeImpact = calculateImpact({ [type]: data });
+          wasteTypeOffset[type].offset += typeImpact.carbonOffset;
+          wasteTypeOffset[type].credits += typeImpact.potentialCredits;
+          wasteTypeOffset[type].weight += data.weight || 0;
+        });
+      });
+
+      // Process carbon offset from master requests with null check
+      masterRequests.forEach(request => {
+        const impact = calculateImpact(request.wastes);
+        totalCarbonOffset += impact.carbonOffset;
+        totalPotentialCredits += impact.potentialCredits;
+
+        // Add to monthly offset with null check
+        if (request.completedAt) {
+          let date;
+          if (request.completedAt.seconds) {
+            date = new Date(request.completedAt.seconds * 1000);
+          } else if (request.completedAt instanceof Date) {
+            date = request.completedAt;
+          } else {
+            date = new Date(request.completedAt);
+          }
+          
+          const monthKey = date.toISOString().slice(0, 7);
+          monthlyOffset[monthKey] = (monthlyOffset[monthKey] || 0) + impact.carbonOffset;
+        }
+
+        // Add to waste type offset
+        Object.entries(request.wastes || {}).forEach(([type, data]) => {
+          if (!wasteTypeOffset[type]) {
+            wasteTypeOffset[type] = {
+              offset: 0,
+              credits: 0,
+              weight: 0
+            };
+          }
+          const typeImpact = calculateImpact({ [type]: data });
+          wasteTypeOffset[type].offset += typeImpact.carbonOffset;
+          wasteTypeOffset[type].credits += typeImpact.potentialCredits;
+          wasteTypeOffset[type].weight += data.weight || 0;
+        });
+      });
+
+      // Calculate projected savings (simple linear projection)
+      const monthlyOffsetArray = Object.entries(monthlyOffset)
+        .map(([month, offset]) => ({
+          month,
+          offset
+        }))
+        .sort((a, b) => a.month.localeCompare(b.month));
+
+      let projectedSavings = 0;
+      if (monthlyOffsetArray.length > 0) {
+        const avgMonthlyOffset = monthlyOffsetArray.reduce((sum, item) => sum + item.offset, 0) / monthlyOffsetArray.length;
+        projectedSavings = avgMonthlyOffset * 12; // Annual projection
+      }
+
+      // Calculate carbon efficiency (offset per kg of waste)
+      const totalWeight = Object.values(wasteTypeOffset).reduce((sum, type) => sum + type.weight, 0);
+      const carbonEfficiency = totalWeight > 0 ? totalCarbonOffset / totalWeight : 0;
+
+      // Update carbon stats
+      setCarbonStats({
+        totalOffset: totalCarbonOffset,
+        potentialCredits: totalPotentialCredits,
+        monthlyOffset: monthlyOffsetArray,
+        wasteTypeOffset: Object.entries(wasteTypeOffset).map(([type, data]) => ({
+          type,
+          ...data
+        })),
+        projectedSavings,
+        carbonEfficiency
+      });
+
+      // Update stats state with all calculated data
+      setStats({
+        totalImpact,
+        wasteTypes: Object.entries(wasteTypes).map(([type, data]) => ({
+          name: type.charAt(0).toUpperCase() + type.slice(1),
+          ...data
+        })),
+        locations,
+        transactionLocations,
+        monthlyTrends: Object.values(monthlyData),
+        bankPerformance
+      });
+    } catch (error) {
+      console.error('Error in calculateStatistics:', error);
+      setError('Failed to process environmental statistics. Please try again later.');
+    }
+  };
+
+  // Simplified map content that focuses only on transactions and users with multi-filter support
+  const renderMapContent = () => {
+    return (
+      <>
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        
+        {/* User location markers (facilities) */}
+        {showBankLocations && stats.locations
+          .filter(location => 
+            facilityFilters.length === 0 || 
+            facilityFilters.includes(location.role)
+          )
+          .map((location) => {
+            if (!location.coordinates?.lat || !location.coordinates?.lng) return null;
+            
+            const roleColor = USER_ROLE_COLORS[location.role] || USER_ROLE_COLORS.default;
+            
+            return (
+              <React.Fragment key={location.id}>
+                <Circle
+                  center={[location.coordinates.lat, location.coordinates.lng]}
+                  radius={300} // Standard size for facility markers
+                  pathOptions={{
+                    color: roleColor,
+                    fillColor: roleColor,
+                    fillOpacity: 0.2
+                  }}
+                />
+                <Marker
+                  position={[location.coordinates.lat, location.coordinates.lng]}
+                  icon={L.divIcon({
+                    className: 'custom-marker-icon',
+                    html: `<div class="w-8 h-8 rounded-full bg-white border-4 flex items-center justify-center"
+                          style="border-color: ${roleColor}">
+                      <div class="w-4 h-4 rounded-full" style="background-color: ${roleColor}"></div>
+                    </div>`,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 32]
+                  })}
+                >
+                  <Popup>
+                    <div className="p-2">
+                      <h3 className="font-medium text-gray-900">
+                        {location.name}
+                      </h3>
+                      <p className="mt-1 text-sm font-semibold text-gray-600">
+                        {location.role === 'wastebank_admin' ? 'Bank Sampah Unit' : 
+                         location.role === 'wastebank_master' ? 'Bank Sampah Induk' : 
+                         location.role === 'industry' ? 'Industri' : 'Fasilitas'}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {location.address}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {location.city}, {location.province}
+                      </p>
+                      {location.phone && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Tel: {location.phone}
+                        </p>
+                      )}
+                      {(location.role === 'wastebank_admin' || location.role === 'wastebank_master') && (
+                        <div className="pt-2 mt-2 border-t border-gray-200">
+                          <p className="text-sm font-medium text-emerald-600">
+                            Rp {Math.round(location.stats.totalValue).toLocaleString('id')} nilai ekonomi
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {location.stats.totalWeight.toFixed(1)} kg sampah terkumpul
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {location.stats.transactions} transaksi selesai
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </Popup>
+                </Marker>
+              </React.Fragment>
+            );
+        })}
+        
+        {/* Transaction Location Markers with multi-filter support */}
+        {stats.transactionLocations
+          .filter(tx => 
+            transactionFilters.length === 0 || 
+            transactionFilters.includes(tx.type)
+          )
+          .map((transaction) => {
+            if (!transaction.coordinates?.lat || !transaction.coordinates?.lng) return null;
+            
+            // Determine marker color based on transaction type
+            const color = TRANSACTION_COLORS[transaction.type];
+            
+            // Scale radius based on weight (make it smaller for clarity)
+            const radius = Math.min(Math.max(transaction.totalWeight * 50, 200), 1000);
+            
+            return (
+              <React.Fragment key={`tx-${transaction.id}`}>
+                <Circle
+                  center={[transaction.coordinates.lat, transaction.coordinates.lng]}
+                  radius={radius}
+                  pathOptions={{
+                    color,
+                    fillColor: color,
+                    fillOpacity: 0.25
+                  }}
+                />
+                <Marker
+                  position={[transaction.coordinates.lat, transaction.coordinates.lng]}
+                  icon={L.divIcon({
+                    className: 'custom-transaction-marker',
+                    html: `<div class="w-6 h-6 rounded-full bg-white border-2 flex items-center justify-center"
+                          style="border-color: ${color}">
+                      <div class="w-3 h-3 rounded-full" style="background-color: ${color}"></div>
+                    </div>`,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 24]
+                  })}
+                >
+                  <Popup>
+                    <div className="max-w-xs p-2">
+                      <h3 className="font-medium text-gray-900">
+                        {transaction.type === 'pickup' ? 'Pickup Personal' : 
+                        transaction.type === 'masterRequest' ? 'Master Bank Request' : 
+                        'Industry Request'}
+                      </h3>
+                      <p className="mt-1 text-sm text-gray-500 break-words">
+                        {transaction.address}
+                      </p>
+                      <div className="pt-2 mt-2 border-t border-gray-200">
+                        {transaction.type === 'pickup' && (
+                          <>
+                            <p className="text-sm text-gray-700">Bank: {transaction.wasteBankName}</p>
+                            <p className="text-sm text-gray-700">Pengguna: {transaction.userName}</p>
+                          </>
+                        )}
+                        {transaction.type === 'masterRequest' && (
+                          <>
+                            <p className="text-sm text-gray-700">Bank Sampah: {transaction.wasteBankName}</p>
+                            <p className="text-sm text-gray-700">Bank Induk: {transaction.masterBankName}</p>
+                          </>
+                        )}
+                        {transaction.type === 'industryRequest' && (
+                          <>
+                            <p className="text-sm text-gray-700">Industri: {transaction.industryName}</p>
+                            <p className="text-sm text-gray-700">Bank Induk: {transaction.masterBankName}</p>
+                          </>
+                        )}
+                        <p className="mt-1 text-sm font-medium text-emerald-600">
+                          {transaction.totalValue > 0 ? `Rp ${Math.round(transaction.totalValue).toLocaleString('id')}` : '-'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {transaction.totalWeight.toFixed(1)} kg sampah
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {transaction.date && new Date(
+                            typeof transaction.date === 'object' && transaction.date.seconds 
+                              ? transaction.date.seconds * 1000 
+                              : transaction.date
+                          ).toLocaleDateString('id-ID')}
+                        </p>
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              </React.Fragment>
+            );
+        })}
+      </>
+    );
+  };
+
+  // Enhanced Map Legend Component showing active filters
+  const MapLegend = () => {
+    return (
+      <div className="absolute bottom-4 right-4 z-[1000] bg-white p-3 rounded-lg shadow-md border border-gray-200 max-w-xs">
+        <div className="flex items-center justify-between mb-1">
+          <h4 className="text-sm font-medium text-gray-800">Legenda Peta:</h4>
+          {(transactionFilters.length > 0 || facilityFilters.length > 0) && (
+            <button 
+              onClick={clearFilters}
+              className="text-xs text-gray-500 underline hover:text-gray-700"
+            >
+              Reset Filter
+            </button>
+          )}
+        </div>
+        
+        {/* Transaction Types Legend */}
+        <div className="mb-3">
+          <h5 className="mb-1 text-xs font-medium text-gray-600">Jenis Transaksi:</h5>
+          <div className="mb-3 space-y-1.5">
+            <div className={`flex items-center gap-2 p-0.5 rounded ${transactionFilters.includes('pickup') ? 'bg-emerald-50' : ''}`}>
+              <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+              <span className="text-xs text-gray-600">Pickup (Personal)</span>
+            </div>
+            <div className={`flex items-center gap-2 p-0.5 rounded ${transactionFilters.includes('masterRequest') ? 'bg-indigo-50' : ''}`}>
+              <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
+              <span className="text-xs text-gray-600">Master Bank Request</span>
+            </div>
+            <div className={`flex items-center gap-2 p-0.5 rounded ${transactionFilters.includes('industryRequest') ? 'bg-amber-50' : ''}`}>
+              <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+              <span className="text-xs text-gray-600">Industry Request</span>
+            </div>
+          </div>
+        </div>
+        
+        {/* Facility Types Legend */}
+        {showBankLocations && (
+          <div className="pt-2 mb-3 border-t border-gray-200">
+            <h5 className="mb-1 text-xs font-medium text-gray-600">Jenis Fasilitas:</h5>
+            <div className="mb-3 space-y-1.5">
+              <div className={`flex items-center gap-2 p-0.5 rounded ${facilityFilters.includes('wastebank_admin') ? 'bg-emerald-50' : ''}`}>
+                <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                <span className="text-xs text-gray-600">Bank Sampah Unit</span>
+              </div>
+              <div className={`flex items-center gap-2 p-0.5 rounded ${facilityFilters.includes('wastebank_master') ? 'bg-indigo-50' : ''}`}>
+                <div className="w-3 h-3 bg-indigo-500 rounded-full"></div>
+                <span className="text-xs text-gray-600">Bank Sampah Induk</span>
+              </div>
+              <div className={`flex items-center gap-2 p-0.5 rounded ${facilityFilters.includes('industry') ? 'bg-amber-50' : ''}`}>
+                <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                <span className="text-xs text-gray-600">Industri</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -726,6 +1230,64 @@ const GovernmentReports = () => {
           {/* Header with Indonesian Language */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
+             <div className="flex items-center gap-4">
+  <Select
+    value={dateRange}
+    onChange={(e) => setDateRange(e.target.value)}
+    className="w-44"
+  >
+    <option value="month">Bulan Ini</option>
+    <option value="quarter">3 Bulan Terakhir</option>
+    <option value="year">Tahun Ini</option>
+    <option value="all">Semua Waktu</option>
+  </Select>
+  
+  <AiReportButton 
+  reportData={{
+    displayedMetrics: [
+      {
+        name: "Dampak Karbon",
+        value: `${Math.round(stats.totalImpact.carbon)} kg CO₂e`,
+        description: "Total emisi yang berhasil dicegah"
+      },
+      {
+        name: "Pohon Terselamatkan", 
+        value: `${Math.round(stats.totalImpact.trees)} pohon`,
+        description: "Setara pohon yang tidak ditebang"
+      },
+      {
+        name: "Air Terhemat",
+        value: `${Math.round(stats.totalImpact.water / 1000)} m³`,
+        description: "Air yang berhasil dihemat"
+      },
+      {
+        name: "Tempat Pembuangan",
+        value: `${stats.totalImpact.landfill.toFixed(1)} m³`,
+        description: "Ruang TPA yang dihemat"
+      }
+    ],
+    wasteDistribution: stats.wasteTypes.map(type => ({
+      name: type.name,
+      weight: type.weight,
+      impact: type.impact
+    })),
+    mapData: {
+      wasteBankLocations: stats.locations.filter(l => l.role === 'wastebank_admin').length,
+      masterBankLocations: stats.locations.filter(l => l.role === 'wastebank_master').length,
+      industryLocations: stats.locations.filter(l => l.role === 'industry').length,
+      transactionCount: stats.transactionLocations.length
+    },
+    performanceTrends: {
+      timePeriod: dateRange,
+      topPerformers: stats.bankPerformance.small.topPerformers.slice(0, 3).map(p => p.name),
+      carbonTrend: carbonStats.monthlyOffset.length > 1 ? 
+        (carbonStats.monthlyOffset[carbonStats.monthlyOffset.length-1].offset > 
+         carbonStats.monthlyOffset[0].offset ? "meningkat" : "menurun") : "stabil"
+    }
+  }}
+/>
+</div>
+  
               <div className="p-2 bg-white border border-gray-200 shadow-sm rounded-xl">
                 <LeafyGreen className="w-6 h-6 text-emerald-500" />
               </div>
@@ -850,8 +1412,142 @@ const GovernmentReports = () => {
             {/* Map Container with Instructions */}
             <div className="overflow-hidden bg-white border border-gray-200 shadow-sm lg:col-span-2 rounded-xl">
               <div className="p-4 border-b border-gray-100 bg-gray-50">
-                <h3 className="font-medium text-gray-800">Peta Sebaran Bank Sampah</h3>
-                <p className="text-xs text-gray-500">Lingkaran menunjukkan volume sampah yang telah dikumpulkan. Klik pada titik untuk melihat detail.</p>
+                <h3 className="font-medium text-gray-800">Peta Sebaran Transaksi & Fasilitas</h3>
+                <p className="text-xs text-gray-500">
+                  Visualisasi menunjukkan lokasi transaksi dan fasilitas pengelolaan sampah. 
+                  Anda dapat memilih kombinasi filter untuk melihat data spesifik.
+                </p>
+                
+                {/* Enhanced filtering UI with multiple selection */}
+                <div className="flex flex-wrap gap-6 p-3 mt-3 bg-white border border-gray-100 rounded-lg">
+                  {/* Facility filters */}
+                  <div className="flex-1 min-w-[250px]">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-medium text-gray-600">Fasilitas:</p>
+                      <FilterButton
+                        active={showBankLocations}
+                        onClick={() => setShowBankLocations(!showBankLocations)}
+                        color="gray"
+                      >
+                        {showBankLocations ? 'Tampilkan' : 'Sembunyikan'}
+                      </FilterButton>
+                    </div>
+                    
+                    {showBankLocations && (
+                      <div className="flex flex-wrap gap-1">
+                        <FilterButton
+                          active={facilityFilters.length === 0}
+                          onClick={() => setFacilityFilters([])}
+                          color="gray"
+                        >
+                          Semua Fasilitas
+                        </FilterButton>
+                        
+                        <FilterButton
+                          active={facilityFilters.includes('wastebank_admin')}
+                          onClick={() => toggleFacilityFilter('wastebank_admin')}
+                          color="emerald"
+                        >
+                          Bank Sampah Unit
+                        </FilterButton>
+                        
+                        <FilterButton
+                          active={facilityFilters.includes('wastebank_master')}
+                          onClick={() => toggleFacilityFilter('wastebank_master')}
+                          color="indigo"
+                        >
+                          Bank Sampah Induk
+                        </FilterButton>
+                        
+                        <FilterButton
+                          active={facilityFilters.includes('industry')}
+                          onClick={() => toggleFacilityFilter('industry')}
+                          color="amber"
+                        >
+                          Industri
+                        </FilterButton>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Transaction type filters - can be combined */}
+                  <div className="flex-1 min-w-[250px]">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-medium text-gray-600">Jenis Transaksi:</p>
+                      {transactionFilters.length > 0 && (
+                        <FilterButton
+                          active={false}
+                          onClick={() => setTransactionFilters([])}
+                          color="gray"
+                        >
+                          Hapus Filter
+                        </FilterButton>
+                      )}
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-1">
+                      <FilterButton
+                        active={transactionFilters.length === 0}
+                        onClick={() => setTransactionFilters([])}
+                        color="gray"
+                      >
+                        Semua Transaksi
+                      </FilterButton>
+                      
+                      <FilterButton
+                        active={transactionFilters.includes('pickup')}
+                        onClick={() => toggleTransactionFilter('pickup')}
+                        color="emerald"
+                      >
+                        Pickup Personal
+                      </FilterButton>
+                      
+                      <FilterButton
+                        active={transactionFilters.includes('masterRequest')}
+                        onClick={() => toggleTransactionFilter('masterRequest')}
+                        color="indigo"
+                      >
+                        Master Bank Request
+                      </FilterButton>
+                      
+                      <FilterButton
+                        active={transactionFilters.includes('industryRequest')}
+                        onClick={() => toggleTransactionFilter('industryRequest')}
+                        color="amber"
+                      >
+                        Industry Request
+                      </FilterButton>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Filter summary */}
+                {(facilityFilters.length > 0 || transactionFilters.length > 0) && (
+                  <div className="p-2 mt-2 border border-blue-100 rounded-md bg-blue-50">
+                    <p className="flex items-center text-xs text-blue-700">
+                      <span className="mr-1 font-medium">Filter aktif:</span>
+                      {facilityFilters.length > 0 && (
+                        <span>
+                          Fasilitas: {facilityFilters.length} terpilih
+                        </span>
+                      )}
+                      {facilityFilters.length > 0 && transactionFilters.length > 0 && (
+                        <span className="mx-1">|</span>
+                      )}
+                      {transactionFilters.length > 0 && (
+                        <span>
+                          Transaksi: {transactionFilters.length} terpilih
+                        </span>
+                      )}
+                      <button
+                        onClick={clearFilters}
+                        className="ml-auto text-xs text-blue-600 underline hover:text-blue-800"
+                      >
+                        Reset
+                      </button>
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="relative h-[450px]">
                 <MapContainer 
@@ -859,64 +1555,9 @@ const GovernmentReports = () => {
                   zoom={13} 
                   className="w-full h-full"
                 >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
-
-                  {stats.locations.map((location) => {
-                    if (!location.coordinates?.lat || !location.coordinates?.lng) return null;
-                    
-                    const radius = Math.min(Math.max(location.stats.totalWeight * 500, 500), 2000);
-                    
-                    return (
-                      <React.Fragment key={location.id}>
-                        <Circle
-                          center={[location.coordinates.lat, location.coordinates.lng]}
-                          radius={radius}
-                          pathOptions={{
-                            color: '#059669',
-                            fillColor: '#059669',
-                            fillOpacity: 0.2
-                          }}
-                        />
-                        <Marker
-                          position={[location.coordinates.lat, location.coordinates.lng]}
-                          icon={L.divIcon({
-                            className: 'custom-marker-icon',
-                            html: `<div class="w-8 h-8 rounded-full bg-emerald-100 border-4 border-emerald-500 flex items-center justify-center">
-                              <div class="w-4 h-4 rounded-full bg-emerald-500"></div>
-                            </div>`,
-                            iconSize: [32, 32],
-                            iconAnchor: [16, 32]
-                          })}
-                        >
-                          <Popup>
-                            <div className="p-2">
-                              <h3 className="font-medium text-gray-900">
-                                {location.name}
-                              </h3>
-                              <p className="mt-1 text-sm text-gray-500">
-                                {location.address}, {location.city}
-                              </p>
-                              <div className="pt-2 mt-2 border-t border-gray-200">
-                                <p className="text-sm font-medium text-emerald-600">
-                                  Rp {Math.round(location.stats.totalValue).toLocaleString('id')} nilai ekonomi
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {location.stats.totalWeight.toFixed(1)} kg sampah terkumpul
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {location.stats.transactions} transaksi selesai
-                                </p>
-                              </div>
-                            </div>
-                          </Popup>
-                        </Marker>
-                      </React.Fragment>
-                    );
-                  })}
+                  {renderMapContent()}
                 </MapContainer>
+                <MapLegend />
               </div>
             </div>
 

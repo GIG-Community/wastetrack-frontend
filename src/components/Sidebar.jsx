@@ -35,7 +35,9 @@ import {
   Scale,
   DollarSign,
   FileText,
-  Wallet
+  Wallet,
+  FactoryIcon,
+  Warehouse
 } from 'lucide-react';
 
 const Sidebar = ({ role, onCollapse }) => {
@@ -66,7 +68,7 @@ const Sidebar = ({ role, onCollapse }) => {
       'Routes': <MapPin {...iconProps} />,
       'History': <History {...iconProps} />,
       'Monitoring': <PieChart {...iconProps} />,
-      'Offset Planner': <PieChart {...iconProps} />,
+      'Recycle Management': <PieChart {...iconProps} />,
       'Recycling Hub': <Recycle {...iconProps} />,
       'Carbon Management': <Factory {...iconProps} />,
       'Analytics': <AreaChart {...iconProps} />,
@@ -102,7 +104,10 @@ const Sidebar = ({ role, onCollapse }) => {
       'Riwayat': <History {...iconProps} />,
       'Pemantauan': <PieChart {...iconProps} />,
       'Perencana Offset': <PieChart {...iconProps} />,
-      'Pusat Daur Ulang': <Recycle {...iconProps} />,
+      'Manajemen Daur Ulang': <PieChart {...iconProps} />,
+      'Penyimpanan Industri': <Warehouse {...iconProps} />,
+      'Waste Hub': <Recycle {...iconProps} />,
+      'Laporan ESG' : <FileText {...iconProps} />,
       'Manajemen Karbon': <Factory {...iconProps} />,
       'Analitik': <AreaChart {...iconProps} />,
       'Produk': <Package {...iconProps} />,
@@ -116,6 +121,7 @@ const Sidebar = ({ role, onCollapse }) => {
       'Pasar': <ShoppingCart {...iconProps} />,
       'Permintaan Induk': <Truck {...iconProps} />,
       'Gaji': <Wallet {...iconProps} />,
+      'Manajemen Gaji': <Wallet {...iconProps} />,
     };
     return icons[label] || <ChevronRight {...iconProps} />;
   };
@@ -140,7 +146,7 @@ const Sidebar = ({ role, onCollapse }) => {
         { label: 'Laporan', path: '/dashboard/wastebank/reports' },
       ],
       collector: [
-        { label: 'Dasbor', path: '/dashboard/collector/dashboard' },
+        { label: 'Dasbor', path: '/dashboard/collector' },
         { label: 'Tugas Saya', path: '/dashboard/collector/assignments' },
         { label: 'Koleksi', path: '/dashboard/collector/collections' },
         { label: 'Rute', path: '/dashboard/collector/routes' }
@@ -161,8 +167,12 @@ const Sidebar = ({ role, onCollapse }) => {
       ],
       industry: [
         { label: 'Dasbor', path: '/dashboard/industry' },
-        { label: 'Pusat Daur Ulang', path: '/dashboard/industry/recycledhub' },
-        { label: 'Perencana Offset', path: '/dashboard/industry/offset-planner' }
+        { label: 'Waste Hub', path: '/dashboard/industry/recycledhub' },
+        { label: 'Recycle Management', path: '/dashboard/industry/recycle-management' },
+        { label: 'Penyimpanan Industri', path: '/dashboard/industry/warehouse' },
+        { label: 'Manajemen Gaji', path: '/dashboard/industry/salary' },
+        { label: 'Laporan ESG', path: '/dashboard/industry/reports' },
+        
       ],
       marketplace: [
         { label: 'Dasbor', path: '/dashboard/marketplace' },

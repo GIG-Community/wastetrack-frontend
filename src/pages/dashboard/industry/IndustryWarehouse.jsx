@@ -20,7 +20,7 @@ import {
   RefreshCw,
   Trash2
 } from 'lucide-react';
-import { collection, doc, query, where, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, query, where, getDoc, setDoc, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
@@ -86,13 +86,13 @@ const StatCard = ({ title, value, unit, icon: Icon, trend, info, color = "emeral
       <div>
         <p className="text-sm text-zinc-500">{title}</p>
         <div className="flex items-end gap-1 mt-1">
-          <p className={`text-xl font-semibold text-${color}-600`}>{value}</p>
+          <p className="text-xl font-semibold text-zinc-800">{value}</p>
           {unit && <p className="mb-0.5 text-sm text-zinc-500">{unit}</p>}
         </div>
         {info && <p className="mt-1 text-xs text-zinc-400">{info}</p>}
       </div>
-      {Icon && <div className={`p-2 rounded-lg bg-${color}-50`}>
-        <Icon className={`w-5 h-5 text-${color}-500`} />
+      {Icon && <div className="p-2 rounded-lg bg-zinc-50">
+        <Icon className="w-5 h-5 text-zinc-800" />
       </div>}
     </div>
     {trend && (
@@ -416,22 +416,33 @@ const IndustryWarehouse = () => {
       unsubscribes.forEach(unsubscribe => unsubscribe());
       const newUnsubscribes = [];
 
-      // Query for industry collections
+      // Use batch loading with limits to improve performance
       const collectionsQuery = query(
         collection(db, 'industryCollections'),
-        where('industryId', '==', currentUser.uid)
+        where('industryId', '==', currentUser.uid),
+        where('status', '==', 'completed'),
+        limit(50) // Limit results to improve performance
       );
       
       // Listen for industry collections in real-time
       const unsubscribeCollections = onSnapshot(
         collectionsQuery, 
         (snapshot) => {
+          console.log('Collection data updated, processing...');
           const collectionsData = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           }));
 
-          processWarehouseData(collectionsData);
+          setCollectionsData(collectionsData);
+          
+          // Only process if we have both datasets
+          if (requestsData.length > 0) {
+            console.time('processWarehouseData');
+            processWarehouseData(collectionsData, requestsData);
+            console.timeEnd('processWarehouseData');
+          }
+          
           setLastUpdated(new Date());
         },
         (error) => {
@@ -441,24 +452,31 @@ const IndustryWarehouse = () => {
         }
       );
 
-      // Query for industry requests
+      // Query for industry requests with limit
       const requestsQuery = query(
         collection(db, 'industryRequests'),
         where('industryId', '==', currentUser.uid),
-        where('status', '==', 'completed')
+        where('status', '==', 'completed'),
+        limit(50) // Limit results to improve performance
       );
       
       // Listen for industry requests in real-time
       const unsubscribeRequests = onSnapshot(
         requestsQuery, 
         (snapshot) => {
-          const requestsData = snapshot.docs.map(doc => ({
+          console.log('Request data updated, processing...');
+          const newRequestsData = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           }));
 
-          // We'll use this data to supplement our warehouse stats
-          updateFromRequests(requestsData);
+          setRequestsData(newRequestsData);
+          
+          if (collectionsData.length > 0) {
+            console.time('processWarehouseData');
+            processWarehouseData(collectionsData, newRequestsData);
+            console.timeEnd('processWarehouseData');
+          }
         },
         (error) => {
           console.error('Error listening to requests:', error);
@@ -476,24 +494,83 @@ const IndustryWarehouse = () => {
     }
   };
 
-  // Process collections data for both waste and recycled materials
-  const processWarehouseData = (collectionsData) => {
-    try {
-      const wasteTypes = {};
-      const wasteDetails = {};
-      const recycledTypes = {};
-      const recycledDetails = {};
-      
-      let totalWasteWeight = 0;
-      let totalRecycledWeight = 0;
+  // Need to add state to track collections and requests data
+  const [collectionsData, setCollectionsData] = useState([]);
+  const [requestsData, setRequestsData] = useState([]);
 
-      collectionsData.forEach(collection => {
-        // Check if this collection has been recycled
-        const isRecycled = Boolean(collection.recycledAt);
+  // Optimize processing logic
+  const processWarehouseData = (collectionsData, requestsData) => {
+    try {
+      console.log(`Processing ${collectionsData.length} collections and ${requestsData.length} requests`);
+      
+      // Process in a non-blocking way using setTimeout
+      setTimeout(() => {
+        const wasteTypes = {};
+        const wasteDetails = {};
+        const recycledTypes = {};
+        const recycledDetails = {};
         
-        // Process original wastes (waste storage) only if not recycled
-        if (collection.originalWastes && !isRecycled) {
-          Object.entries(collection.originalWastes).forEach(([type, data]) => {
+        let totalWasteWeight = 0;
+        let totalRecycledWeight = 0;
+
+        // Create a Set for faster lookups
+        const processedRequestIds = new Set();
+        
+        // First pass: identify processed request IDs from collections
+        collectionsData.forEach(collection => {
+          if (collection.collectionId) {
+            processedRequestIds.add(collection.collectionId);
+          }
+          
+          // Process recycled data
+          if (collection.recycledWeights && collection.recycledAt) {
+            Object.entries(collection.recycledWeights).forEach(([type, data]) => {
+              const weight = Number(data.weight) || 0;
+              
+              if (!recycledTypes[type]) {
+                recycledTypes[type] = 0;
+                recycledDetails[type] = [];
+              }
+              
+              recycledTypes[type] += weight;
+              totalRecycledWeight += weight;
+              
+              const recycledDate = collection.recycledAt?.toDate ? 
+                collection.recycledAt.toDate() : 
+                new Date(collection.recycledAt?.seconds * 1000 || 0);
+                
+              recycledDetails[type].push({
+                weight: weight,
+                date: recycledDate,
+                volume: weight * VOLUME_CONVERSION_FACTOR,
+                originalWeight: data.originalWeight || 0,
+                categoryId: data.categoryId || ''
+              });
+            });
+          }
+        });
+        
+        // Second pass: process requests not yet recycled
+        requestsData.forEach(request => {
+          // Skip if this request has been processed
+          if (processedRequestIds.has(request.id)) {
+            return;
+          }
+          
+          // Check for collection IDs
+          let shouldSkip = false;
+          if (request.collectionIds && request.collectionIds.length > 0) {
+            shouldSkip = request.collectionIds.every(info => 
+              processedRequestIds.has(info.id)
+            );
+            
+            if (shouldSkip) return;
+          }
+          
+          // Process waste weights for materials not yet recycled
+          const processWasteData = (type, data) => {
+            if (!data || !data.weight) return;
+            
             const weight = Number(data.weight) || 0;
             
             if (!wasteTypes[type]) {
@@ -504,95 +581,77 @@ const IndustryWarehouse = () => {
             wasteTypes[type] += weight;
             totalWasteWeight += weight;
             
-            const collectionDate = collection.createdAt?.toDate ? 
-              collection.createdAt.toDate() : 
-              new Date(collection.createdAt?.seconds * 1000 || 0);
+            const requestDate = request.completedAt?.toDate ? 
+              request.completedAt.toDate() : 
+              new Date(request.completedAt?.seconds * 1000 || 0);
               
             wasteDetails[type].push({
               weight: weight,
-              date: collectionDate,
+              date: requestDate,
               volume: weight * VOLUME_CONVERSION_FACTOR,
-              value: data.value || 0
+              value: data.value || 0,
+              requestId: request.id
             });
-          });
-        }
-        
-        // Process recycled weights (recycled storage)
-        if (collection.recycledWeights && collection.recycledAt) {
-          Object.entries(collection.recycledWeights).forEach(([type, data]) => {
-            const weight = Number(data.weight) || 0;
-            
-            if (!recycledTypes[type]) {
-              recycledTypes[type] = 0;
-              recycledDetails[type] = [];
-            }
-            
-            recycledTypes[type] += weight;
-            totalRecycledWeight += weight;
-            
-            const recycledDate = collection.recycledAt?.toDate ? 
-              collection.recycledAt.toDate() : 
-              new Date(collection.recycledAt?.seconds * 1000 || 0);
-              
-            recycledDetails[type].push({
-              weight: weight,
-              date: recycledDate,
-              volume: weight * VOLUME_CONVERSION_FACTOR,
-              originalWeight: data.originalWeight || 0,
-              categoryId: data.categoryId || ''
+          };
+          
+          // Process wastes object
+          if (request.wastes) {
+            Object.entries(request.wastes).forEach(([type, data]) => 
+              processWasteData(type, data)
+            );
+          }
+          
+          // Process wasteWeights object as alternative
+          if (request.wasteWeights) {
+            Object.entries(request.wasteWeights).forEach(([type, weight]) => {
+              processWasteData(type, { weight });
             });
-          });
-        }
-      });
+          }
+        });
 
-      const wasteVolume = totalWasteWeight * VOLUME_CONVERSION_FACTOR;
-      const wasteTotalCapacity = wasteDimensions.length * wasteDimensions.width * wasteDimensions.height;
-      const wasteUsagePercentage = Math.min((wasteVolume / wasteTotalCapacity) * 100, 100);
+        // Calculate volumes and percentages
+        const wasteVolume = totalWasteWeight * VOLUME_CONVERSION_FACTOR;
+        const wasteTotalCapacity = wasteDimensions.length * wasteDimensions.width * wasteDimensions.height;
+        const wasteUsagePercentage = Math.min((wasteVolume / wasteTotalCapacity) * 100, 100);
 
-      const recycledVolume = totalRecycledWeight * VOLUME_CONVERSION_FACTOR;
-      const recycleTotalCapacity = recycleDimensions.length * recycleDimensions.width * recycleDimensions.height;
-      const recycleUsagePercentage = Math.min((recycledVolume / recycleTotalCapacity) * 100, 100);
+        const recycledVolume = totalRecycledWeight * VOLUME_CONVERSION_FACTOR;
+        const recycleTotalCapacity = recycleDimensions.length * recycleDimensions.width * recycleDimensions.height;
+        const recycleUsagePercentage = Math.min((recycledVolume / recycleTotalCapacity) * 100, 100);
 
-      // Update waste warehouse stats
-      setWasteWarehouseStats({
-        totalCapacity: wasteTotalCapacity,
-        currentStorage: wasteVolume,
-        wasteTypes,
-        wasteDetails,
-        usagePercentage: wasteUsagePercentage,
-        recentCollections: collectionsData
-          .filter(c => c.createdAt && !c.recycledAt) // Only show collections that haven't been recycled
-          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
-          .slice(0, 5)
-      });
+        // Update state after all processing is complete
+        setWasteWarehouseStats({
+          totalCapacity: wasteTotalCapacity,
+          currentStorage: wasteVolume,
+          wasteTypes,
+          wasteDetails,
+          usagePercentage: wasteUsagePercentage,
+          recentCollections: requestsData
+            .filter(c => c.completedAt)
+            .sort((a, b) => (b.completedAt?.seconds || 0) - (a.completedAt?.seconds || 0))
+            .slice(0, 5)
+        });
 
-      // Update recycled warehouse stats
-      setRecycleWarehouseStats({
-        totalCapacity: recycleTotalCapacity,
-        currentStorage: recycledVolume,
-        recycledTypes,
-        recycledDetails,
-        usagePercentage: recycleUsagePercentage,
-        recentRecyclings: collectionsData
-          .filter(c => c.recycledAt)
-          .sort((a, b) => (b.recycledAt?.seconds || 0) - (a.recycledAt?.seconds || 0))
-          .slice(0, 5)
-      });
+        setRecycleWarehouseStats({
+          totalCapacity: recycleTotalCapacity,
+          currentStorage: recycledVolume,
+          recycledTypes,
+          recycledDetails,
+          usagePercentage: recycleUsagePercentage,
+          recentRecyclings: collectionsData
+            .filter(c => c.recycledAt)
+            .sort((a, b) => (b.recycledAt?.seconds || 0) - (a.recycledAt?.seconds || 0))
+            .slice(0, 5)
+        });
 
-      setError(null);
-      setLoading(false);
+        setError(null);
+        setLoading(false);
+        console.log('Processing complete');
+      }, 0);
     } catch (err) {
       console.error('Error processing warehouse data:', err);
       setError('Gagal memproses data gudang');
       setLoading(false);
     }
-  };
-
-  // Supplement warehouse data with requests information
-  const updateFromRequests = (requestsData) => {
-    // This function can be used to add additional information from requests
-    // to our warehouse statistics if needed
-    // Currently empty as we're primarily using the collections for warehouse data
   };
 
   const handleRefreshData = () => {
@@ -695,8 +754,7 @@ const IndustryWarehouse = () => {
                 <h3 className="font-medium text-blue-800">Data Realtime</h3>
                 <p className="text-sm text-blue-600">
                   Halaman ini menampilkan data gudang secara realtime. Perubahan pada data koleksi atau dimensi gudang
-                  akan segera terlihat tanpa perlu memuat ulang halaman. Material yang sudah didaur ulang akan 
-                  dipindahkan dari gudang material mentah ke gudang produk daur ulang.
+                  akan segera terlihat tanpa perlu memuat ulang halaman.
                 </p>
               </div>
             </div>
@@ -1271,8 +1329,7 @@ const IndustryWarehouse = () => {
                       
                       <p className="mt-3 text-xs text-zinc-500">
                         Visualisasi di atas menunjukkan berapa banyak ruang gudang yang terpakai berdasarkan jenis material. 
-                        Warna yang berbeda mewakili jenis material yang berbeda. Material yang sudah didaur ulang
-                        tidak lagi dihitung sebagai bagian dari gudang material mentah.
+                        Warna yang berbeda mewakili jenis material yang berbeda.
                       </p>
                     </div>
                   </div>
