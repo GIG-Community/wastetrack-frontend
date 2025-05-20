@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Package, ArrowRight, Loader2, Search, CheckCircle2, CalendarIcon,
-  User, MapPin, AlertCircle, Scale, ArrowUp, Coins, HelpCircle
+  User, MapPin, AlertCircle, Scale, ArrowUp, Coins, HelpCircle, ChevronRight,
+  Info,
 } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
@@ -9,11 +10,12 @@ import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
 import { Link, useNavigate } from 'react-router-dom';
 import { calculatePoints, calculateTotalValue, POINTS_CONVERSION_RATE } from '../../../lib/constants';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 // Reusable components
 const Input = ({ className = "", ...props }) => (
   <input
-    className={`px-4 py-2.5 bg-white border border-gray-200 rounded-lg
+    className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-lg
       text-gray-700 text-sm transition-all
       focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500
       disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
@@ -85,7 +87,7 @@ const PickupCard = ({ pickup, onSelectPickup }) => {
   };
 
   // Calculate total bags and points
-  const totalBags = pickup.wastes 
+  const totalBags = pickup.wastes
     ? Object.values(pickup.wastes).reduce((sum, waste) => sum + Math.ceil(waste.weight / 5), 0)
     : 0;
 
@@ -156,6 +158,12 @@ const PickupCard = ({ pickup, onSelectPickup }) => {
 };
 
 const CollectorCollections = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [pickups, setPickups] = useState([]);
@@ -182,7 +190,7 @@ const CollectorCollections = () => {
           where('collectorId', '==', currentUser.uid),
           where('status', '==', 'in_progress')
         );
-        
+
         unsubscribe = onSnapshot(
           pickupsQuery,
           (snapshot) => {
@@ -239,7 +247,7 @@ const CollectorCollections = () => {
     .filter(pickup => {
       const matchesSearch = pickup.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         pickup.location?.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const pickupDate = pickup.date ? new Date(pickup.date.seconds * 1000) : null;
       const matchesDateRange = (!startDate || !endDate || !pickupDate) ? true : (
         pickupDate >= new Date(startDate) &&
@@ -289,11 +297,10 @@ const CollectorCollections = () => {
           <button
             key={index + 1}
             onClick={() => setCurrentPage(index + 1)}
-            className={`px-3 py-1 text-sm border rounded-md ${
-              currentPage === index + 1
-                ? 'bg-emerald-500 text-white'
-                : 'bg-white hover:bg-gray-50'
-            }`}
+            className={`px-3 py-1 text-sm border rounded-md ${currentPage === index + 1
+              ? 'bg-emerald-500 text-white'
+              : 'bg-white hover:bg-gray-50'
+              }`}
           >
             {index + 1}
           </button>
@@ -308,6 +315,28 @@ const CollectorCollections = () => {
       </div>
     </div>
   );
+
+  // Information panel component - modified with collapsible behavior
+  const InfoPanel = ({ title, children }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    return (
+      <div className="text-left p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+        <div className="flex gap-3">
+          <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+              <h3 className="mb-1 font-medium text-blue-800">{title}</h3>
+              <ChevronRight className={`w-4 h-4 text-blue-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+            </div>
+            {isExpanded && (
+              <div className="text-sm text-blue-700">{children}</div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -324,200 +353,195 @@ const CollectorCollections = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-zinc-50/50">
       <Sidebar role={userData?.role} onCollapse={setIsSidebarCollapsed} />
-      <main className={`flex-1 p-8 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <main className={`flex-1 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         {/* Header */}
-        <div className="flex flex-col gap-4 mb-8 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-800">Manajemen Pengambilan Sampah</h1>
-            <p className="text-sm text-gray-500">Perbarui berat sampah dan hitung poin untuk pengambilan yang sedang berlangsung</p>
+        <div className="p-6">
+          <div className="flex text-left items-center gap-4 mb-8">
+            <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <Scale className="w-6 h-6 text-emerald-500" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-left text-zinc-800">Manajemen Pengambilan Sampah</h1>
+              <p className="text-sm text-gray-500">Perbarui berat sampah dan hitung poin untuk pengambilan yang sedang berlangsung</p>
+            </div>
           </div>
-          
-          <button 
-            onClick={() => setShowHelp(!showHelp)} 
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 transition-colors border border-blue-100 rounded-lg bg-blue-50 hover:bg-blue-100"
-          >
-            <HelpCircle className="w-4 h-4" />
-            {showHelp ? 'Sembunyikan Bantuan' : 'Tampilkan Bantuan'}
-          </button>
-        </div>
 
-        {/* Help Section */}
-        {showHelp && (
-          <div className="p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
-            <h3 className="mb-2 font-medium text-blue-700">Panduan Penggunaan:</h3>
-            <ul className="ml-6 text-sm text-blue-700 list-disc">
+          {/* Information Panel */}
+          <InfoPanel title="Informasi">
+            <p className="text-sm mb-2 text-blue-600">
+              Dashboard ini menampilkan data secara realtime dan langsung memperbarui perubahan tanpa perlu memuat ulang halaman.
+            </p>
+            <ul className="ml-4 list-disc">
               <li className="mb-1">Halaman ini menampilkan semua pengambilan sampah yang sedang dalam proses pengerjaan oleh Anda.</li>
               <li className="mb-1">Klik tombol "Perbarui Berat" untuk mencatat berat sampah yang sebenarnya pada pengambilan.</li>
               <li className="mb-1">Poin dihitung berdasarkan jenis dan berat sampah yang diambil. 1 poin bernilai Rp {POINTS_CONVERSION_RATE}.</li>
               <li className="mb-1">Gunakan filter pencarian dan tanggal untuk menemukan pengambilan tertentu.</li>
               <li className="mb-1">Data di halaman ini diperbarui secara otomatis (real-time) ketika ada perubahan.</li>
             </ul>
-          </div>
-        )}
+          </InfoPanel>
 
-        {/* Filters, Search, and Sort */}
-        <div className="flex flex-col gap-4 mb-6">
-          <div className="flex flex-col gap-4 sm:flex-row">
-            <div className="flex flex-1 gap-4">
-              <Tooltip text="Cari berdasarkan nama pelanggan atau lokasi pengambilan">
-                <div className="relative w-full md:w-64">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                  <Input
-                    type="text"
-                    placeholder="Cari pengambilan..."
-                    className="pl-10"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-              </Tooltip>
+          {/* Filters, Search, and Sort */}
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="w-full flex gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute w-5 h-5 text-gray-400 -translate-y-1/2 left-3 top-1/2" />
+                <Input
+                  type="text"
+                  placeholder="Cari pengambilan..."
+                  className="w-full pl-10 py-3 text-sm"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+
               <Tooltip text="Filter berdasarkan rentang tanggal pengambilan">
                 <div className="flex items-center gap-2">
                   <Input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-40"
+                    className="w- py-3 text-sm"
                   />
-                  <span className="text-gray-500">hingga</span>
+                  <span className="text-gray-500">s/d</span>
                   <Input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-40"
+                    className="w-44 py-3 text-sm"
                   />
                 </div>
               </Tooltip>
             </div>
-          </div>
-          
-          {/* Sort Options */}
-          <div className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-lg">
-            <span className="text-sm font-medium text-gray-600">Urutkan berdasarkan:</span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleSort('createdAt')}
-                className={`flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-md transition-colors
-                  ${sortBy === 'createdAt' 
-                    ? 'bg-emerald-50 text-emerald-600' 
-                    : 'text-gray-600 hover:bg-gray-50'}`}
-              >
-                Tanggal Dibuat
-                {sortBy === 'createdAt' && (
-                  <span className="text-xs">
-                    {sortOrder === 'desc' ? '↓' : '↑'}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => handleSort('completedAt')}
-                className={`flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-md transition-colors
-                  ${sortBy === 'completedAt' 
-                    ? 'bg-emerald-50 text-emerald-600' 
-                    : 'text-gray-600 hover:bg-gray-50'}`}
-              >
-                Tanggal Selesai
-                {sortBy === 'completedAt' && (
-                  <span className="text-xs">
-                    {sortOrder === 'desc' ? '↓' : '↑'}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
 
-        {/* Collection Stats */}
-        <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-3">
-          <div className="p-5 bg-white border border-gray-200 rounded-xl">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Total Pengambilan</p>
-                <p className="mt-1 text-2xl font-semibold text-gray-800">{pickups.length}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-blue-50">
-                <Package className="w-6 h-6 text-blue-500" />
+            {/* Sort Options */}
+            <div className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-lg">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <span className="text-sm font-medium text-gray-600">Urutkan berdasarkan:</span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleSort('createdAt')}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors
+                    ${sortBy === 'createdAt'
+                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                        : 'text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+                  >
+                    Tanggal Dibuat
+                    {sortBy === 'createdAt' && (
+                      <span className="ml-2">
+                        {sortOrder === 'desc' ? '↓' : '↑'}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleSort('completedAt')}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors
+                    ${sortBy === 'completedAt'
+                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                        : 'text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+                  >
+                    Tanggal Selesai
+                    {sortBy === 'completedAt' && (
+                      <span className="ml-2">
+                        {sortOrder === 'desc' ? '↓' : '↑'}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
-          <Tooltip text="Nilai 1 poin setara dengan Rp 1.000. Poin dihitung otomatis berdasarkan jenis dan berat sampah.">
+          {/* Collection Stats */}
+          <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-3">
             <div className="p-5 bg-white border border-gray-200 rounded-xl">
               <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Perhitungan Poin</p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-800">
-                    1 poin / {POINTS_CONVERSION_RATE} Rp
-                  </p>
-                  <p className="text-xs text-gray-500">Berdasarkan jenis dan berat sampah</p>
+                <div className="text-left">
+                  <p className="text-sm text-gray-500">Total Pengambilan</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-800">{pickups.length}</p>
                 </div>
-                <div className="p-2 rounded-lg bg-emerald-50">
+                <div className="hidden p-2 rounded-lg bg-blue-50">
+                  <Package className="w-6 h-6 text-blue-500" />
+                </div>
+              </div>
+            </div>
+
+            <Tooltip text="Nilai 1 poin setara dengan Rp 100. Poin dihitung otomatis berdasarkan jenis dan berat sampah.">
+            <div className="p-5 bg-white border border-gray-200 rounded-xl">
+              <div className="flex items-start justify-between">
+                <div className="text-left">
+                  <p className="text-sm text-gray-500">Perhitungan Poin</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-800">
+                    1 poin = Rp {POINTS_CONVERSION_RATE}
+                  </p>
+                </div>
+                <div className="hidden p-2 rounded-lg bg-emerald-50">
                   <Coins className="w-6 h-6 text-emerald-500" />
                 </div>
               </div>
             </div>
-          </Tooltip>
+            </Tooltip>
 
-          <Tooltip text="Anda perlu mencatat berat semua jenis sampah yang dikumpulkan">
-            <div className="p-5 bg-white border border-gray-200 rounded-xl">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Berat yang Diperlukan</p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-800">Semua Jenis</p>
-                </div>
-                <div className="p-2 rounded-lg bg-yellow-50">
-                  <Scale className="w-6 h-6 text-yellow-500" />
+            <Tooltip text="Anda perlu mencatat berat semua jenis sampah yang dikumpulkan">
+              <div className="p-5 bg-white border border-gray-200 rounded-xl">
+                <div className="flex items-start justify-between">
+                  <div className="text-left">
+                    <p className="text-sm text-gray-500">Berat yang Diperlukan</p>
+                    <p className="mt-1 text-2xl font-semibold text-gray-800">Semua Jenis</p>
+                  </div>
+                  <div className="hidden p-2 rounded-lg bg-yellow-50">
+                    <Scale className="w-6 h-6 text-yellow-500" />
+                  </div>
                 </div>
               </div>
-            </div>
-          </Tooltip>
-        </div>
+            </Tooltip>
+          </div>
 
-        {/* Collections List with Pagination */}
-        {error ? (
-          <div className="p-4 mb-6 text-red-700 rounded-lg bg-red-50">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5" />
-              <p>{error}</p>
+          {/* Collections List with Pagination */}
+          {error ? (
+            <div className="p-4 mb-6 text-red-700 rounded-lg bg-red-50">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                <p>{error}</p>
+              </div>
+              <button
+                onClick={fetchInProgressPickups}
+                className="mt-2 text-sm font-medium text-red-700 hover:text-red-800"
+              >
+                Coba Lagi
+              </button>
             </div>
-            <button
-              onClick={fetchInProgressPickups}
-              className="mt-2 text-sm font-medium text-red-700 hover:text-red-800"
-            >
-              Coba Lagi
-            </button>
-          </div>
-        ) : filteredAndSortedPickups.length === 0 ? (
-          <div className="p-8 text-center bg-white border border-gray-200 rounded-xl">
-            <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-            <h3 className="mb-2 text-lg font-medium text-gray-700">Tidak Ada Pengambilan Sedang Diproses</h3>
-            <p className="max-w-md mx-auto mb-6 text-gray-500">
-              Saat ini tidak ada pengambilan sampah yang sedang diproses oleh Anda.
-              Periksa kembali nanti atau hubungi bank sampah.
-            </p>
-            <Link
-              to="/dashboard/collector/assignments"
-              className="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
-            >
-              Lihat Penugasan <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-6">
-              {paginatedPickups.map(pickup => (
-                <PickupCard
-                  key={pickup.id}
-                  pickup={pickup}
-                  onSelectPickup={handleSelectPickup}
-                />
-              ))}
+          ) : filteredAndSortedPickups.length === 0 ? (
+            <div className="p-8 text-center bg-white border border-gray-200 rounded-xl">
+              <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <h3 className="mb-2 text-lg font-medium text-gray-700">Tidak Ada Pengambilan Sedang Diproses</h3>
+              <p className="max-w-lg mx-auto mb-6 text-gray-500">
+                Saat ini tidak ada pengambilan sampah yang sedang diproses oleh Anda.
+                Periksa kembali nanti atau hubungi bank sampah.
+              </p>
+              <Link
+                to="/dashboard/collector/assignments"
+                className="inline-flex items-center gap-1 px-4 py-3 text-sm font-medium text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
+              >
+                Lihat Penugasan <ArrowRight className="w-4 h-4" />
+              </Link>
             </div>
-            <Pagination />
-          </>
-        )}
+          ) : (
+            <>
+              <div className="space-y-6">
+                {paginatedPickups.map(pickup => (
+                  <PickupCard
+                    key={pickup.id}
+                    pickup={pickup}
+                    onSelectPickup={handleSelectPickup}
+                  />
+                ))}
+              </div>
+              <Pagination />
+            </>
+          )}
+        </div>
       </main>
     </div>
   );

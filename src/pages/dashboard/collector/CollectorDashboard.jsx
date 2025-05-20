@@ -64,6 +64,7 @@ const CollectorDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showInfoTooltip, setShowInfoTooltip] = useState(null);
+  const [infoPanelOpen, setInfoPanelOpen] = useState(false);
   const [stats, setStats] = useState({
     totalPickups: 0,
     totalWaste: 0,
@@ -736,8 +737,8 @@ const CollectorDashboard = () => {
                 </p>
               </InfoPanel>
 
-              <div className="h-80">
-                <div className="h-[60%]">
+              <div className="flex flex-col">
+                <div className="h-48 mb-4">
                   {wasteTypes.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full">
                       <Recycle className="w-12 h-12 mb-2 text-zinc-300" />
@@ -748,6 +749,8 @@ const CollectorDashboard = () => {
                       <PieChart>
                         <Pie
                           data={wasteTypes}
+                          cx="50%"
+                          cy="50%"
                           innerRadius={60}
                           outerRadius={80}
                           paddingAngle={0}
@@ -773,14 +776,14 @@ const CollectorDashboard = () => {
                   )}
                 </div>
 
-                <div className="pt-4 mt-2 border-t border-zinc-100">
+                <div className="pt-4 mt-2 border-t border-zinc-100 flex-grow flex flex-col">
                   {wasteTypes.length > 0 && (
                     <div className="flex justify-between mb-2 text-xs font-medium text-zinc-500">
                       <span>JENIS SAMPAH</span>
                       <span>BERAT & PERSENTASE</span>
                     </div>
                   )}
-                  <div className="mt-4 space-y-2 max-h-[150px] overflow-y-auto pr-2">
+                  <div className="mt-4 space-y-2 max-h-[150px] overflow-y-auto pr-2 flex-grow">
                     {wasteTypes.map((entry, index) => {
                       const totalWeight = wasteTypes.reduce((sum, type) => sum + type.weight, 0);
                       const percentage = ((entry.weight / totalWeight) * 100).toFixed(1);
