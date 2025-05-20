@@ -36,12 +36,9 @@ import {
 import { emissionFactors } from '../../../lib/carbonConstants';
 import { calculateDistance } from '../../../lib/utils/distanceCalculator';
 import { calculateEmissions, emissionFactorTransport, truckCapacity } from '../../../lib/utils/emissionCalculator';
-import AiReportButton from '../../../components/AiReportButton
-import { jsPDF } from "jspdf";
+import AiReportButton from '../../../components/AiReportButton';
 import 'jspdf-autotable';
-import moment from 'moment';
-import 'moment/locale/id'; // Import Indonesian locale
-import generateAIReport from '../../../lib/api/generateReport';
+import 'moment/locale/id'; // Import Indonesian locale;
 import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 
@@ -75,7 +72,7 @@ const InfoPanel = ({ title, children, defaultExpanded = false }) => {
             <div className="mt-2 text-sm text-blue-700">{children}</div>
           )}
         </div>
-        <div className="hidden flex items-center gap-2">
+        <div className="flex items-center hidden gap-2">
         </div>
         {subValue && (
           <p className="mt-1 text-sm text-zinc-500">{subValue}</p>
