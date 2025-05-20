@@ -22,6 +22,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 // Reusable components
 const Input = ({ className = "", ...props }) => (
@@ -242,6 +243,12 @@ const PickupCard = ({ pickup, onSelect }) => {
 };
 
 const Assignments = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [assignments, setAssignments] = useState([]);
@@ -480,8 +487,23 @@ const Assignments = () => {
             </div>
           </div>
 
+          {/* Information Panel */}
+          <InfoPanel title="Informasi">
+            <p className="text-sm mb-2 text-blue-600">
+              Dashboard ini menampilkan data secara realtime dan langsung memperbarui perubahan tanpa perlu memuat ulang halaman.
+            </p>
+            <ul className="ml-4 list-disc">
+              <li className="">Status <strong>Ditugaskan</strong>: Tugas telah diberikan, Anda perlu mengambil sampah di lokasi.</li>
+              <li className="">Status <strong>Sedang Diproses</strong>: Anda sedang dalam proses pengambilan sampah.</li>
+              <li className="">Status <strong>Selesai</strong>: Pengambilan telah selesai dan sampah telah dicatat.</li>
+              <li className="">Klik tombol <strong>Mulai Pengambilan</strong> untuk memulai proses.</li>
+              <li className="">Klik tombol <strong>Catat Hasil Pengambilan</strong> untuk menyelesaikan dan mencatat jenis sampah yang diambil.</li>
+              <li className="">Gunakan filter untuk mencari tugas berdasarkan lokasi, tanggal, atau status.</li>
+            </ul>
+          </InfoPanel>
+
           {/* Quick Stats */}
-          <div className="pb-8 grid grid-cols-3 gap-4 w-full">
+          <div className="pb-6 grid grid-cols-3 gap-4 w-full">
             {/* Pengambilan Hari Ini */}
             <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl flex flex-col items-center justify-center text-center">
               <p className="text-sm text-gray-500">Pengambilan Hari Ini</p>
@@ -506,21 +528,6 @@ const Assignments = () => {
               </p>
             </div>
           </div>
-
-          {/* Information Panel */}
-          <InfoPanel title="Informasi">
-            <p className="text-sm mb-2 text-blue-600">
-              Dashboard ini menampilkan data secara realtime dan langsung memperbarui perubahan tanpa perlu memuat ulang halaman.
-            </p>
-            <ul className="ml-4 list-disc">
-              <li className="">Status <strong>Ditugaskan</strong>: Tugas telah diberikan, Anda perlu mengambil sampah di lokasi.</li>
-              <li className="">Status <strong>Sedang Diproses</strong>: Anda sedang dalam proses pengambilan sampah.</li>
-              <li className="">Status <strong>Selesai</strong>: Pengambilan telah selesai dan sampah telah dicatat.</li>
-              <li className="">Klik tombol <strong>Mulai Pengambilan</strong> untuk memulai proses.</li>
-              <li className="">Klik tombol <strong>Catat Hasil Pengambilan</strong> untuk menyelesaikan dan mencatat jenis sampah yang diambil.</li>
-              <li className="">Gunakan filter untuk mencari tugas berdasarkan lokasi, tanggal, atau status.</li>
-            </ul>
-          </InfoPanel>
 
           {/* Filters */}
           <div className="flex flex-col gap-4 mb-6">
@@ -571,36 +578,38 @@ const Assignments = () => {
 
             {/* Sort Options */}
             <div className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-lg">
-              <span className="text-sm font-medium text-gray-600">Urutkan berdasarkan:</span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleSort('date')}
-                  className={`flex items-center text-xs gap-1 px-3 py-1 text-sm rounded-md transition-colors
-                  ${sortBy === 'date'
-                      ? 'bg-emerald-50 text-emerald-600'
-                      : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                  Tanggal Pengambilan
-                  {sortBy === 'date' && (
-                    <span className="text-xs ml-4">
-                      {sortOrder === 'desc' ? '↓' : '↑'}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => handleSort('createdAt')}
-                  className={`flex items-center text-xs gap-1 px-3 py-1 text-sm rounded-md transition-colors
-                  ${sortBy === 'createdAt'
-                      ? 'bg-emerald-50 text-emerald-600'
-                      : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                  Tanggal Dibuat
-                  {sortBy === 'createdAt' && (
-                    <span className="text-xs ml-4">
-                      {sortOrder === 'desc' ? '↓' : '↑'}
-                    </span>
-                  )}
-                </button>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <span className="text-sm font-medium text-gray-600">Urutkan berdasarkan:</span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleSort('date')}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors
+        ${sortBy === 'date'
+                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                        : 'text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+                  >
+                    Tanggal Pengambilan
+                    {sortBy === 'date' && (
+                      <span className="ml-2">
+                        {sortOrder === 'desc' ? '↓' : '↑'}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleSort('createdAt')}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors
+        ${sortBy === 'createdAt'
+                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                        : 'text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+                  >
+                    Tanggal Dibuat
+                    {sortBy === 'createdAt' && (
+                      <span className="ml-2">
+                        {sortOrder === 'desc' ? '↓' : '↑'}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
