@@ -36,7 +36,13 @@ import {
 import { emissionFactors } from '../../../lib/carbonConstants';
 import { calculateDistance } from '../../../lib/utils/distanceCalculator';
 import { calculateEmissions, emissionFactorTransport, truckCapacity } from '../../../lib/utils/emissionCalculator';
-import AiReportButton from '../../../components/AiReportButton';
+import AiReportButton from '../../../components/AiReportButton
+import { jsPDF } from "jspdf";
+import 'jspdf-autotable';
+import moment from 'moment';
+import 'moment/locale/id'; // Import Indonesian locale
+import generateAIReport from '../../../lib/api/generateReport';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 
 // Constants
@@ -69,6 +75,11 @@ const InfoPanel = ({ title, children, defaultExpanded = false }) => {
             <div className="mt-2 text-sm text-blue-700">{children}</div>
           )}
         </div>
+        <div className="hidden flex items-center gap-2">
+        </div>
+        {subValue && (
+          <p className="mt-1 text-sm text-zinc-500">{subValue}</p>
+        )}
       </div>
     </div>
   );
@@ -92,6 +103,7 @@ const StatCard = ({ icon: Icon, label, value, trend, trendValue, variant = "succ
           <p className="text-sm font-medium text-zinc-600">{label}</p>
           <p className="mt-1 text-2xl font-semibold text-zinc-800">{value}</p>
         </div>
+
       </div>
       {trend && (
         <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm
@@ -109,10 +121,17 @@ const StatCard = ({ icon: Icon, label, value, trend, trendValue, variant = "succ
 );
 
 const Reports = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [pickups, setPickups] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const [totalEmissions, setTotalEmissions] = useState(0);
   const [wasteBankLocation, setWasteBankLocation] = useState(null);
   const [wasteTypeData, setWasteTypeData] = useState([]);
@@ -364,6 +383,7 @@ const Reports = () => {
     return translations[type] || type.split('-').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
+
   };
 
   if (loading) {
@@ -398,7 +418,7 @@ const Reports = () => {
 
   return (
     <div className="flex min-h-screen bg-zinc-50/50">
-      <Sidebar 
+      <Sidebar
         role={userData?.role}
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
@@ -406,7 +426,7 @@ const Reports = () => {
       <main className={`flex-1 transition-all duration-300 ease-in-out
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
       >
-        <div className="p-8">
+        <div className="p-6">
           {/* Header */}
 <div className="flex items-center gap-4 mb-8">
   <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
@@ -733,6 +753,7 @@ const Reports = () => {
                     Nilai negatif berarti aktivitas pengumpulan sampah secara keseluruhan mengurangi emisi karbon.
                   </p>
                 </div>
+
               </div>
             </>
           )}

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, doc, setDoc, getDoc, runTransaction, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { Search, AlertCircle, UserCheck, User, Users, Filter, Wallet, Calculator, Loader2, DollarSign, Clock, ArrowDown, Info, HelpCircle } from 'lucide-react';
+import { Search, AlertCircle, UserCheck, User, Users, Filter, Wallet, Calculator, Loader2, DollarSign, Clock, ArrowDown, Info, HelpCircle, ChevronRight } from 'lucide-react';
 import Swal from 'sweetalert2';
 import Sidebar from '../../../components/Sidebar';
 import { useAuth } from '../../../hooks/useAuth';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 // Helper component for tooltips
 const Tooltip = ({ children, content }) => (
@@ -17,24 +18,35 @@ const Tooltip = ({ children, content }) => (
   </div>
 );
 
-// Information card component
-const InfoCard = ({ title, children, icon: Icon }) => (
-  <div className="p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
-    <div className="flex items-start gap-3">
-      <div className="mt-0.5 text-blue-500 flex-shrink-0">
-        {Icon ? <Icon size={20} /> : <Info size={20} />}
-      </div>
-      <div>
-        <h3 className="mb-1 text-sm font-medium text-blue-800">{title}</h3>
-        <div className="text-sm text-blue-700">
-          {children}
+// Information panel component - modified with collapsible behavior
+const InfoPanel = ({ title, children }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="text-left p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+      <div className="flex gap-3">
+        <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+        <div className="flex-1">
+          <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+            <h3 className="mb-1 font-medium text-blue-800">{title}</h3>
+            <ChevronRight className={`w-4 h-4 text-blue-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+          </div>
+          {isExpanded && (
+            <div className="text-sm text-blue-700">{children}</div>
+          )}
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default function SalaryManagement() {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData } = useAuth();
   const [loading, setLoading] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -63,28 +75,28 @@ export default function SalaryManagement() {
 
   const fetchTransactionHistory = (userId) => {
     if (!userId) return;
-    
+
     setLoadingTransactions(true);
-    
+
     try {
       const transactionsQuery = query(
         collection(db, 'transactions'),
         where('userId', '==', userId)
       );
-      
+
       // Using onSnapshot instead of getDocs
-      const unsubscribe = onSnapshot(transactionsQuery, 
+      const unsubscribe = onSnapshot(transactionsQuery,
         (transactionsSnapshot) => {
           const transactionsData = transactionsSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
             createdAt: doc.data().createdAt?.toDate() || new Date()
           }));
-          
-          const sortedTransactions = transactionsData.sort((a, b) => 
+
+          const sortedTransactions = transactionsData.sort((a, b) =>
             b.createdAt.getTime() - a.createdAt.getTime()
           ).slice(0, 10);
-          
+
           setTransactions(sortedTransactions);
           setLoadingTransactions(false);
         },
@@ -93,39 +105,39 @@ export default function SalaryManagement() {
           setLoadingTransactions(false);
         }
       );
-      
+
       return unsubscribe;
     } catch (error) {
       console.error('Error saat menyiapkan listener riwayat transaksi:', error);
       setLoadingTransactions(false);
-      return () => {};
+      return () => { };
     }
   };
 
   const fetchIncomingTransfers = () => {
     if (!userData?.id) return;
-    
+
     setLoadingIncomingTransfers(true);
-    
+
     try {
       const transfersQuery = query(
         collection(db, 'transactions'),
         where('userId', '==', userData.id)
       );
-      
+
       // Using onSnapshot instead of getDocs
-      const unsubscribe = onSnapshot(transfersQuery, 
+      const unsubscribe = onSnapshot(transfersQuery,
         (transfersSnapshot) => {
           const transfersData = transfersSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
             createdAt: doc.data().createdAt?.toDate() || new Date()
           }));
-          
-          const sortedTransfers = transfersData.sort((a, b) => 
+
+          const sortedTransfers = transfersData.sort((a, b) =>
             b.createdAt.getTime() - a.createdAt.getTime()
           ).slice(0, 10);
-          
+
           setIncomingTransfers(sortedTransfers);
           setLoadingIncomingTransfers(false);
         },
@@ -134,21 +146,21 @@ export default function SalaryManagement() {
           setLoadingIncomingTransfers(false);
         }
       );
-      
+
       return unsubscribe;
     } catch (error) {
       console.error('Error saat menyiapkan listener transfer masuk:', error);
       setLoadingIncomingTransfers(false);
-      return () => {};
+      return () => { };
     }
   };
 
   const fetchWasteBankBalance = () => {
-    if (!userData?.id) return () => {};
-    
+    if (!userData?.id) return () => { };
+
     try {
       // Using onSnapshot for real-time balance updates
-      const unsubscribe = onSnapshot(doc(db, 'users', userData.id), 
+      const unsubscribe = onSnapshot(doc(db, 'users', userData.id),
         (wasteBankDoc) => {
           if (wasteBankDoc.exists()) {
             setWasteBankBalance(wasteBankDoc.data().balance || 0);
@@ -158,23 +170,23 @@ export default function SalaryManagement() {
           console.error('Error memantau saldo bank sampah:', error);
         }
       );
-      
+
       return unsubscribe;
     } catch (error) {
       console.error('Error saat menyiapkan listener saldo bank sampah:', error);
-      return () => {};
+      return () => { };
     }
   };
 
   useEffect(() => {
-    let balanceUnsubscribe = () => {};
-    let transfersUnsubscribe = () => {};
-    
+    let balanceUnsubscribe = () => { };
+    let transfersUnsubscribe = () => { };
+
     if (userData?.id) {
       balanceUnsubscribe = fetchWasteBankBalance();
       transfersUnsubscribe = fetchIncomingTransfers();
     }
-    
+
     // Cleanup function
     return () => {
       if (typeof balanceUnsubscribe === 'function') balanceUnsubscribe();
@@ -184,19 +196,19 @@ export default function SalaryManagement() {
 
   useEffect(() => {
     let usersUnsubscribe;
-    
+
     const fetchUsers = () => {
       if (!userData?.id) return;
-      
+
       try {
         setLoadingUsers(true);
-        
+
         // First, get all pickups for this waste bank
         const pickupsQuery = query(
           collection(db, 'pickups'),
           where('wasteBankId', '==', userData.id)
         );
-        
+
         // Using onSnapshot for pickups
         const pickupsUnsubscribe = onSnapshot(pickupsQuery, async (pickupsSnapshot) => {
           const customerIds = [...new Set(
@@ -204,21 +216,21 @@ export default function SalaryManagement() {
               .map(doc => doc.data().userId)
               .filter(Boolean)
           )];
-          
+
           // Only proceed if we have customer IDs or to get collectors
           const collectorQuery = query(
             collection(db, 'users'),
             where('role', '==', 'collector'),
             where('profile.institution', '==', userData.id)
           );
-          
+
           // Using onSnapshot for collectors
           const collectorUnsubscribe = onSnapshot(collectorQuery, (collectorSnapshot) => {
             const collectorData = collectorSnapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data()
             }));
-            
+
             // If we have customer IDs, fetch those users too
             if (customerIds.length > 0) {
               const customerQuery = query(
@@ -226,14 +238,14 @@ export default function SalaryManagement() {
                 where('role', '==', 'customer'),
                 where('__name__', 'in', customerIds)
               );
-              
+
               // Using onSnapshot for customers
               const customerUnsubscribe = onSnapshot(customerQuery, (customerSnapshot) => {
                 const customerData = customerSnapshot.docs.map(doc => ({
                   id: doc.id,
                   ...doc.data()
                 }));
-                
+
                 // Combine both datasets
                 setUsers([...collectorData, ...customerData]);
                 setLoadingUsers(false);
@@ -243,7 +255,7 @@ export default function SalaryManagement() {
                 setUsers(collectorData);
                 setLoadingUsers(false);
               });
-              
+
               return () => customerUnsubscribe();
             } else {
               // Just use collectors if no customers
@@ -254,13 +266,13 @@ export default function SalaryManagement() {
             console.error('Error memantau data petugas:', error);
             setLoadingUsers(false);
           });
-          
+
           return () => collectorUnsubscribe();
         }, (error) => {
           console.error('Error memantau data pengambilan:', error);
           setLoadingUsers(false);
         });
-        
+
         return () => pickupsUnsubscribe();
       } catch (error) {
         console.error('Error saat menyiapkan listener pengguna:', error);
@@ -270,12 +282,12 @@ export default function SalaryManagement() {
           text: 'Gagal memuat data pengguna',
         });
         setLoadingUsers(false);
-        return () => {};
+        return () => { };
       }
     };
 
     usersUnsubscribe = fetchUsers();
-    
+
     return () => {
       if (usersUnsubscribe) usersUnsubscribe();
     };
@@ -283,13 +295,13 @@ export default function SalaryManagement() {
 
   const fetchUserDetails = async (userId) => {
     if (!userId) return;
-    
+
     try {
       setLoading(true);
-      
+
       let userUnsubscribe;
       let transactionUnsubscribe;
-      
+
       // Using onSnapshot for user details
       userUnsubscribe = onSnapshot(doc(db, 'users', userId), async (userDoc) => {
         if (!userDoc.exists()) {
@@ -297,9 +309,9 @@ export default function SalaryManagement() {
         }
 
         const userData = userDoc.data();
-        
+
         setPointsToConvert(0);
-        
+
         if (userData.role === 'collector') {
           const salaryDoc = await getDoc(doc(db, 'salaries', userId));
           setSalaryConfig({
@@ -323,7 +335,7 @@ export default function SalaryManagement() {
             if (data.status === 'completed') {
               totalCollections++;
               totalValue += data.totalValue || 0;
-              
+
               if (data.wasteQuantities) {
                 Object.values(data.wasteQuantities).forEach(quantity => {
                   totalWasteCollected += Number(quantity) || 0;
@@ -339,16 +351,16 @@ export default function SalaryManagement() {
             balance: userData.balance || 0,
             points: userData.role === 'customer' ? userData.rewards?.points || 0 : 0,
           });
-          
+
           setLoading(false);
         }, (error) => {
           console.error('Error memantau data pengambilan pengguna:', error);
           setLoading(false);
         });
-        
+
         // Fetch transaction history
         transactionUnsubscribe = fetchTransactionHistory(userId);
-        
+
         return () => {
           pickupsUnsubscribe();
           if (transactionUnsubscribe) transactionUnsubscribe();
@@ -362,7 +374,7 @@ export default function SalaryManagement() {
         });
         setLoading(false);
       });
-      
+
       // Return the cleanup function
       return () => {
         if (userUnsubscribe) userUnsubscribe();
@@ -376,7 +388,7 @@ export default function SalaryManagement() {
         text: 'Gagal memuat detail pengguna',
       });
       setLoading(false);
-      return () => {};
+      return () => { };
     }
   };
 
@@ -420,12 +432,12 @@ export default function SalaryManagement() {
 
     try {
       setLoading(true);
-      
+
       const selectedUser = users.find(u => u.id === selectedUserId);
       const isCustomer = selectedUser?.role === 'customer';
-      
+
       let paymentAmount = 0;
-      
+
       if (isCustomer) {
         const pointsRequested = Number(pointsToConvert);
         if (pointsRequested <= 0 || pointsRequested > userStats.points) {
@@ -435,7 +447,7 @@ export default function SalaryManagement() {
       } else {
         paymentAmount = salaryConfig.baseSalary;
       }
-      
+
       if (paymentAmount <= 0) {
         throw new Error('Jumlah pembayaran tidak valid');
       }
@@ -447,19 +459,19 @@ export default function SalaryManagement() {
       await runTransaction(db, async (transaction) => {
         const wasteBankRef = doc(db, 'users', userData.id);
         const userRef = doc(db, 'users', selectedUserId);
-        
+
         const wasteBankDoc = await transaction.get(wasteBankRef);
         const currentBalance = wasteBankDoc.data().balance || 0;
-        
+
         if (currentBalance < paymentAmount) {
           throw new Error('Saldo bank sampah tidak mencukupi');
         }
-        
+
         transaction.update(wasteBankRef, {
           balance: currentBalance - paymentAmount,
           updatedAt: new Date()
         });
-        
+
         if (isCustomer) {
           transaction.update(userRef, {
             balance: (selectedUser.balance || 0) + paymentAmount,
@@ -473,7 +485,7 @@ export default function SalaryManagement() {
             updatedAt: new Date()
           });
         }
-        
+
         const transactionRef = doc(collection(db, 'transactions'));
         transaction.set(transactionRef, {
           userId: selectedUserId,
@@ -508,11 +520,11 @@ export default function SalaryManagement() {
 
   const filteredUsers = users.filter(user => {
     const matchesRole = selectedRole === 'all' || user.role === selectedRole;
-    const matchesSearch = 
+    const matchesSearch =
       user.profile?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.profile?.phone?.includes(searchTerm);
-    
+
     return matchesRole && matchesSearch;
   });
 
@@ -554,38 +566,33 @@ export default function SalaryManagement() {
 
   return (
     <div className="flex min-h-screen bg-zinc-50/50">
-      <Sidebar 
+      <Sidebar
         role={userData?.role}
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
-      
+
       <main className={`flex-1 transition-all duration-300 ease-in-out
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
       >
-        <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
-                <Wallet className="w-6 h-6 text-emerald-500" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-800">Manajemen Gaji</h1>
-                <p className="mt-1 text-sm text-gray-500">
-                  Kelola gaji dan pembayaran untuk petugas pengumpul
-                </p>
-              </div>
+        <div className="p-6">
+          <div className="flex text-left items-center gap-4 mb-8">
+            <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <Wallet className="w-6 h-6 text-emerald-500" />
             </div>
-            {/* Commented out button */}
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-800">Manajemen Gaji</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Kelola gaji dan pembayaran untuk petugas pengumpul
+              </p>
+            </div>
           </div>
 
           {/* Information Card */}
-          <InfoCard title="Tentang Manajemen Gaji" icon={Info}>
+          <InfoPanel title="Informasi" icon={Info}>
             <p>
-              Halaman ini memungkinkan Anda mengelola gaji petugas dan konversi poin pelanggan. 
-              Data ditampilkan secara real-time dan akan diperbarui otomatis saat ada perubahan.
-              Pilih pengguna dari daftar untuk melihat informasi rinci dan memproses pembayaran.
+              Halaman ini digunakan untuk mengelola gaji petugas dan poin pelanggan, dengan data real-time. Pilih pengguna untuk melihat detail dan memproses pembayaran.
             </p>
-          </InfoCard>
+          </InfoPanel>
 
           <div className="grid grid-cols-1 gap-4 mb-8 sm:grid-cols-2 lg:grid-cols-4">
             <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
@@ -653,18 +660,18 @@ export default function SalaryManagement() {
                     placeholder="Cari pengguna..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="text-sm w-full pl-10 pr-4 py-3 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   />
                 </div>
-                
+
                 <div className="flex items-center gap-2">
-                  <Filter className="w-5 h-5 text-zinc-400" />
+                  <p className="text-sm">Pengguna:</p>
                   <select
                     value={selectedRole}
                     onChange={(e) => setSelectedRole(e.target.value)}
-                    className="flex-1 px-3 py-2 border rounded-lg bg-zinc-50 border-zinc-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="flex-1 text-sm px-3 py-3 border rounded-lg bg-zinc-50 border-zinc-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   >
-                    <option value="all">Semua Pengguna</option>
+                    <option value="all">Semua</option>
                     <option value="collector">Petugas</option>
                     <option value="customer">Pelanggan</option>
                   </select>
@@ -675,9 +682,9 @@ export default function SalaryManagement() {
                     setShowIncomingTransfers(true);
                     fetchIncomingTransfers();
                   }}
-                  className="flex items-center justify-center w-full gap-2 px-4 py-2 text-sm text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
+                  className="flex items-center font-medium justify-center w-full gap-2 px-4 py-3 text-sm text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
                 >
-                  <ArrowDown className="w-4 h-4" />
+                  <ArrowDown className="w-5 h-5" />
                   <span>Lihat Transfer Masuk</span>
                 </button>
               </div>
@@ -691,11 +698,10 @@ export default function SalaryManagement() {
                       <button
                         key={user.id}
                         onClick={() => handleSelectUser(user.id)}
-                        className={`w-full p-3 rounded-lg text-left transition-all ${
-                          selectedUserId === user.id && !showIncomingTransfers
-                            ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm'
-                            : 'bg-white hover:bg-zinc-50 border border-zinc-200'
-                        }`}
+                        className={`w-full p-3 rounded-lg text-left transition-all ${selectedUserId === user.id && !showIncomingTransfers
+                          ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm'
+                          : 'bg-white hover:bg-zinc-50 border border-zinc-200'
+                          }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
@@ -707,11 +713,10 @@ export default function SalaryManagement() {
                               <div className="text-sm text-zinc-500">{user.email}</div>
                             </div>
                           </div>
-                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                            user.role === 'collector' 
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-blue-100 text-blue-700'
-                          }`}>
+                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${user.role === 'collector'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-blue-100 text-blue-700'
+                            }`}>
                             {user.role === 'collector' ? 'Petugas' : 'Pelanggan'}
                           </span>
                         </div>
@@ -748,7 +753,7 @@ export default function SalaryManagement() {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div className="mt-4 divide-y divide-zinc-100 max-h-[450px] overflow-y-auto">
                     {loadingIncomingTransfers ? (
                       <TransactionSkeleton />
@@ -820,19 +825,19 @@ export default function SalaryManagement() {
                       <>
                         <div className="flex items-center justify-between mb-6">
                           <h2 className="text-xl font-semibold text-zinc-800">
-                            {users.find(u => u.id === selectedUserId)?.role === 'customer' 
-                              ? 'Konversi Poin' 
+                            {users.find(u => u.id === selectedUserId)?.role === 'customer'
+                              ? 'Konversi Poin'
                               : 'Pembayaran Gaji'}
                           </h2>
                           <button
                             onClick={handlePayment}
-                            disabled={loading || 
-                              (users.find(u => u.id === selectedUserId)?.role === 'customer' && 
+                            disabled={loading ||
+                              (users.find(u => u.id === selectedUserId)?.role === 'customer' &&
                                 (pointsToConvert <= 0 || pointsToConvert > userStats.points)) ||
-                              (users.find(u => u.id === selectedUserId)?.role === 'collector' && 
+                              (users.find(u => u.id === selectedUserId)?.role === 'collector' &&
                                 !salaryConfig.baseSalary)
                             }
-                            className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-6 py-3 bg-emerald-600 text-sm text-white rounded-lg hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {loading ? 'Memproses...' : 'Proses Pembayaran'}
                           </button>
@@ -912,12 +917,12 @@ export default function SalaryManagement() {
                                   }))}
                                   min={0}
                                   step={1000}
-                                  className="pl-10 w-full p-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                                  className="text-sm pl-10 w-full p-3 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                                 />
                               </div>
                               <button
                                 onClick={handleSaveSalaryConfig}
-                                className="w-full px-4 py-2 mt-3 text-sm transition-colors border rounded-lg text-emerald-700 bg-emerald-100 border-emerald-200 hover:bg-emerald-200"
+                                className="w-full px-4 py-3 mt-3 text-sm transition-colors border rounded-lg text-emerald-700 bg-emerald-100 border-emerald-200 hover:bg-emerald-200"
                               >
                                 Simpan Konfigurasi Gaji
                               </button>
@@ -936,7 +941,7 @@ export default function SalaryManagement() {
                         <h2 className="text-xl font-semibold text-zinc-800">Riwayat Transaksi Pengguna</h2>
                       </div>
                     </div>
-                    
+
                     <div className="mt-4 divide-y divide-zinc-100 max-h-[300px] overflow-y-auto">
                       {loadingTransactions ? (
                         <TransactionSkeleton />
@@ -945,10 +950,10 @@ export default function SalaryManagement() {
                           <div key={transaction.id} className="p-4 border-b border-zinc-100">
                             <div className="flex items-center justify-between mb-1">
                               <span className="font-medium text-zinc-800">
-                                {transaction.type === 'salary_payment' 
-                                  ? 'Pembayaran Gaji' 
-                                  : transaction.type === 'points_conversion' 
-                                    ? 'Konversi Poin' 
+                                {transaction.type === 'salary_payment'
+                                  ? 'Pembayaran Gaji'
+                                  : transaction.type === 'points_conversion'
+                                    ? 'Konversi Poin'
                                     : 'Transaksi'}
                               </span>
                               <span className="font-semibold text-emerald-600">
@@ -965,11 +970,10 @@ export default function SalaryManagement() {
                                   minute: '2-digit'
                                 })}
                               </span>
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                                transaction.status === 'completed' 
-                                  ? 'bg-green-100 text-green-700'
-                                  : 'bg-yellow-100 text-yellow-700'
-                              }`}>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${transaction.status === 'completed'
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-yellow-100 text-yellow-700'
+                                }`}>
                                 {transaction.status === 'completed' ? 'Selesai' : 'Tertunda'}
                               </span>
                             </div>
