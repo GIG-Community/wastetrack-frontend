@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, getFirestore, limit } from 'firebase/firestore';
 import { useAuth } from '../../../hooks/useAuth';
+import AiReportButton from '../../../components/AiReportButton';
 import Sidebar from '../../../components/Sidebar';
 import { 
   PieChart, Pie, 
@@ -1007,32 +1008,83 @@ const EsgReport = () => {
           )}
           
           {/* Improved action buttons with clearer purposes */}
-          <div className="grid grid-cols-1 gap-4 mt-8 md:grid-cols-2 lg:grid-cols-4">
-            <ActionButton 
-              icon={Download} 
-              label="Unduh Laporan PDF" 
-              variant="primary" 
-              onClick={() => {/*...*/}} 
-            />
-            <ActionButton 
-              icon={Calendar} 
-              label="Jadwalkan Audit ESG" 
-              variant="default" 
-              onClick={() => {/*...*/}} 
-            />
-            <ActionButton 
-              icon={GlobeIcon} 
-              label="Bagikan ke Media Sosial" 
-              variant="secondary" 
-              onClick={() => {/*...*/}} 
-            />
-            <ActionButton 
-              icon={BarChart2} 
-              label="Laporan ESG Lengkap" 
-              variant="primary" 
-              onClick={() => {/*...*/}} 
-            />
-          </div>
+
+// Gantikan action buttons di bagian bawah halaman
+// Temukan bagian ini dalam komponen:
+<div className="grid grid-cols-1 gap-4 mt-8 md:grid-cols-2 lg:grid-cols-4">
+  <ActionButton 
+    icon={Download} 
+    label="Unduh Laporan PDF" 
+    variant="primary" 
+    onClick={() => {/*...*/}} 
+  />
+  <ActionButton 
+    icon={Calendar} 
+    label="Jadwalkan Audit ESG" 
+    variant="default" 
+    onClick={() => {/*...*/}} 
+  />
+  <ActionButton 
+    icon={GlobeIcon} 
+    label="Bagikan ke Media Sosial" 
+    variant="secondary" 
+    onClick={() => {/*...*/}} 
+  />
+  
+  {/* Ganti tombol "Laporan ESG Lengkap" dengan AiReportButton */}
+  <AiReportButton 
+    reportData={{
+      chartDescriptions: [
+        {
+          title: "Distribusi Jenis Sampah",
+          description: `Diagram menunjukkan komposisi sampah berdasarkan jenisnya`
+        },
+        {
+          title: "Tren Berat Sampah",
+          description: `Grafik perkembangan jumlah sampah yang dikelola setiap bulan`
+        }
+      ],
+      displayedMetrics: [
+        {
+          name: "Reduksi Emisi CO2",
+          value: `${(typeof environmentalImpact.co2Reduction === 'number' ? environmentalImpact.co2Reduction.toFixed(1) : '0')} kg`,
+          description: "Mengurangi gas rumah kaca di atmosfer"
+        },
+        {
+          name: "Air Bersih Terselamatkan",
+          value: `${(typeof environmentalImpact.waterSaved === 'number' ? environmentalImpact.waterSaved.toLocaleString('id-ID') : '0')} L`,
+          description: "Air yang tidak terpakai dalam produksi baru"
+        },
+        {
+          name: "Energi Terhemat",
+          value: `${(typeof environmentalImpact.energyConserved === 'number' ? environmentalImpact.energyConserved.toFixed(1) : '0')} kWh`,
+          description: "Energi yang dihemat melalui daur ulang"
+        },
+        {
+          name: "Total Sampah Dikelola",
+          value: `${summaryStats.totalWeight.toFixed(2)} kg`,
+          description: "Jumlah sampah yang telah diproses"
+        }
+      ],
+      wasteDistribution: wasteDistribution.map(type => ({
+        name: type.name,
+        weight: type.value,
+        impact: type.value * 0.5 // estimasi dampak karbon
+      })),
+      mapData: {
+        wasteBankLocations: socialImpact.wasteBankMasters || 0,
+        industryLocations: 1,
+        totalLocations: (socialImpact.totalParticipants || 0) + 1
+      },
+      performanceTrends: {
+        timePeriod: timeframe,
+        recyclingEfficiency: `${summaryStats.recyclingEfficiencyRate}%`,
+        sustainabilityScore: governanceCompliance.sustainabilityScore
+      }
+    }}
+    role="industry"
+  />
+</div>
 
           {/* More informative footer */}
           <div className="p-4 mt-8 text-sm text-center text-gray-500 border-t border-gray-200">

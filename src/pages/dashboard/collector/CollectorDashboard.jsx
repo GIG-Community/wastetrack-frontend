@@ -129,7 +129,8 @@ const CollectorDashboard = () => {
       // Existing pickups subscription
       const pickupsQuery = query(
         collection(db, 'pickups'),
-        where('collectorId', '==', currentUser.uid)
+        where('collectorId', '==', currentUser.uid),
+        where('status', '==', 'in_progress')
       );
 
       const unsubscribePickups = onSnapshot(pickupsQuery, (pickupsSnapshot) => {

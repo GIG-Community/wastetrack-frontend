@@ -44,7 +44,7 @@ import { jsPDF } from "jspdf";
 import 'jspdf-autotable';
 import moment from 'moment';
 import 'moment/locale/id'; // Import Indonesian locale
-import generateAIReport from '../../../lib/api/generateReport';
+import AiReportButton from '../../../components/AiReportButton';
 
 // Set moment to use Indonesian locale
 moment.locale('id');
@@ -698,40 +698,82 @@ const MasterReports = () => {
                 <option value="quarter">{dateRangeTranslations.quarter}</option>
                 <option value="year">{dateRangeTranslations.year}</option>
               </Select>
-              <div className="flex w-full gap-2 sm:w-auto">
-                <button
-                  onClick={downloadReport}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-zinc-200 text-zinc-700 rounded-lg
-                    hover:border-zinc-300 hover:bg-zinc-50 transition-colors flex-1 sm:flex-initial"
-                  title="Unduh data mentah dalam format JSON"
-                >
-                  <Download className="w-4 h-4" />
-                  JSON
-                </button>
-                <button
-                  onClick={downloadPdfReport}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-zinc-200 text-zinc-700 rounded-lg
-                    hover:border-zinc-300 hover:bg-zinc-50 transition-colors flex-1 sm:flex-initial"
-                  title="Unduh laporan dalam format PDF"
-                >
-                  <Download className="w-4 h-4" />
-                  Laporan PDF
-                </button>
-                <button
-                  onClick={downloadAIReport}
-                  disabled={isGeneratingAIReport}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 text-white rounded-lg
-                    hover:bg-emerald-600 transition-colors flex-1 sm:flex-initial disabled:opacity-70 disabled:cursor-not-allowed"
-                  title="Hasilkan laporan dengan AI yang lebih komprehensif"
-                >
-                  {isGeneratingAIReport ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <BarChart2 className="w-4 h-4" />
-                  )}
-                  Laporan AI
-                </button>
-              </div>
+          
+
+<div className="flex w-full gap-2 sm:w-auto">
+  <button
+    onClick={downloadReport}
+    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-zinc-200 text-zinc-700 rounded-lg
+      hover:border-zinc-300 hover:bg-zinc-50 transition-colors flex-1 sm:flex-initial"
+    title="Unduh data mentah dalam format JSON"
+  >
+    <Download className="w-4 h-4" />
+    JSON
+  </button>
+  <button
+    onClick={downloadPdfReport}
+    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-zinc-200 text-zinc-700 rounded-lg
+      hover:border-zinc-300 hover:bg-zinc-50 transition-colors flex-1 sm:flex-initial"
+    title="Unduh laporan dalam format PDF"
+  >
+    <Download className="w-4 h-4" />
+    Laporan PDF
+  </button>
+  
+  {/* Ganti tombol sebelumnya dengan AiReportButton */}
+  <AiReportButton 
+    reportData={{
+      chartDescriptions: [
+        {
+          title: "Kinerja Bulanan",
+          description: `Tren berat yang terkumpul dan pendapatan`
+        },
+        {
+          title: "Tren Dampak Karbon",
+          description: `Emisi CO₂ yang dicegah bulanan`
+        }
+      ],
+      displayedMetrics: [
+        {
+          name: "Total Pendapatan",
+          value: `Rp ${reports.financialStats.totalRevenue.toLocaleString('id-ID')}`,
+          description: "Total pemasukan dari seluruh transaksi"
+        },
+        {
+          name: "Total Berat",
+          value: `${reports.collectionStats.totalWeight.toFixed(1)} kg`,
+          description: `${reports.collectionStats.totalPickups} pengambilan selesai`
+        },
+        {
+          name: "Pengurangan Karbon",
+          value: `${reports.impactStats.carbonReduced.toFixed(1)} kg CO₂`,
+          description: "Emisi CO₂ yang dicegah"
+        },
+        {
+          name: "Dampak Daur Ulang",
+          value: `${(reports.impactStats.carbonReduced / 20).toFixed(1)} pohon`,
+          description: "Setara dengan pohon yang ditanam selama setahun"
+        }
+      ],
+      wasteDistribution: reports.revenueByWasteType.map(type => ({
+        name: type.name,
+        weight: type.weight,
+        impact: type.revenue
+      })),
+      mapData: {
+        wasteBankLocations: reports.collectionStats.completedPickups,
+        masterBankLocations: 1, // ini adalah bank sampah induk
+        totalTransactions: reports.collectionStats.totalPickups
+      },
+      performanceTrends: {
+        timePeriod: dateRange,
+        revenueGrowth: `${reports.financialStats.revenueGrowth.toFixed(1)}%`,
+        averagePrice: reports.financialStats.averagePerKg
+      }
+    }}
+    role="wastebank_master"
+  />
+</div>
             </div>
           </div>
 
