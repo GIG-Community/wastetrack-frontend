@@ -666,7 +666,7 @@ const AiReportButton = ({ reportData, role }) => {
   
   // Kode return button
   const buttonLabels = {
-    government: "Laporan Resmi",
+    government: "Laporan Dampak Lingkungan",
     industry: "Laporan ESG",
     wastebank_master: "Laporan Performa", 
     wastebank_admin: "Laporan Dampak"
