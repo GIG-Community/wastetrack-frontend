@@ -166,7 +166,7 @@ export default function Login() {
                     {showPassword ? <EyeOff className="w-5 h-5 text-gray-400" /> : <Eye className="w-5 h-5 text-gray-400" />}
                   </span>
                 </div>
-                <div className="text-right">
+                <div className="text-right sm:pt-2">
                   <Link to="/forgot-password" className="text-[10px] sm:text-sm font-medium text-emerald-600 hover:text-emerald-700 sm:text-sm">
                     Lupa Password?
                   </Link>
