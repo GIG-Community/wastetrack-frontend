@@ -47,7 +47,6 @@ const ROLES = {
   wastebank_master_collector: "Wastebank Master Collector",
 };
 
-
 const ROLE_COLORS = {
   super_admin: "bg-rose-100 text-rose-700",
   customer: "bg-sky-100 text-sky-700",
@@ -76,7 +75,7 @@ const ROLE_DESCRIPTIONS = {
 const Input = ({ icon: Icon, className = "", ...props }) => (
   <div className="relative">
     {Icon && (
-      <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-emerald-500" size={18} />
+      <Icon className="absolute transform -translate-y-1/2 left-3 top-1/2 text-emerald-500" size={18} />
     )}
     <input
       className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-4 py-2.5 bg-white
@@ -213,6 +212,18 @@ const Users = () => {
     province: ''
   });
 
+  // Add comments to user data to control permissions
+  const canPerformAction = (actionType) => {
+    const userComments = {
+      canCreate: false, // Set to false to disable user creation
+      canUpdate: false, // Set to false to disable user updates
+      canDelete: false, // Set to false to disable user deletion
+      canView: true,   // Set to false to disable viewing users
+    };
+
+    return userComments[actionType] || false;
+  };
+
   // Fetch users
   const fetchUsers = async () => {
     setLoading(true);
@@ -248,6 +259,16 @@ const Users = () => {
   // Create user with improved validation
   const handleCreateUser = async (e) => {
     e.preventDefault();
+    if (!canPerformAction('canCreate')) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Access Denied',
+        text: 'You do not have permission to create users',
+        background: '#fff5f5',
+        iconColor: '#d33'
+      });
+      return;
+    }
     setLoading(true);
 
     // Basic validation
@@ -316,6 +337,16 @@ const Users = () => {
   };
 
   const handleUpdateUser = async (user) => {
+    if (!canPerformAction('canUpdate')) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Access Denied',
+        text: 'You do not have permission to update users',
+        background: '#fff5f5',
+        iconColor: '#d33'
+      });
+      return;
+    }
     try {
       await updateDoc(doc(db, 'users', user.id), {
         fullName: user.fullName,
@@ -351,6 +382,16 @@ const Users = () => {
   };
 
   const handleDeleteUser = async (userId) => {
+    if (!canPerformAction('canDelete')) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Access Denied',
+        text: 'You do not have permission to delete users',
+        background: '#fff5f5',
+        iconColor: '#d33'
+      });
+      return;
+    }
     const result = await Swal.fire({
       title: 'Are you sure?',
       text: "This action cannot be undone!",
@@ -405,14 +446,14 @@ const Users = () => {
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         <div className="p-8">
           {/* Header Section */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
-                <UsersIcon className="h-6 w-6 text-emerald-600" />
+              <div className="p-3 border bg-emerald-50 rounded-xl border-emerald-100">
+                <UsersIcon className="w-6 h-6 text-emerald-600" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="mt-1 text-sm text-gray-500">
                   Manage and monitor user accounts
                 </p>
               </div>
@@ -421,6 +462,7 @@ const Users = () => {
             <Button
               onClick={() => setShowCreateForm(!showCreateForm)}
               className="shadow-sm"
+              disabled={!canPerformAction('canCreate')}
             >
               <UserPlus size={18} className="mr-2" />
               {showCreateForm ? 'Cancel' : 'Add New User'}
@@ -428,17 +470,17 @@ const Users = () => {
           </div>
 
           {/* Quick Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 gap-6 mb-8 md:grid-cols-4">
             <Card className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500">Total Users</p>
-                  <p className="text-2xl font-semibold text-gray-900 mt-1">
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">
                     {users.length}
                   </p>
                 </div>
-                <div className="p-3 bg-emerald-50 rounded-lg">
-                  <UsersIcon className="h-6 w-6 text-emerald-600" />
+                <div className="p-3 rounded-lg bg-emerald-50">
+                  <UsersIcon className="w-6 h-6 text-emerald-600" />
                 </div>
               </div>
             </Card>
@@ -447,12 +489,12 @@ const Users = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500">Active Customers</p>
-                  <p className="text-2xl font-semibold text-gray-900 mt-1">
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">
                     {users.filter(u => u.role === 'customer').length}
                   </p>
                 </div>
-                <div className="p-3 bg-blue-50 rounded-lg">
-                  <UserCircle className="h-6 w-6 text-blue-600" />
+                <div className="p-3 rounded-lg bg-blue-50">
+                  <UserCircle className="w-6 h-6 text-blue-600" />
                 </div>
               </div>
             </Card>
@@ -461,12 +503,12 @@ const Users = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500">Total Collectors</p>
-                  <p className="text-2xl font-semibold text-gray-900 mt-1">
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">
                     {users.filter(u => u.role === 'collector').length}
                   </p>
                 </div>
-                <div className="p-3 bg-amber-50 rounded-lg">
-                  <Building2 className="h-6 w-6 text-amber-600" />
+                <div className="p-3 rounded-lg bg-amber-50">
+                  <Building2 className="w-6 h-6 text-amber-600" />
                 </div>
               </div>
             </Card>
@@ -475,12 +517,12 @@ const Users = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500">Industries</p>
-                  <p className="text-2xl font-semibold text-gray-900 mt-1">
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">
                     {users.filter(u => u.role === 'industry').length}
                   </p>
                 </div>
-                <div className="p-3 bg-purple-50 rounded-lg">
-                  <Building2 className="h-6 w-6 text-purple-600" />
+                <div className="p-3 rounded-lg bg-purple-50">
+                  <Building2 className="w-6 h-6 text-purple-600" />
                 </div>
               </div>
             </Card>
@@ -489,7 +531,7 @@ const Users = () => {
           {/* Search Bar */}
           <div className="mb-6">
             <div className="relative max-w-xl">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <Search className="absolute text-gray-400 -translate-y-1/2 left-3 top-1/2" size={20} />
               <input
                 type="text"
                 placeholder="Search by name, email, or role..."
@@ -505,9 +547,9 @@ const Users = () => {
           {/* Create User Form */}
           {showCreateForm && (
             <Card className="p-6 mb-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">Create New User</h2>
+              <h2 className="mb-6 text-xl font-semibold text-gray-900">Create New User</h2>
               <form onSubmit={handleCreateUser} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <FormGroup>
                     <Label>Email Address</Label>
                     <Input
@@ -537,8 +579,7 @@ const Users = () => {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 
-                          hover:text-gray-500 transition-colors"
+                        className="absolute text-gray-400 transition-colors transform -translate-y-1/2 right-3 top-1/2 hover:text-gray-500"
                       >
                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
@@ -655,29 +696,29 @@ const Users = () => {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
                       User Info
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
                       Role & Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
                       Contact & Location
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
                       Date Joined
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
+                <tbody className="bg-white divide-y divide-gray-200">
                   {loading ? (
                     <tr>
                       <td colSpan="5" className="px-6 py-8 text-center">
-                        <div className="flex items-center justify-center text-gray-500 space-x-3">
+                        <div className="flex items-center justify-center space-x-3 text-gray-500">
                           <Loader2 className="w-5 h-5 animate-spin" />
                           <span>Loading users...</span>
                         </div>
@@ -691,7 +732,7 @@ const Users = () => {
                     </tr>
                   ) : (
                     filteredUsers.map(user => (
-                      <tr key={user.id} className="group hover:bg-gray-50/50 transition-colors">
+                      <tr key={user.id} className="transition-colors group hover:bg-gray-50/50">
                         <td className="px-6 py-4">
                           {editingUser?.id === user.id ? (
                             <Input
@@ -703,8 +744,8 @@ const Users = () => {
                           ) : (
                             <div className="flex items-center space-x-3">
                               <div className="flex-shrink-0">
-                                <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                                  <span className="text-emerald-600 font-medium">
+                                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-emerald-100">
+                                  <span className="font-medium text-emerald-600">
                                     {user.fullName?.charAt(0) || user.email?.charAt(0) || '?'}
                                   </span>
                                 </div>
@@ -732,7 +773,7 @@ const Users = () => {
                                 {ROLES[user.role]}
                               </span>
                               {user.institution && (
-                                <div className="text-sm text-gray-500 mt-1">{user.institution}</div>
+                                <div className="mt-1 text-sm text-gray-500">{user.institution}</div>
                               )}
                             </div>
                           )}
@@ -758,7 +799,7 @@ const Users = () => {
                           ) : (
                             <div>
                               {user.phone && (
-                                <div className="flex items-center text-sm text-gray-500 mb-1">
+                                <div className="flex items-center mb-1 text-sm text-gray-500">
                                   <Phone size={14} className="mr-1" />
                                   {user.phone}
                                 </div>
@@ -779,13 +820,14 @@ const Users = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <div className="transition-all flex justify-end space-x-2">
+                          <div className="flex justify-end space-x-2 transition-all">
                             {editingUser?.id === user.id ? (
                               <>
                                 <Button
                                   variant="success"
                                   size="sm"
                                   onClick={() => handleUpdateUser(editingUser)}
+                                  disabled={!canPerformAction('canUpdate')}
                                 >
                                   <Save size={14} className="mr-1" />
                                   Save
@@ -805,6 +847,7 @@ const Users = () => {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => setEditingUser(user)}
+                                  disabled={!canPerformAction('canUpdate')}
                                 >
                                   <Edit2 size={14} className="mr-1" />
                                   Edit
@@ -813,6 +856,7 @@ const Users = () => {
                                   variant="danger"
                                   size="sm"
                                   onClick={() => handleDeleteUser(user.id)}
+                                  disabled={!canPerformAction('canDelete')}
                                 >
                                   <Trash2 size={14} className="mr-1" />
                                   Delete
