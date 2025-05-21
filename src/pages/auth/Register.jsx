@@ -174,7 +174,7 @@ export default function Register() {
     try {
       setLoading(true);
       setError(''); // Clear any existing errors
-      console.log('Registration data:', formData); // Debug log
+      // console.log('Registration data:', formData); // Debug log
 
       const profile = {
         fullName: formData.fullName,
@@ -194,7 +194,7 @@ export default function Register() {
         }
       };
 
-      console.log('Profile to be saved:', profile); // Debug log
+      // console.log('Profile to be saved:', profile); // Debug log
 
       const userData = {
         email: formData.email,
@@ -225,7 +225,7 @@ export default function Register() {
         })
       };
 
-      console.log('Final user data:', userData); // Debug log
+      // console.log('Final user data:', userData); // Debug log
 
       // Daftar pengguna baru - user will remain logged in after signup
       const user = await signup(formData.email, formData.password, userData);

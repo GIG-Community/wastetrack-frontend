@@ -112,9 +112,9 @@ const DetectWaste = () => {
       return;
     }
 
-    console.log(`Captured image data URL length: ${imageUrl.length}`);
+    // console.log(`Captured image data URL length: ${imageUrl.length}`);
     const base64Image = imageUrl.split(',')[1];
-    console.log(`Captured image base64 length: ${base64Image?.length || 0}`);
+    // console.log(`Captured image base64 length: ${base64Image?.length || 0}`);
 
     try {
       const response = await fetch('/api/detect-waste', {
@@ -142,10 +142,10 @@ const DetectWaste = () => {
         throw new Error('API tidak mengembalikan ID jenis sampah yang valid.');
       }
 
-      console.log(`Detected waste: ${detectedTypeId} with confidence: ${confidence}`);
-      console.log(`Price: Rp ${price}/kg | Bag color: ${bagColor}`);
-      console.log(`Description: ${description}`);
-      console.log(`Recommendations: ${recommendations}`);
+      // console.log(`Detected waste: ${detectedTypeId} with confidence: ${confidence}`);
+      // console.log(`Price: Rp ${price}/kg | Bag color: ${bagColor}`);
+      // console.log(`Description: ${description}`);
+      // console.log(`Recommendations: ${recommendations}`);
 
       processDetectedWaste(detectedTypeId, confidence, description, price, recommendations, bagColor);
 
@@ -167,7 +167,7 @@ const DetectWaste = () => {
     bagColor = ''
   ) => {
     try {
-      console.log(`Processing detected waste ID: ${detectedTypeId}`);
+      // console.log(`Processing detected waste ID: ${detectedTypeId}`);
       const details = getWasteDetails(detectedTypeId);
       const category = WASTE_CATEGORIES[detectedTypeId] || 'unknown';
 
@@ -280,7 +280,7 @@ const DetectWaste = () => {
         throw new Error(data.message || `Error API: ${response.statusText}`);
       }
 
-      console.log("API test response:", data);
+      // console.log("API test response:", data);
       setApiTestResult({
         success: true,
         text: "Koneksi AI berhasil."

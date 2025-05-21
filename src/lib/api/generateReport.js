@@ -125,7 +125,7 @@ async function generateAiReport(visualData, role = 'government') {
       
       JANGAN gunakan format markdown, blok kode, atau format khusus lainnya. Kembalikan HANYA objek JSON.
     `;
-
+    
     // Perbarui endpoint untuk menggunakan model gemini-2.0-flash
     const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
     
@@ -146,6 +146,7 @@ async function generateAiReport(visualData, role = 'government') {
         "Content-Type": "application/json"
       },
       body: JSON.stringify(payload)
+
     });
 
     if (!response.ok) {
