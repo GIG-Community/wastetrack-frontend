@@ -1,7 +1,7 @@
 // src/pages/wastebank/BankSettings.jsx
 import React, { useState, useEffect, Suspense } from 'react';
-import { 
-  Building2, 
+import {
+  Building2,
   PackageOpen,
   AlertTriangle,
   Scale,
@@ -9,13 +9,15 @@ import {
   Box,
   AlertCircle,
   AlertOctagon,
-  Info
+  Info,
+  ChevronRight
 } from 'lucide-react';
 import { collection, doc, query, where, getDocs, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
 import WarehouseVisualization3D from '../../../components/WarehouseVisualization3D';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 // Constants for waste type data
 const VOLUME_CONVERSION_FACTOR = 0.2; // m³ per kg, rata-rata dari WASTE_IMPACT_MULTIPLIERS
@@ -151,7 +153,7 @@ export const WASTE_PRICES = {
   'majalah': 1000,
   'sak-semen': 700,
   'duplek': 400,
-  
+
   'pet-bening': 4200,
   'pet-biru': 3500,
   'pet-warna': 1200,
@@ -161,14 +163,14 @@ export const WASTE_PRICES = {
   'tutup-amdk': 2500,
   'tutup-galon': 2000,
   'tutup-campur': 1000,
-  
+
   'ps-kaca': 1000,
   'keping-cd': 3500,
   'galon-utuh': 5000,
   'bak-hitam': 3000,
   'bak-campur': 1500,
   'plastik-keras': 200,
-  
+
   'plastik-bening': 800,
   'kresek': 300,
   'sablon-tipis': 200,
@@ -176,7 +178,7 @@ export const WASTE_PRICES = {
   'karung-kecil': 200,
   'sachet': 50,
   'lembaran-campur': 50,
-  
+
   'besi-tebal': 2500,
   'sepeda': 1500,
   'besi-tipis': 500,
@@ -186,16 +188,16 @@ export const WASTE_PRICES = {
   'kuningan': 15000,
   'perunggu': 8000,
   'aluminium': 9000,
-  
+
   'botol-bensin': 800,
   'botol-bir': 500,
   'botol-kecap': 300,
   'botol-bening': 100,
   'botol-warna': 50,
-  
+
   'karung-100': 1300,
   'karung-200': 1800,
-  
+
   'karak': 1800,
   'gembos': 300,
   'jelantah': 4000,
@@ -214,7 +216,7 @@ export const WASTE_CATEGORIES = {
   'seng': 'metal',
   'tembaga': 'metal',
   'sepeda': 'metal',
-  
+
   // Paper
   'kardus-bagus': 'paper',
   'kardus-jelek': 'paper',
@@ -224,7 +226,7 @@ export const WASTE_CATEGORIES = {
   'duplek': 'paper',
   'buram': 'paper',
   'sak-semen': 'paper',
-  
+
   // Plastics
   'botol-bening': 'plastic',
   'botol-bensin': 'plastic',
@@ -244,7 +246,7 @@ export const WASTE_CATEGORIES = {
   'kresek': 'plastic',
   'bak-campur': 'plastic',
   'bak-hitam': 'plastic',
-  
+
   // Organic
   'jelantah': 'organic',
   'karak': 'organic',
@@ -279,7 +281,7 @@ const getWasteTypeName = (typeId) => {
         };
       }
     }
-    
+
     // Check in subcategories if they exist
     if (category.subcategories) {
       for (const subcategory of category.subcategories) {
@@ -295,7 +297,7 @@ const getWasteTypeName = (typeId) => {
       }
     }
   }
-  
+
   // If not found, format the typeId to be more readable
   return {
     name: typeId.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
@@ -383,6 +385,12 @@ const getStorageAlert = (percentage) => {
 };
 
 const MasterWarehouse = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -427,7 +435,7 @@ const MasterWarehouse = () => {
   useEffect(() => {
     const totalCapacity = dimensions.length * dimensions.width * dimensions.height;
     const usagePercentage = Math.min((warehouseStats.currentStorage / totalCapacity) * 100, 100);
-    
+
     setWarehouseStats(prev => ({
       ...prev,
       totalCapacity,
@@ -476,7 +484,7 @@ const MasterWarehouse = () => {
       await setDoc(userRef, {
         warehouseDimensions: dimensions
       }, { merge: true });
-      
+
       setInputErrors({});
       setIsEditingDimensions(false);
     } catch (err) {
@@ -502,10 +510,10 @@ const MasterWarehouse = () => {
         where('masterBankId', '==', currentUser.uid),
         where('status', '==', 'completed')
       );
-      
+
       // Use onSnapshot for realtime data
       const unsubscribePickups = onSnapshot(
-        pickupsQuery, 
+        pickupsQuery,
         (snapshot) => {
           const pickupsData = snapshot.docs.map(doc => ({
             id: doc.id,
@@ -543,19 +551,19 @@ const MasterWarehouse = () => {
         if (pickup.wastes) {
           Object.entries(pickup.wastes).forEach(([type, data]) => {
             const weight = Number(data.weight) || 0;
-            
+
             if (!wasteTypes[type]) {
               wasteTypes[type] = 0;
               wasteDetails[type] = [];
             }
-            
+
             wasteTypes[type] += weight;
             totalWeight += weight;
-            
-            const pickupDate = pickup.completedAt?.toDate ? 
-              pickup.completedAt.toDate() : 
+
+            const pickupDate = pickup.completedAt?.toDate ?
+              pickup.completedAt.toDate() :
               new Date(pickup.completedAt?.seconds * 1000 || 0);
-              
+
             wasteDetails[type].push({
               weight: weight,
               date: pickupDate,
@@ -564,26 +572,26 @@ const MasterWarehouse = () => {
               points: data.points || 0
             });
           });
-        } 
+        }
         // Handle if using wasteWeights structure
         else if (pickup.wasteWeights) {
           Object.entries(pickup.wasteWeights).forEach(([type, weight]) => {
             weight = Number(weight) || 0;
-            
+
             if (!wasteTypes[type]) {
               wasteTypes[type] = 0;
               wasteDetails[type] = [];
             }
-            
+
             wasteTypes[type] += weight;
             totalWeight += weight;
-            
-            const pickupDate = pickup.completedAt?.toDate ? 
-              pickup.completedAt.toDate() : 
+
+            const pickupDate = pickup.completedAt?.toDate ?
+              pickup.completedAt.toDate() :
               new Date(pickup.completedAt?.seconds * 1000 || 0);
-              
+
             const value = WASTE_PRICES[type] ? weight * WASTE_PRICES[type] : 0;
-            
+
             wasteDetails[type].push({
               weight: weight,
               date: pickupDate,
@@ -619,11 +627,33 @@ const MasterWarehouse = () => {
     }
   };
 
+  // Information panel component - modified with collapsible behavior
+  const InfoPanel = ({ title, children }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    return (
+      <div className="text-left p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+        <div className="flex gap-3">
+          <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+              <h3 className="mb-1 font-medium text-blue-800">{title}</h3>
+              <ChevronRight className={`w-4 h-4 text-blue-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+            </div>
+            {isExpanded && (
+              <div className="text-sm text-blue-700">{children}</div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen bg-zinc-50/50">
-        <Sidebar 
-          role={userData?.role} 
+        <Sidebar
+          role={userData?.role}
           onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
         />
         <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -640,16 +670,16 @@ const MasterWarehouse = () => {
 
   return (
     <div className="flex min-h-screen bg-zinc-50/50">
-      <Sidebar 
-        role={userData?.role} 
+      <Sidebar
+        role={userData?.role}
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
-      
+
       <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
-        <div className="p-8">
+        <div className="p-6">
           {/* Header */}
-          <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
+          <div className="flex text-left items-center gap-4 mb-8">
+            <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
               <Building2 className="w-6 h-6 text-emerald-500" />
             </div>
             <div>
@@ -658,21 +688,15 @@ const MasterWarehouse = () => {
             </div>
           </div>
 
-          {/* Info Banner */}
-          <div className="p-4 mb-6 border border-blue-200 rounded-lg bg-blue-50">
-            <div className="flex gap-3">
-              <Info className="flex-shrink-0 w-5 h-5 mt-0.5 text-blue-500" />
-              <div>
-                <h3 className="font-medium text-blue-800">Data Realtime</h3>
-                <p className="text-sm text-blue-600">
-                  Halaman ini menampilkan data gudang secara realtime. Perubahan pada data pengambilan atau dimensi gudang
-                  akan segera terlihat tanpa perlu memuat ulang halaman.
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Information Panel */}
+          <InfoPanel title="Informasi">
+            <p className="text-sm text-blue-600">
+              <li>Halaman ini menampilkan data secara realtime dan langsung memperbarui perubahan tanpa perlu memuat ulang halaman.</li>
+              <li><span className="font-semibold">Distribusi Sampah</span>: tabel ini menunjukkan jenis sampah berdasarkan volume terbanyak ke terkecil. Persentase menunjukkan proporsi dari total sampah yang ada.</li>
+            </p>
+          </InfoPanel>
 
-          <div className="w-full mx-auto space-y-6 max-w-7xl">
+          <div className="w-full mx-auto space-y-6">
             {/* Quick Stats */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <Card className="p-6">
@@ -695,9 +719,11 @@ const MasterWarehouse = () => {
             {/* Warehouse Dimensions Settings */}
             <Card className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2">
-                  <Box className="w-5 h-5 text-zinc-600" />
-                  <div>
+                <div className="flex text-left items-center gap-2">
+                  <div className="p-3 rounded-lg bg-emerald-50">
+                    <Box className="w-5 h-5 text-emerald-500" />
+                  </div>
+                  <div className="items-center ml-4">
                     <h2 className="text-lg font-semibold text-zinc-800">Dimensi Gudang</h2>
                     <p className="text-sm text-zinc-500">Atur ukuran gudang penyimpanan sampah</p>
                   </div>
@@ -738,7 +764,7 @@ const MasterWarehouse = () => {
                           }
                         }}
                         disabled={!isEditingDimensions}
-                        className={`block w-full rounded-lg shadow-sm focus:border-emerald-500 focus:ring-emerald-500 disabled:bg-zinc-50 pr-12
+                        className={`block w-full rounded-lg shadow-sm focus:border-emerald-500 focus:ring-emerald-500 disabled:bg-white pr-12
                           ${inputErrors[dim] ? 'border-red-300' : 'border-zinc-300'}`}
                       />
                       <span className="absolute -translate-y-1/2 right-3 top-1/2 text-zinc-400">
@@ -759,7 +785,7 @@ const MasterWarehouse = () => {
                     {formatNumber((dimensions.length * dimensions.width * dimensions.height).toFixed(1))} m³
                   </span>
                 </div>
-                <p className="mt-2 text-xs text-zinc-500">
+                <p className="mt-2 text-left text-xs text-zinc-500">
                   Volume dihitung dari perkalian panjang × lebar × tinggi gudang. Semakin besar volume, semakin banyak sampah yang dapat disimpan.
                 </p>
                 {isEditingDimensions && Object.values(dimensions).some(v => !v || v <= 0) && (
@@ -773,9 +799,11 @@ const MasterWarehouse = () => {
             {/* Storage Overview with 3D Visualization */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               <Card className="p-6 lg:col-span-2">
-                <div className="flex items-center gap-2 mb-6">
-                  <PackageOpen className="w-5 h-5 text-zinc-600" />
-                  <div>
+                <div className="text-left flex items-center gap-2 mb-6">
+                  <div className="p-3 rounded-lg bg-emerald-50">
+                    <PackageOpen className="w-5 h-5 text-emerald-500" />
+                  </div>
+                  <div className="items-center ml-4">
                     <h2 className="text-lg font-semibold text-zinc-800">Visualisasi Penyimpanan</h2>
                     <p className="text-sm text-zinc-500">Lihat penggunaan ruang gudang dalam tampilan 3D</p>
                   </div>
@@ -788,7 +816,7 @@ const MasterWarehouse = () => {
                       <div className="w-12 h-12 border-b-2 rounded-full animate-spin border-emerald-500" />
                     </div>
                   }>
-                    <WarehouseVisualization3D 
+                    <WarehouseVisualization3D
                       wasteTypes={Object.entries(warehouseStats.wasteTypes).reduce((acc, [type, weight]) => ({
                         ...acc,
                         [type]: weight * VOLUME_CONVERSION_FACTOR
@@ -799,7 +827,7 @@ const MasterWarehouse = () => {
                       wasteDetails={warehouseStats.wasteDetails}
                     />
                   </Suspense>
-                  
+
                   {/* Usage gauge */}
                   <div>
                     <div className="flex justify-between mb-2">
@@ -811,12 +839,11 @@ const MasterWarehouse = () => {
                       </span>
                     </div>
                     <div className="h-4 overflow-hidden rounded-full bg-zinc-100">
-                      <div 
-                        className={`h-full rounded-full transition-all ${
-                          warehouseStats.usagePercentage >= 90 ? 'bg-red-500' :
+                      <div
+                        className={`h-full rounded-full transition-all ${warehouseStats.usagePercentage >= 90 ? 'bg-red-500' :
                           warehouseStats.usagePercentage >= 70 ? 'bg-amber-500' :
-                          'bg-emerald-500'
-                        }`}
+                            'bg-emerald-500'
+                          }`}
                         style={{ width: `${Math.min(warehouseStats.usagePercentage, 100)}%` }}
                       />
                     </div>
@@ -829,15 +856,14 @@ const MasterWarehouse = () => {
                   {warehouseStats.usagePercentage >= 60 && (() => {
                     const alert = getStorageAlert(warehouseStats.usagePercentage);
                     const AlertIcon = alert.icon;
-                    
+
                     return (
-                      <div className={`p-4 rounded-lg border ${
-                        alert.type === 'critical' ? 'bg-red-50 border-red-200' :
+                      <div className={`p-4 rounded-lg border ${alert.type === 'critical' ? 'bg-red-50 border-red-200' :
                         alert.type === 'urgent' ? 'bg-rose-50 border-rose-200' :
-                        alert.type === 'warning' ? 'bg-amber-50 border-amber-200' :
-                        'bg-blue-50 border-blue-200'
-                      }`}>
-                        <div className="flex items-start gap-3">
+                          alert.type === 'warning' ? 'bg-amber-50 border-amber-200' :
+                            'bg-blue-50 border-blue-200'
+                        }`}>
+                        <div className="text-left flex items-start gap-3">
                           <AlertIcon className={`h-5 w-5 flex-shrink-0 text-${alert.color}-500 mt-0.5`} />
                           <div className="space-y-1">
                             <p className={`font-medium text-${alert.color}-700`}>
@@ -873,23 +899,18 @@ const MasterWarehouse = () => {
               </Card>
 
               {/* Waste Distribution - Updated with improved waste type translation */}
-              <Card className="p-6">
-                <div className="flex items-center gap-2 mb-6">
-                  <Scale className="w-5 h-5 text-zinc-600" />
-                  <div>
+              <Card className="p-6 max-h-[730px]">
+                <div className="text-left flex items-center gap-2 mb-6">
+                  <div className="p-3 rounded-lg bg-emerald-50">
+                    <Scale className="w-5 h-5 text-emerald-500" />
+                  </div>
+                  <div className="items-center ml-4">
                     <h2 className="text-lg font-semibold text-zinc-800">Distribusi Sampah</h2>
                     <p className="text-sm text-zinc-500">Rincian jenis sampah yang disimpan di gudang</p>
                   </div>
                 </div>
 
-                <div className="p-3 mb-4 text-sm text-blue-700 border border-blue-100 rounded-lg bg-blue-50">
-                  <p>
-                    <strong>Cara Membaca:</strong> Tabel ini menunjukkan jenis sampah berdasarkan volume terbanyak ke terkecil.
-                    Persentase menunjukkan proporsi dari total sampah yang ada.
-                  </p>
-                </div>
-
-                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                <div className="space-y-4 max-h-[580px] overflow-y-auto pr-2">
                   {Object.entries(warehouseStats.wasteTypes).length === 0 ? (
                     <div className="flex flex-col items-center justify-center p-8 bg-zinc-50 rounded-xl">
                       <PackageOpen className="w-12 h-12 mb-2 text-zinc-300" />
@@ -900,7 +921,7 @@ const MasterWarehouse = () => {
                       .map(([type, weight]) => {
                         const volume = weight * VOLUME_CONVERSION_FACTOR;
                         const details = warehouseStats.wasteDetails[type] || [];
-                        const oldestDate = details.length > 0 ? 
+                        const oldestDate = details.length > 0 ?
                           new Date(Math.min(...details.map(d => d.date.getTime()))) : null;
                         const percentage = (volume / warehouseStats.currentStorage) * 100;
 
@@ -918,7 +939,7 @@ const MasterWarehouse = () => {
                       .map(item => (
                         <div key={item.type} className="pb-4 border-b border-zinc-200">
                           <div className="flex justify-between mb-2">
-                            <div>
+                            <div className="text-left">
                               <span className="text-sm font-medium text-zinc-700">
                                 {item.translatedType}
                               </span>
@@ -942,7 +963,7 @@ const MasterWarehouse = () => {
                             </div>
                           </div>
                           <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
-                            <div 
+                            <div
                               className="h-full rounded-full bg-emerald-500"
                               style={{ width: `${item.percentage}%` }}
                             />
@@ -956,9 +977,11 @@ const MasterWarehouse = () => {
 
             {/* Recent Collections - Updated with better waste type handling */}
             <Card className="p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <ArrowUpCircle className="w-5 h-5 text-zinc-600" />
-                <div>
+              <div className="text-left flex items-center gap-2 mb-6">
+                <div className="p-3 rounded-lg bg-emerald-50">
+                  <ArrowUpCircle className="w-5 h-5 text-emerald-500" />
+                </div>
+                <div className="items-center ml-4">
                   <h2 className="text-lg font-semibold text-zinc-800">Pengumpulan Terbaru</h2>
                   <p className="text-sm text-zinc-500">Riwayat pengumpulan sampah terakhir yang masuk ke gudang</p>
                 </div>
@@ -975,25 +998,25 @@ const MasterWarehouse = () => {
                     // Handle both waste data structures
                     const wastes = pickup.wastes || {};
                     const wasteWeights = pickup.wasteWeights || {};
-                    
+
                     // Calculate totals
                     let totalWeight = 0;
                     if (Object.keys(wastes).length > 0) {
-                      totalWeight = Object.values(wastes).reduce((sum, waste) => 
+                      totalWeight = Object.values(wastes).reduce((sum, waste) =>
                         sum + (Number(waste.weight) || 0), 0);
                     } else if (Object.keys(wasteWeights).length > 0) {
-                      totalWeight = Object.values(wasteWeights).reduce((sum, weight) => 
+                      totalWeight = Object.values(wasteWeights).reduce((sum, weight) =>
                         sum + (Number(weight) || 0), 0);
                     }
-                    
+
                     const totalVolume = totalWeight * VOLUME_CONVERSION_FACTOR;
 
                     return (
                       <div key={pickup.id} className="py-4">
                         <div className="flex items-start justify-between">
                           <div>
-                            <p className="font-medium text-zinc-800">{pickup.userName || "Pengguna"}</p>
-                            <p className="text-sm text-zinc-500">
+                            <p className="text-left font-medium text-zinc-800">{pickup.wasteBankName || "Pengguna"}</p>
+                            <p className="text-left text-sm text-zinc-500">
                               {new Date(pickup.completedAt?.seconds * 1000).toLocaleDateString('id-ID', {
                                 day: 'numeric',
                                 month: 'long',
@@ -1001,7 +1024,7 @@ const MasterWarehouse = () => {
                               })}
                             </p>
                             {pickup.wasteBankName && (
-                              <p className="text-xs text-zinc-500">
+                              <p className="hidden text-xs text-zinc-500 mt-1">
                                 Bank Sampah: {pickup.wasteBankName}
                               </p>
                             )}
@@ -1021,7 +1044,7 @@ const MasterWarehouse = () => {
                             Object.entries(wastes).map(([type, data]) => {
                               const weight = Number(data.weight) || 0;
                               const volume = weight * VOLUME_CONVERSION_FACTOR;
-                              
+
                               return (
                                 <span key={type} className="px-2 py-1 text-xs rounded-full bg-zinc-100 text-zinc-700">
                                   {translateWasteType(type)}: {formatNumber(volume.toFixed(1))} m³
@@ -1033,7 +1056,7 @@ const MasterWarehouse = () => {
                             Object.entries(wasteWeights).map(([type, weight]) => {
                               weight = Number(weight) || 0;
                               const volume = weight * VOLUME_CONVERSION_FACTOR;
-                              
+
                               return (
                                 <span key={type} className="px-2 py-1 text-xs rounded-full bg-zinc-100 text-zinc-700">
                                   {translateWasteType(type)}: {formatNumber(volume.toFixed(1))} m³

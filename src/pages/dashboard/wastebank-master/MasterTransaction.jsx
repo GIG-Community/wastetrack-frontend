@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Building2, 
+import {
+  Building2,
   Search,
   Package,
   Loader2,
@@ -17,14 +17,16 @@ import {
   TreePineIcon,
   BoxSelectIcon,
   ChevronRight,
+  ChevronLeft,
   Info,
-  HelpCircle
+  HelpCircle,
 } from 'lucide-react';
 import { collection, query, doc, updateDoc, where, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
 import Swal from 'sweetalert2/dist/sweetalert2.js';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 import 'sweetalert2/dist/sweetalert2.css';
 
 // Waste Types Structure
@@ -157,7 +159,7 @@ export const WASTE_PRICES = {
   'majalah': 1000,
   'sak-semen': 700,
   'duplek': 400,
-  
+
   'pet-bening': 4200,
   'pet-biru': 3500,
   'pet-warna': 1200,
@@ -167,14 +169,14 @@ export const WASTE_PRICES = {
   'tutup-amdk': 2500,
   'tutup-galon': 2000,
   'tutup-campur': 1000,
-  
+
   'ps-kaca': 1000,
   'keping-cd': 3500,
   'galon-utuh': 5000,
   'bak-hitam': 3000,
   'bak-campur': 1500,
   'plastik-keras': 200,
-  
+
   'plastik-bening': 800,
   'kresek': 300,
   'sablon-tipis': 200,
@@ -182,7 +184,7 @@ export const WASTE_PRICES = {
   'karung-kecil': 200,
   'sachet': 50,
   'lembaran-campur': 50,
-  
+
   'besi-tebal': 2500,
   'sepeda': 1500,
   'besi-tipis': 500,
@@ -192,16 +194,16 @@ export const WASTE_PRICES = {
   'kuningan': 15000,
   'perunggu': 8000,
   'aluminium': 9000,
-  
+
   'botol-bensin': 800,
   'botol-bir': 500,
   'botol-kecap': 300,
   'botol-bening': 100,
   'botol-warna': 50,
-  
+
   'karung-100': 1300,
   'karung-200': 1800,
-  
+
   'karak': 1800,
   'gembos': 300,
   'jelantah': 4000,
@@ -228,7 +230,7 @@ export const WASTE_CATEGORIES = {
   'seng': 'metal',
   'tembaga': 'metal',
   'sepeda': 'metal',
-  
+
   // Cardboard
   'kardus-bagus': 'paper',
   'kardus-jelek': 'paper',
@@ -238,7 +240,7 @@ export const WASTE_CATEGORIES = {
   'duplek': 'paper',
   'buram': 'paper',
   'sak-semen': 'paper',
-  
+
   // Plastics
   'botol-bening': 'plastic',
   'botol-bensin': 'plastic',
@@ -258,7 +260,7 @@ export const WASTE_CATEGORIES = {
   'kresek': 'plastic',
   'bak-campur': 'plastic',
   'bak-hitam': 'plastic',
-  
+
   // Organic
   'jelantah': 'organic',
   'karak': 'organic',
@@ -299,7 +301,7 @@ const getWasteTypeDetails = (typeId) => {
         };
       }
     }
-    
+
     // Check if this category has subcategories
     if (category.subcategories) {
       for (const subcategory of category.subcategories) {
@@ -317,10 +319,10 @@ const getWasteTypeDetails = (typeId) => {
       }
     }
   }
-  
+
   // If not found, return a default object
-  return { 
-    name: typeId.charAt(0).toUpperCase() + typeId.slice(1).replace(/-/g, ' '), 
+  return {
+    name: typeId.charAt(0).toUpperCase() + typeId.slice(1).replace(/-/g, ' '),
     icon: '📦',
     basePrice: WASTE_PRICES[typeId] || 0,
     masterPrice: MASTER_WASTE_PRICES[typeId] || 0,
@@ -380,21 +382,13 @@ const Badge = ({ variant = "default", children, className = "", ...props }) => {
 
 // Tooltip component for additional information - modified to be toggle-based instead of hover
 const Tooltip = ({ children, content }) => {
-  const [isVisible, setIsVisible] = useState(false);
-  
-  return (
-    <div className="relative group">
-      <div onClick={() => setIsVisible(!isVisible)} className="cursor-pointer">
-        {children}
-      </div>
-      {isVisible && (
-        <div className="absolute z-20 w-48 px-3 py-2 mb-2 text-xs text-white transform -translate-x-1/2 rounded-lg bg-zinc-800 bottom-full left-1/2">
-          {content}
-          <div className="absolute transform -translate-x-1/2 border-4 border-transparent top-full left-1/2 border-t-zinc-800"></div>
-        </div>
-      )}
+  <div className="relative flex items-start group">
+    {children}
+    <div className="absolute z-50 invisible w-48 p-2 mb-2 text-xs text-white transition-all duration-200 transform -translate-x-1/2 rounded-lg opacity-0 bottom-full left-1/2 bg-zinc-800 group-hover:opacity-100 group-hover:visible">
+      <div className="text-left">{content}</div>
+      <div className="absolute transform -translate-x-1/2 border-4 border-transparent top-full left-1/2 border-t-zinc-800"></div>
     </div>
-  );
+  </div>
 };
 
 // Hover-based tooltip specifically for help icons (question mark)
@@ -411,18 +405,18 @@ const HoverTooltip = ({ children, content }) => (
 // Information panel component - modified with collapsible behavior
 const InfoPanel = ({ title, children }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   return (
-    <div className="p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+    <div className="text-left p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
       <div className="flex gap-3">
-        <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+        <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
         <div className="flex-1">
           <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
-            <h3 className="text-sm font-medium text-blue-800">{title}</h3>
+            <h3 className="mb-1 font-medium text-blue-800">{title}</h3>
             <ChevronRight className={`w-4 h-4 text-blue-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
           </div>
           {isExpanded && (
-            <div className="mt-1 text-sm text-blue-700">{children}</div>
+            <div className="text-sm text-blue-700">{children}</div>
           )}
         </div>
       </div>
@@ -430,24 +424,28 @@ const InfoPanel = ({ title, children }) => {
   );
 };
 
-const StatusCard = ({ label, count, icon: Icon, description, className, tooltip }) => (
-  <div className={`bg-white p-6 rounded-xl border border-gray-200 hover:shadow-md transition-all cursor-pointer group ${className}`}>
+const StatCard = ({ label, count, icon: Icon, description, className, tooltip }) => (
+  <div className={`bg-white rounded-xl p-4 border border-zinc-200 ${className}`}>
     <div className="flex items-start justify-between">
-      <div>
-        <div className="p-2.5 bg-gray-50 rounded-lg w-fit group-hover:bg-emerald-50 transition-colors">
-          <Icon className="w-5 h-5 text-gray-600 transition-colors group-hover:text-emerald-600" />
-        </div>
-        <div className="flex items-center gap-1.5 mt-3">
-          <p className="text-sm font-medium text-gray-600">{label}</p>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="p-2.5 bg-gray-50 rounded-full">
+            <Icon className="w-5 h-5 text-zinc-600" />
+          </div>
           {tooltip && (
-            <HoverTooltip content={tooltip}>
-              <HelpCircle className="w-3.5 h-3.5 text-gray-400" />
-            </HoverTooltip>
+            <Tooltip content={tooltip}>
+              <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
+            </Tooltip>
           )}
         </div>
-        <p className="mt-1 text-2xl font-semibold text-gray-800">{count}</p>
+        <div>
+          <div className="flex items-start gap-1">
+            <p className="text-sm font-medium text-zinc-600">{label}</p>
+          </div>
+        </div>
+        <p className="mt-1 text-left text-2xl font-semibold text-zinc-800">{count}</p>
         {description && (
-          <p className="mt-1 text-sm text-gray-500">{description}</p>
+          <p className="hidden mt-1 text-sm text-gray-500">{description}</p>
         )}
       </div>
     </div>
@@ -504,8 +502,8 @@ const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
   };
 
   const formatCurrency = (value) => {
-    return new Intl.NumberFormat('id-ID', { 
-      style: 'currency', 
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
@@ -547,11 +545,11 @@ const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
   const isDelivery = pickup.deliveryType === 'self-delivery';
   const isCompleted = pickup.status === 'completed';
   const hasCollector = !!pickup.collectorId;
-  
+
   // Get total weight from all wastes - handle both data structures
-  const totalWeight = pickup.wastes ? 
-    Object.values(pickup.wastes).reduce((sum, waste) => sum + (parseFloat(waste.weight) || 0), 0) : 
-    (pickup.wasteWeights ? 
+  const totalWeight = pickup.wastes ?
+    Object.values(pickup.wastes).reduce((sum, waste) => sum + (parseFloat(waste.weight) || 0), 0) :
+    (pickup.wasteWeights ?
       Object.values(pickup.wasteWeights).reduce((sum, weight) => sum + (parseFloat(weight) || 0), 0) : 0);
 
   return (
@@ -563,7 +561,7 @@ const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
           {isDelivery ? 'Antar Sendiri' : 'Jemput'}
         </span>
       </div>
-      
+
       <div className="p-6">
         {/* Header with toggle */}
         <div className="flex items-start justify-between mb-6 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
@@ -600,7 +598,7 @@ const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
               )} */}
             </div>
           </div>
-          
+
           <div className="flex items-start gap-4 text-right">
             <div>
               <p className="text-xs text-gray-400">Dibuat Pada</p>
@@ -616,7 +614,7 @@ const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
                 </>
               )}
             </div>
-            <ChevronRight 
+            <ChevronRight
               className={`w-5 h-5 text-gray-400 transform transition-transform duration-200 mt-2
                 ${isExpanded ? 'rotate-90' : ''}`}
             />
@@ -627,11 +625,13 @@ const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
         <div className={`transition-all duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>
           {/* Details Grid */}
           <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
-            <div className="flex items-start gap-3 p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50">
-              <Calendar className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
-              <div>
+            <div className="flex transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50 p-4">
+              <div className="flex-shrink-0 mr-3 mt-0.5">
+                <Calendar className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
+              </div>
+              <div className="flex-1 text-left">
                 <p className="text-sm font-medium text-gray-700">Jadwal</p>
-                <p className="mt-1 text-sm text-gray-600">
+                <p className="mt-1 text-sm text-gray-500">
                   {pickup.date ? new Date(pickup.date.seconds * 1000).toLocaleDateString('id-ID', {
                     weekday: 'long',
                     year: 'numeric',
@@ -643,9 +643,11 @@ const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50">
-              <MapPin className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
-              <div>
+            <div className="flex transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50 p-4">
+              <div className="flex-shrink-0 mr-3 mt-0.5">
+                <MapPin className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
+              </div>
+              <div className="flex-1 text-left">
                 <p className="text-sm font-medium text-gray-700">Lokasi</p>
                 <p className="mt-1 text-sm text-gray-600">{getLocationDisplay(pickup.location)}</p>
                 {pickup.notes && (
@@ -655,7 +657,7 @@ const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
             </div>
 
             {hasCollector && (
-              <div className="flex items-start gap-3 p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50">
+              <div className="flex text-left items-start gap-3 p-4 transition-colors bg-gray-50 rounded-xl group-hover:bg-emerald-50/50">
                 <Truck className="w-5 h-5 text-gray-400 transition-colors group-hover:text-emerald-500" />
                 <div>
                   <p className="text-sm font-medium text-gray-700">Petugas Pengumpul</p>
@@ -668,9 +670,9 @@ const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
             )}
 
             {isCompleted ? (
-              <div className="flex items-start gap-3 p-4 transition-colors bg-emerald-50 rounded-xl md:col-span-3">
+              <div className="flex items-start gap-3 p-4 transition-colors bg-emerald-50 rounded-xl">
                 <TreePine className="w-5 h-5 text-emerald-600" />
-                <div className="w-full">
+                <div className="text-left">
                   <p className="text-sm font-medium text-emerald-700">Hasil Pengumpulan</p>
                   <div className="flex flex-wrap justify-between gap-4 mt-2">
                     <p className="text-sm text-emerald-600">
@@ -689,18 +691,19 @@ const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
                   <p className="text-sm font-medium text-gray-700">Jenis Sampah</p>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {pickup.wasteTypes?.map((type, index) => {
-                      const wasteDetails = getWasteTypeDetails(type);
+                      // const wasteDetails = getWasteTypeDetails(type);
                       return (
-                        <span 
-                          key={index} 
-                          className="flex items-center gap-1 px-2 py-1 text-xs border rounded-full bg-emerald-50 text-emerald-700 border-emerald-100"
+                        <span
+                          key={index}
+                          className="px-2 py-1 text-xs border rounded-full bg-emerald-50 text-emerald-700 border-emerald-100"
                         >
-                          <span>{getWasteTypeEmoji(type)}</span>
-                          <span>{wasteDetails.name}</span>
+                          {type.charAt(0).toUpperCase() + type.slice(1)}
+                          {/* <span>{getWasteTypeEmoji(type)}</span>
+                          <span>{wasteDetails.name}</span> */}
                         </span>
                       );
                     })}
-                    
+
                     {pickup.wasteQuantities && Object.keys(pickup.wasteQuantities).length > 0 && (
                       <div className="w-full mt-2 space-y-1">
                         {Object.entries(pickup.wasteQuantities).map(([type, quantity]) => {
@@ -779,7 +782,7 @@ const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
               variant={pickup.status === 'completed' ? 'success' : 'default'}
             />
           </div>
-          
+
           {pickup.status === 'pending' && (
             <QuickAction
               icon={AlertCircle}
@@ -796,6 +799,12 @@ const PickupCard = ({ pickup, onStatusChange, isProcessing }) => {
 };
 
 const MasterTransaction = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [pickups, setPickups] = useState([]);
@@ -816,13 +825,13 @@ const MasterTransaction = () => {
   useEffect(() => {
     let masterRequestsUnsubscribe;
     let collectorsUnsubscribe;
-    
+
     if (currentUser?.uid) {
       const unsubscribes = fetchInitialData();
       masterRequestsUnsubscribe = unsubscribes.masterRequestsUnsubscribe;
       collectorsUnsubscribe = unsubscribes.collectorsUnsubscribe;
     }
-    
+
     return () => {
       if (masterRequestsUnsubscribe) masterRequestsUnsubscribe();
       if (collectorsUnsubscribe) collectorsUnsubscribe();
@@ -832,13 +841,13 @@ const MasterTransaction = () => {
   const fetchInitialData = () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const masterRequestsUnsubscribe = setupMasterRequestsListener();
       const collectorsUnsubscribe = setupCollectorsListener();
-      
-      return { 
-        masterRequestsUnsubscribe, 
+
+      return {
+        masterRequestsUnsubscribe,
         collectorsUnsubscribe
       };
     } catch (err) {
@@ -850,9 +859,9 @@ const MasterTransaction = () => {
         confirmButtonColor: '#10B981'
       });
       setLoading(false);
-      return { 
-        masterRequestsUnsubscribe: () => {}, 
-        collectorsUnsubscribe: () => {}
+      return {
+        masterRequestsUnsubscribe: () => { },
+        collectorsUnsubscribe: () => { }
       };
     }
   };
@@ -860,16 +869,16 @@ const MasterTransaction = () => {
   const setupMasterRequestsListener = () => {
     if (!currentUser?.uid) {
       setError('Autentikasi diperlukan');
-      return () => {};
+      return () => { };
     }
-    
+
     try {
       // Get all requests where this user is the master bank
       const masterRequestsQuery = query(
         collection(db, 'masterBankRequests'),
         where('masterBankId', '==', currentUser.uid)
       );
-      
+
       const unsubscribe = onSnapshot(
         masterRequestsQuery,
         (snapshot) => {
@@ -877,7 +886,7 @@ const MasterTransaction = () => {
             id: doc.id,
             ...doc.data()
           }));
-          
+
           setPickups(requestsData);
           setLoading(false);
         },
@@ -887,12 +896,12 @@ const MasterTransaction = () => {
           setLoading(false);
         }
       );
-      
+
       return unsubscribe;
     } catch (error) {
       console.error('Error menyiapkan listener pengumpulan:', error);
       setLoading(false);
-      return () => {};
+      return () => { };
     }
   };
 
@@ -903,7 +912,7 @@ const MasterTransaction = () => {
         where('role', '==', 'wastebank_master_collector'),
         where('profile.institution', '==', userData?.id || '')
       );
-      
+
       const unsubscribe = onSnapshot(
         collectorsQuery,
         (snapshot) => {
@@ -917,11 +926,11 @@ const MasterTransaction = () => {
           console.error('Error memantau data petugas:', error);
         }
       );
-      
+
       return unsubscribe;
     } catch (error) {
       console.error('Error menyiapkan listener petugas:', error);
-      return () => {};
+      return () => { };
     }
   };
 
@@ -944,13 +953,13 @@ const MasterTransaction = () => {
           ${collector.status !== 'active' ? ' (Tidak Aktif)' : ''}
         </option>
       `).join('');
-      
+
     // Add visualization for waste details
-    const wasteDetailsHTML = pickup.wastes ? 
+    const wasteDetailsHTML = pickup.wastes ?
       Object.entries(pickup.wastes).map(([type, data]) => {
         const wasteDetails = getWasteTypeDetails(type);
         const typeName = wasteDetails ? wasteDetails.name : type;
-        
+
         return `
           <div class="flex justify-between items-center py-2 border-b border-gray-100">
             <div class="flex items-center gap-2">
@@ -976,11 +985,11 @@ const MasterTransaction = () => {
             <div class="flex items-center gap-2">
               <span class="text-base">${statusOptions.find(s => s.value === pickup.status)?.icon}</span>
               <span class="font-medium ${statusOptions.find(s => s.value === pickup.status)?.color} px-3 py-1 rounded-lg">
-                ${pickup.status === 'pending' ? 'Menunggu' : 
-                  pickup.status === 'assigned' ? 'Ditugaskan' : 
-                  pickup.status === 'in_progress' ? 'Dalam Proses' : 
-                  pickup.status === 'completed' ? 'Selesai' : 
-                  pickup.status === 'cancelled' ? 'Dibatalkan' : 
+                ${pickup.status === 'pending' ? 'Menunggu' :
+          pickup.status === 'assigned' ? 'Ditugaskan' :
+            pickup.status === 'in_progress' ? 'Dalam Proses' :
+              pickup.status === 'completed' ? 'Selesai' :
+                pickup.status === 'cancelled' ? 'Dibatalkan' :
                   pickup.status.charAt(0).toUpperCase() + pickup.status.slice(1)}
               </span>
             </div>
@@ -1035,7 +1044,7 @@ const MasterTransaction = () => {
       didOpen: () => {
         const statusSelect = document.getElementById('newStatus');
         const collectorDiv = document.getElementById('collectorSelectDiv');
-        
+
         if (statusSelect && collectorDiv) {
           // Add event listener directly, without depending on external function
           statusSelect.addEventListener('change', (e) => {
@@ -1103,31 +1112,31 @@ const MasterTransaction = () => {
   // Filter pickups based on status, search term, and date range
   const filteredData = pickups.filter(item => {
     const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
-    
+
     // Enhanced search to handle different data structures
     const matchesSearch = searchTerm === '' || (
       (item.userName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
       (item.wasteBankName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
       (item.masterBankName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (typeof item.location === 'string' ? 
-        item.location.toLowerCase() : 
+      (typeof item.location === 'string' ?
+        item.location.toLowerCase() :
         item.location?.address?.toLowerCase() || ''
       ).includes(searchTerm.toLowerCase())
     );
-    
+
     // Handle date comparisons more robustly
     let matchesDateRange = true;
     if (startDate && endDate && item.date) {
-      const itemDate = item.date.seconds ? 
-        new Date(item.date.seconds * 1000) : 
-        item.date instanceof Date ? 
+      const itemDate = item.date.seconds ?
+        new Date(item.date.seconds * 1000) :
+        item.date instanceof Date ?
           item.date : null;
-          
+
       if (itemDate) {
         const startDateObj = new Date(startDate);
         const endDateObj = new Date(endDate);
         endDateObj.setHours(23, 59, 59); // Set to end of day
-        
+
         matchesDateRange = itemDate >= startDateObj && itemDate <= endDateObj;
       }
     }
@@ -1139,7 +1148,7 @@ const MasterTransaction = () => {
   const sortedAndFilteredItems = filteredData.sort((a, b) => {
     // Handle different timestamp formats
     let aValue, bValue;
-    
+
     if (sortBy === 'createdAt' || sortBy === 'completedAt' || sortBy === 'updatedAt') {
       aValue = a[sortBy]?.seconds ? a[sortBy].seconds : a[sortBy] instanceof Date ? a[sortBy].getTime() / 1000 : 0;
       bValue = b[sortBy]?.seconds ? b[sortBy].seconds : b[sortBy] instanceof Date ? b[sortBy].getTime() / 1000 : 0;
@@ -1147,11 +1156,11 @@ const MasterTransaction = () => {
       aValue = a[sortBy] || '';
       bValue = b[sortBy] || '';
     }
-    
+
     if (typeof aValue === 'string' && typeof bValue === 'string') {
       return sortOrder === 'desc' ? bValue.localeCompare(aValue) : aValue.localeCompare(bValue);
     }
-    
+
     return sortOrder === 'desc' ? bValue - aValue : aValue - bValue;
   });
 
@@ -1186,7 +1195,7 @@ const MasterTransaction = () => {
           disabled={currentPage === 1}
           className="px-3 py-1 text-sm bg-white border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
-          Sebelumnya
+          <ChevronLeft />
         </button>
         {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
           // Show pages around current page
@@ -1203,11 +1212,10 @@ const MasterTransaction = () => {
             <button
               key={pageNum}
               onClick={() => setCurrentPage(pageNum)}
-              className={`px-3 py-1 text-sm border rounded-md ${
-                currentPage === pageNum
-                  ? 'bg-emerald-500 text-white'
-                  : 'bg-white hover:bg-gray-50'
-              }`}
+              className={`px-3 py-1 text-sm border rounded-md ${currentPage === pageNum
+                ? 'bg-emerald-500 text-white'
+                : 'bg-white hover:bg-gray-50'
+                }`}
             >
               {pageNum}
             </button>
@@ -1218,7 +1226,7 @@ const MasterTransaction = () => {
           disabled={currentPage === totalPages || totalPages === 0}
           className="px-3 py-1 text-sm bg-white border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
-          Berikutnya
+          <ChevronRight />
         </button>
       </div>
     </div>
@@ -1232,7 +1240,7 @@ const MasterTransaction = () => {
 
   return (
     <div className="flex min-h-screen bg-zinc-50/50">
-      <Sidebar 
+      <Sidebar
         role={userData?.role}
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
@@ -1240,33 +1248,25 @@ const MasterTransaction = () => {
       <main className={`flex-1 transition-all duration-300 ease-in-out
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
       >
-        <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
+        <div className="p-6">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
-                <Package className="w-6 h-6 text-emerald-500" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-800">Pengumpulan Sampah</h1>
-                <p className="mt-1 text-sm text-gray-500">
-                  Kelola dan pantau semua permintaan pengumpulan sampah
-                </p>
-                <button 
-                  className="px-2 py-1 mt-1 text-xs text-blue-600 rounded-md bg-blue-50 hover:bg-blue-100"
-                  onClick={() => document.getElementById('infoPanel').scrollIntoView({ behavior: 'smooth' })}
-                >
-                  Lihat Panduan
-                </button>
-              </div>
+          <div className="flex text-left items-center gap-4 mb-8">
+            <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <Package className="w-6 h-6 text-emerald-500" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-800">Pengumpulan Sampah</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Kelola dan pantau semua permintaan pengumpulan sampah
+              </p>
             </div>
           </div>
 
           {/* Information Panel with ID for direct access */}
-          <div id="infoPanel">
-            <InfoPanel title="Tentang Pengumpulan Sampah">
+          <div id="informasi">
+            <InfoPanel title="Informasi">
               <p>
-                Halaman ini memungkinkan Anda untuk mengelola semua permintaan pengumpulan sampah. 
+                Halaman ini memungkinkan Anda untuk mengelola semua permintaan pengumpulan sampah.
                 Data ditampilkan secara real-time dan akan diperbarui otomatis ketika ada perubahan.
                 Anda dapat mengubah status pengumpulan, menugaskan petugas, dan menambahkan poin reward untuk pengguna.
               </p>
@@ -1275,111 +1275,100 @@ const MasterTransaction = () => {
 
           {/* Status Cards - with less intrusive tooltips */}
           <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
-            <StatusCard
+            <StatCard
               label="Total Pengumpulan"
               count={pickups.length}
               icon={Package}
-              description="Total semua pengumpulan"
+              // description="Total semua pengumpulan"
               tooltip="Jumlah keseluruhan permintaan pengumpulan yang tercatat dalam sistem"
             />
-            <StatusCard
+            <StatCard
               label="Menunggu"
               count={statusCounts.pending || 0}
               icon={Clock}
-              description="Belum diproses"
+              // description="Belum diproses"
               className="border-yellow-200"
               tooltip="Permintaan pengumpulan yang belum diproses atau ditugaskan ke petugas"
             />
-            <StatusCard
+            <StatCard
               label="Sedang Diproses"
               count={statusCounts.processing || 0}
               icon={Truck}
-              description="Sedang dalam pengumpulan"
+              // description="Sedang dalam pengumpulan"
               className="border-blue-200"
               tooltip="Permintaan pengumpulan yang sedang dalam proses pengambilan oleh petugas"
             />
-            <StatusCard
+            <StatCard
               label="Selesai"
               count={statusCounts.completed || 0}
               icon={CheckCircle2}
-              description="Berhasil diselesaikan"
+              // description="Berhasil diselesaikan"
               className="border-emerald-200"
               tooltip="Permintaan pengumpulan yang telah berhasil diselesaikan"
             />
           </div>
 
           {/* Filters, Search, and Sort */}
-          <div className="flex flex-col gap-4 mb-6">
-            <div className="flex flex-col gap-4 sm:flex-row">
-              <div className="flex flex-1 gap-4">
+          <div className="mb-6">
+            <div className="flex flex-col md:flex-row items-center gap-3">
+              <div className="relative flex-grow w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <Input
                   type="text"
                   placeholder="Cari berdasarkan nama pelanggan atau lokasi..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="max-w-md"
+                  className="pl-10 sm:placeholder:text-sm py-3"
                 />
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-40"
-                  />
-                  <span className="text-gray-500">sampai</span>
-                  <Input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-40"
-                  />
-                </div>
               </div>
-              <Select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full sm:w-48"
-              >
-                <option value="all">Semua Status</option>
-                <option value="pending">Menunggu</option>
-                <option value="processing">Diproses</option>
-                <option value="completed">Selesai</option>
-                <option value="cancelled">Dibatalkan</option>
-              </Select>
-            </div>
-            
-            {/* Sort Options */}
-            <div className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-lg">
-              <span className="text-sm font-medium text-gray-600">Urutkan:</span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleSort('createdAt')}
-                  className={`flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-md transition-colors
-                    ${sortBy === 'createdAt' 
-                      ? 'bg-emerald-50 text-emerald-600' 
-                      : 'text-gray-600 hover:bg-gray-50'}`}
+
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full md:w-40 py-3"
+                />
+                <span className="text-gray-500">sampai</span>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full md:w-40 py-3"
+                />
+              </div>
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <span className="text-sm text-gray-600 whitespace-nowrap">Status:</span>
+                <Select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full sm:w-48 py-3"
                 >
-                  Tanggal Dibuat
-                  {sortBy === 'createdAt' && (
-                    <span className="text-xs">
-                      {sortOrder === 'desc' ? '↓' : '↑'}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => handleSort('completedAt')}
-                  className={`flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-md transition-colors
-                    ${sortBy === 'completedAt' 
-                      ? 'bg-emerald-50 text-emerald-600' 
-                      : 'text-gray-600 hover:bg-gray-50'}`}
+                  <option value="all">Semua</option>
+                  <option value="pending">Menunggu</option>
+                  <option value="processing">Diproses</option>
+                  <option value="completed">Selesai</option>
+                  <option value="cancelled">Dibatalkan</option>
+                </Select>
+              </div>
+
+              {/* Sort Options */}
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <span className="text-sm text-gray-600 whitespace-nowrap">Urutkan:</span>
+                <Select
+                  value={`${sortBy}-${sortOrder}`}
+                  onChange={(e) => {
+                    const [newSortBy, newSortOrder] = e.target.value.split('-');
+                    setSortBy(newSortBy);
+                    setSortOrder(newSortOrder);
+                  }}
+                  className="w-full md:w-40 py-3"
                 >
-                  Tanggal Selesai
-                  {sortBy === 'completedAt' && (
-                    <span className="text-xs">
-                      {sortOrder === 'desc' ? '↓' : '↑'}
-                    </span>
-                  )}
-                </button>
+                  <option value="createdAt-desc">Terbaru Dibuat</option>
+                  <option value="createdAt-asc">Terlama Dibuat</option>
+                  <option value="completedAt-desc">Terbaru Selesai</option>
+                  <option value="completedAt-asc">Terlama Selesai</option>
+                </Select>
               </div>
             </div>
           </div>
@@ -1394,7 +1383,7 @@ const MasterTransaction = () => {
             ) : error ? (
               <div className="py-12 text-center">
                 <p className="text-red-500">{error}</p>
-                <button 
+                <button
                   className="px-4 py-2 mt-4 text-white rounded-lg bg-emerald-500"
                   onClick={fetchInitialData}
                 >

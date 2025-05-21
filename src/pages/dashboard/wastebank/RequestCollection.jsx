@@ -691,7 +691,7 @@ const RequestCollection = () => {
                     <div className="flex items-center gap-2">
                       <h2 className="text-xl font-semibold text-gray-800">Pilih Waktu</h2>
                     </div>
-                    <p className="mt-2 text-sm text-gray-500">Pilih rentang waktu pengambilan yang diinginkan</p>
+                    <p className="mt-3 text-sm text-gray-500">Pilih rentang waktu pengambilan yang diinginkan</p>
                   </div>
                   <div className="p-6">
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -779,7 +779,7 @@ const RequestCollection = () => {
                                   max={storage[waste.id] || 0}
                                   value={formData.wasteWeights[waste.id] || ''}
                                   onChange={(e) => handleWeightChange(waste.id, e.target.value)}
-                                  className="w-32 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                  className="w-32 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-sm"
                                   placeholder="Berat dalam kg"
                                 />
                                 <span className="text-sm text-gray-500">kg</span>
@@ -1010,7 +1010,7 @@ const RequestCollection = () => {
                   className="px-6 py-3 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 ml-auto flex items-center gap-2 transition-colors focus:ring-4 focus:ring-emerald-300"
                 >
                   Lanjutkan
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-5 h-5" />
                 </button>
               ) : (
                 <button

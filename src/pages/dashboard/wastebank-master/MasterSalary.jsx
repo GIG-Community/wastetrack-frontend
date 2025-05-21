@@ -1,12 +1,52 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, doc, setDoc, getDoc, runTransaction, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import { Search, AlertCircle, UserCheck, User, Users, Filter, Wallet, Calculator, Clock, Info } from 'lucide-react';
+import { Search, AlertCircle, UserCheck, User, Users, Filter, Wallet, Calculator, Clock, Info, ChevronRight, HelpCircle } from 'lucide-react';
 import Swal from 'sweetalert2';
 import Sidebar from '../../../components/Sidebar';
 import { useAuth } from '../../../hooks/useAuth';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
+
+// Helper component for tooltips
+const Tooltip = ({ children, content }) => (
+  <div className="relative group">
+    {children}
+    <div className="absolute z-50 invisible w-48 px-3 py-2 mb-2 text-xs text-white transition-all duration-200 transform -translate-x-1/2 rounded-lg opacity-0 bottom-full left-1/2 bg-zinc-800 group-hover:opacity-100 group-hover:visible">
+      {content}
+      <div className="absolute transform -translate-x-1/2 border-4 border-transparent top-full left-1/2 border-t-zinc-800"></div>
+    </div>
+  </div>
+);
+
+// Information panel component - modified with collapsible behavior
+const InfoPanel = ({ title, children }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="text-left p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+      <div className="flex gap-3">
+        <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+        <div className="flex-1">
+          <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+            <h3 className="mb-1 font-medium text-blue-800">{title}</h3>
+            <ChevronRight className={`w-4 h-4 text-blue-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+          </div>
+          {isExpanded && (
+            <div className="text-sm text-blue-700">{children}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function MasterSalaryManagement() {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData } = useAuth();
   const [loading, setLoading] = useState(false);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
@@ -43,22 +83,22 @@ export default function MasterSalaryManagement() {
 
   const fetchTransactionHistory = async (userId) => {
     if (!userId) return;
-    
+
     try {
       setLoadingTransactions(true);
-      
+
       const currentUnsubscribes = [...unsubscribes];
       const transactionsUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'transactions');
       if (transactionsUnsubscribeIndex !== -1 && typeof currentUnsubscribes[transactionsUnsubscribeIndex].fn === 'function') {
         currentUnsubscribes[transactionsUnsubscribeIndex].fn();
         currentUnsubscribes.splice(transactionsUnsubscribeIndex, 1);
       }
-      
+
       const transactionsQuery = query(
         collection(db, 'transactions'),
         where('userId', '==', userId)
       );
-      
+
       const unsubscribe = onSnapshot(
         transactionsQuery,
         (snapshot) => {
@@ -67,11 +107,11 @@ export default function MasterSalaryManagement() {
             ...doc.data(),
             createdAt: doc.data().createdAt?.toDate() || new Date()
           }));
-          
-          const sortedTransactions = transactionsData.sort((a, b) => 
+
+          const sortedTransactions = transactionsData.sort((a, b) =>
             b.createdAt.getTime() - a.createdAt.getTime()
           ).slice(0, 10);
-          
+
           setTransactions(sortedTransactions);
           setLoadingTransactions(false);
         },
@@ -80,9 +120,9 @@ export default function MasterSalaryManagement() {
           setLoadingTransactions(false);
         }
       );
-      
+
       setUnsubscribes([...currentUnsubscribes, { name: 'transactions', fn: unsubscribe }]);
-      
+
     } catch (error) {
       console.error('Error memantau riwayat transaksi:', error);
       setLoadingTransactions(false);
@@ -91,7 +131,7 @@ export default function MasterSalaryManagement() {
 
   const fetchWasteBankBalance = async () => {
     if (!userData?.id) return;
-    
+
     try {
       const unsubscribe = onSnapshot(
         doc(db, 'users', userData.id),
@@ -104,12 +144,12 @@ export default function MasterSalaryManagement() {
           console.error('Error memantau saldo bank sampah:', error);
         }
       );
-      
+
       setUnsubscribes(prev => {
         const filtered = prev.filter(u => u.name !== 'wastebank');
         return [...filtered, { name: 'wastebank', fn: unsubscribe }];
       });
-      
+
     } catch (error) {
       console.error('Error memantau saldo bank sampah:', error);
     }
@@ -122,50 +162,50 @@ export default function MasterSalaryManagement() {
   useEffect(() => {
     const fetchUsers = async () => {
       if (!userData?.id) return;
-      
+
       try {
         setLoadingUsers(true);
-        
+
         const currentUnsubscribes = [...unsubscribes];
         const pickupsUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'pickups');
         const collectorsUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'collectors');
         const wastebanksUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'wastebanks');
         const customersUnsubscribeIndex = currentUnsubscribes.findIndex(u => u.name === 'customers');
-        
+
         if (pickupsUnsubscribeIndex !== -1 && typeof currentUnsubscribes[pickupsUnsubscribeIndex].fn === 'function') {
           currentUnsubscribes[pickupsUnsubscribeIndex].fn();
           currentUnsubscribes.splice(pickupsUnsubscribeIndex, 1);
         }
-        
+
         if (collectorsUnsubscribeIndex !== -1 && typeof currentUnsubscribes[collectorsUnsubscribeIndex].fn === 'function') {
           currentUnsubscribes[collectorsUnsubscribeIndex].fn();
           currentUnsubscribes.splice(collectorsUnsubscribeIndex, 1);
         }
-        
+
         if (wastebanksUnsubscribeIndex !== -1 && typeof currentUnsubscribes[wastebanksUnsubscribeIndex].fn === 'function') {
           currentUnsubscribes[wastebanksUnsubscribeIndex].fn();
           currentUnsubscribes.splice(wastebanksUnsubscribeIndex, 1);
         }
-        
+
         if (customersUnsubscribeIndex !== -1 && typeof currentUnsubscribes[customersUnsubscribeIndex].fn === 'function') {
           currentUnsubscribes[customersUnsubscribeIndex].fn();
           currentUnsubscribes.splice(customersUnsubscribeIndex, 1);
         }
-        
+
         const newUnsubscribes = [...currentUnsubscribes];
-        
+
         const pickupsQuery = query(
           collection(db, 'masterBankRequests'),
           where('masterBankId', '==', userData.id)
         );
-        
+
         const pickupsUnsubscribe = onSnapshot(
           pickupsQuery,
           (snapshot) => {
             const customerIds = [...new Set(
               snapshot.docs.map(doc => doc.data().userId)
             )].filter(Boolean);
-            
+
             fetchRelatedUsers(customerIds, newUnsubscribes);
           },
           (error) => {
@@ -173,10 +213,10 @@ export default function MasterSalaryManagement() {
             fetchRelatedUsers([], newUnsubscribes);
           }
         );
-        
+
         newUnsubscribes.push({ name: 'pickups', fn: pickupsUnsubscribe });
         setUnsubscribes(newUnsubscribes);
-        
+
       } catch (error) {
         console.error('Error menyiapkan pantauan pengguna:', error);
         setLoadingUsers(false);
@@ -187,7 +227,7 @@ export default function MasterSalaryManagement() {
         });
       }
     };
-    
+
     const fetchRelatedUsers = (customerIds, currentUnsubscribes) => {
       try {
         const collectorQuery = query(
@@ -195,12 +235,12 @@ export default function MasterSalaryManagement() {
           where('role', '==', 'wastebank_master_collector'),
           where('profile.institution', '==', userData.id)
         );
-        
+
         const wasteBankQuery = query(
           collection(db, 'users'),
           where('role', '==', 'wastebank_admin')
         );
-        
+
         const collectorUnsubscribe = onSnapshot(
           collectorQuery,
           (collectorSnapshot) => {
@@ -208,7 +248,7 @@ export default function MasterSalaryManagement() {
               wasteBankQuery,
               async (wasteBankSnapshot) => {
                 let customerSnapshot = { docs: [] };
-                
+
                 if (customerIds.length > 0) {
                   try {
                     const customerQuery = query(
@@ -216,7 +256,7 @@ export default function MasterSalaryManagement() {
                       where('role', '==', 'customer'),
                       where('__name__', 'in', customerIds)
                     );
-                    
+
                     const customerUnsubscribe = onSnapshot(
                       customerQuery,
                       (snapshot) => {
@@ -227,7 +267,7 @@ export default function MasterSalaryManagement() {
                         processAllUserData(collectorSnapshot, wasteBankSnapshot, { docs: [] });
                       }
                     );
-                    
+
                     currentUnsubscribes.push({ name: 'customers', fn: customerUnsubscribe });
                   } catch (error) {
                     console.error('Error menyiapkan pantauan pelanggan:', error);
@@ -242,7 +282,7 @@ export default function MasterSalaryManagement() {
                 processAllUserData(collectorSnapshot, { docs: [] }, { docs: [] });
               }
             );
-            
+
             currentUnsubscribes.push({ name: 'wastebanks', fn: wasteBankUnsubscribe });
           },
           (error) => {
@@ -250,16 +290,16 @@ export default function MasterSalaryManagement() {
             setLoadingUsers(false);
           }
         );
-        
+
         currentUnsubscribes.push({ name: 'collectors', fn: collectorUnsubscribe });
         setUnsubscribes(currentUnsubscribes);
-        
+
       } catch (error) {
         console.error('Error menyiapkan pantauan pengguna terkait:', error);
         setLoadingUsers(false);
       }
     };
-    
+
     const processAllUserData = (collectorSnapshot, wasteBankSnapshot, customerSnapshot) => {
       try {
         const usersData = [
@@ -276,7 +316,7 @@ export default function MasterSalaryManagement() {
             ...doc.data()
           }))
         ];
-        
+
         setUsers(usersData);
         setLoadingUsers(false);
       } catch (error) {
@@ -291,20 +331,20 @@ export default function MasterSalaryManagement() {
   const fetchUserDetails = async (userId) => {
     try {
       setLoading(true);
-      
+
       // Create a safe copy of unsubscribe functions
       const currentUnsubscribes = [...unsubscribes];
-      
+
       // Clean up previous listeners more safely
       currentUnsubscribes.forEach((unsubscribe, index) => {
-        if (unsubscribe && 
-           (unsubscribe.name === 'userDetails' || unsubscribe.name === 'userPickups') && 
-           typeof unsubscribe.fn === 'function') {
+        if (unsubscribe &&
+          (unsubscribe.name === 'userDetails' || unsubscribe.name === 'userPickups') &&
+          typeof unsubscribe.fn === 'function') {
           unsubscribe.fn();
           currentUnsubscribes.splice(index, 1);
         }
       });
-      
+
       // Set up new listener for user details
       const userUnsubscribe = onSnapshot(
         doc(db, 'users', userId),
@@ -314,9 +354,9 @@ export default function MasterSalaryManagement() {
           }
 
           const userData = userDoc.data();
-          
+
           setPointsToConvert(0);
-          
+
           if (userData.role === 'collector') {
             try {
               const salaryDoc = await getDoc(doc(db, 'salaries', userId));
@@ -338,7 +378,7 @@ export default function MasterSalaryManagement() {
 
           // Set up listener for user's pickups or requests
           const pickupsQuery = query(
-            collection(db, collectionName), 
+            collection(db, collectionName),
             where(fieldName, '==', userId)
           );
 
@@ -354,7 +394,7 @@ export default function MasterSalaryManagement() {
                 if (data.status === 'completed') {
                   totalCollections++;
                   totalValue += data.totalValue || 0;
-                  
+
                   // Support different waste data formats
                   if (data.wastes) {
                     Object.values(data.wastes).forEach(waste => {
@@ -387,7 +427,7 @@ export default function MasterSalaryManagement() {
               setLoading(false);
             }
           );
-          
+
           // Update unsubscribes array with new functions using a safer approach
           const newUnsubscribes = [
             ...currentUnsubscribes,
@@ -425,12 +465,12 @@ export default function MasterSalaryManagement() {
 
     try {
       setLoading(true);
-      
+
       const selectedUser = users.find(u => u.id === selectedUserId);
       const isCustomer = selectedUser?.role === 'customer';
-      
+
       let paymentAmount = 0;
-      
+
       if (isCustomer) {
         const pointsRequested = Number(pointsToConvert);
         if (pointsRequested <= 0 || pointsRequested > userStats.points) {
@@ -440,7 +480,7 @@ export default function MasterSalaryManagement() {
       } else {
         paymentAmount = salaryConfig.baseSalary;
       }
-      
+
       if (paymentAmount <= 0) {
         throw new Error('Jumlah pembayaran tidak valid');
       }
@@ -452,19 +492,19 @@ export default function MasterSalaryManagement() {
       await runTransaction(db, async (transaction) => {
         const wasteBankRef = doc(db, 'users', userData.id);
         const userRef = doc(db, 'users', selectedUserId);
-        
+
         const wasteBankDoc = await transaction.get(wasteBankRef);
         const currentBalance = wasteBankDoc.data().balance || 0;
-        
+
         if (currentBalance < paymentAmount) {
           throw new Error('Saldo bank sampah tidak mencukupi');
         }
-        
+
         transaction.update(wasteBankRef, {
           balance: currentBalance - paymentAmount,
           updatedAt: new Date()
         });
-        
+
         if (isCustomer) {
           transaction.update(userRef, {
             balance: (selectedUser.balance || 0) + paymentAmount,
@@ -477,7 +517,7 @@ export default function MasterSalaryManagement() {
             updatedAt: new Date()
           });
         }
-        
+
         const transactionRef = doc(collection(db, 'transactions'));
         transaction.set(transactionRef, {
           userId: selectedUserId,
@@ -511,12 +551,12 @@ export default function MasterSalaryManagement() {
 
   const filteredUsers = users.filter(user => {
     const matchesRole = selectedRole === 'all' || user.role === selectedRole;
-    const matchesSearch = 
+    const matchesSearch =
       user.profile?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.profile?.institution?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.profile?.phone?.includes(searchTerm);
-    
+
     return matchesRole && matchesSearch;
   });
 
@@ -568,79 +608,87 @@ export default function MasterSalaryManagement() {
 
   return (
     <div className="flex h-screen bg-zinc-50/50">
-      <Sidebar 
+      <Sidebar
         role={userData?.role}
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
-      
+
       <main className={`flex-1 transition-all duration-300 ease-in-out overflow-auto
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
       >
         <div className="p-6">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
-                <Users className="w-6 h-6 text-emerald-500" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-zinc-800">Manajemen Pembayaran</h1>
-                <p className="text-sm text-zinc-500">Kelola pembayaran untuk bank sampah dan kolektor</p>
-              </div>
+          <div className="flex text-left items-center gap-4 mb-8">
+            <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <Wallet className="w-6 h-6 text-emerald-500" />
             </div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-white border rounded-lg border-zinc-200">
-              <Wallet className="w-5 h-5 text-emerald-500" />
-              <div>
-                <p className="text-sm text-zinc-500">Saldo Tersedia</p>
-                <p className="font-semibold text-zinc-800">Rp {wasteBankBalance.toLocaleString()}</p>
-              </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-zinc-800">Manajemen Pembayaran</h1>
+              <p className="text-sm text-zinc-500">Kelola pembayaran untuk bank sampah dan kolektor</p>
             </div>
           </div>
 
-          <div className="p-4 mb-6 border border-blue-200 rounded-lg bg-blue-50">
-            <div className="flex gap-3">
-              <Info className="flex-shrink-0 w-5 h-5 mt-0.5 text-blue-500" />
-              <div>
-                <h3 className="font-medium text-blue-800">Data Realtime</h3>
-                <p className="text-sm text-blue-600">
-                  Halaman ini menampilkan data secara realtime. Perubahan pada pengguna, transaksi atau saldo
-                  akan segera terlihat tanpa perlu memuat ulang halaman.
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Information Card */}
+          <InfoPanel title="Informasi" icon={Info}>
+            <p>
+              Halaman ini digunakan untuk mengelola gaji petugas dan poin pelanggan, dengan data real-time. Pilih pengguna untuk melihat detail dan memproses pembayaran.
+            </p>
+          </InfoPanel>
 
-          {selectedUserId && (
-            <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
-              {loading ? (
-                <>
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200 animate-pulse">
-                      <div className="w-32 h-4 mb-2 rounded-md bg-zinc-200"></div>
-                      <div className="w-24 h-8 rounded-md bg-zinc-200"></div>
-                    </div>
-                  ))}
-                </>
-              ) : (
-                <>
-                  <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-                    <h3 className="text-sm font-medium text-zinc-500">Saldo Saat Ini</h3>
-                    <p className="text-2xl font-semibold text-zinc-800">Rp {userStats.balance.toLocaleString()}</p>
-                    <p className="mt-1 text-xs text-zinc-500">Jumlah dana yang tersedia di akun pengguna</p>
-                  </div>
-                  <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-                    <h3 className="text-sm font-medium text-zinc-500">Total Pengumpulan</h3>
-                    <p className="text-2xl font-semibold text-zinc-800">{userStats.totalCollections}</p>
-                    <p className="mt-1 text-xs text-zinc-500">Jumlah pengumpulan sampah yang telah diselesaikan</p>
-                  </div>
-                  <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
-                    <h3 className="text-sm font-medium text-zinc-500">Total Nilai</h3>
-                    <p className="text-2xl font-semibold text-zinc-800">Rp {userStats.totalValue.toLocaleString()}</p>
-                    <p className="mt-1 text-xs text-zinc-500">Nilai total dari semua sampah yang dikumpulkan</p>
-                  </div>
-                </>
-              )}
+          <div className="grid grid-cols-1 gap-4 mb-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-gray-500">Saldo Tersedia</h3>
+                <Tooltip content="Jumlah dana yang tersedia di akun bank sampah">
+                  <HelpCircle className="w-4 h-4 text-gray-400" />
+                </Tooltip>
+              </div>
+              <p className="text-2xl font-semibold text-gray-800">Rp {wasteBankBalance.toLocaleString('id-ID')}</p>
             </div>
-          )}
+
+            {selectedUserId && (
+              <>
+                <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-gray-500">Saldo Pengguna</h3>
+                    <Tooltip content="Jumlah uang yang dimiliki pengguna saat ini">
+                      <HelpCircle className="w-4 h-4 text-gray-400" />
+                    </Tooltip>
+                  </div>
+                  {loading ? (
+                    <div className="w-24 h-8 mt-1 rounded-md bg-zinc-200 animate-pulse"></div>
+                  ) : (
+                    <p className="text-2xl font-semibold text-gray-800">Rp {userStats.balance.toLocaleString('id-ID')}</p>
+                  )}
+                </div>
+                <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-gray-500">Total Pengumpulan</h3>
+                    <Tooltip content="Jumlah pengumpulan sampah yang telah diselesaikan oleh pengguna ini">
+                      <HelpCircle className="w-4 h-4 text-gray-400" />
+                    </Tooltip>
+                  </div>
+                  {loading ? (
+                    <div className="w-16 h-8 mt-1 rounded-md bg-zinc-200 animate-pulse"></div>
+                  ) : (
+                    <p className="text-2xl font-semibold text-gray-800">{userStats.totalCollections}</p>
+                  )}
+                </div>
+                <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-gray-500">Total Nilai</h3>
+                    <Tooltip content="Nilai total dari semua sampah yang telah dikumpulkan oleh pengguna ini">
+                      <HelpCircle className="w-4 h-4 text-gray-400" />
+                    </Tooltip>
+                  </div>
+                  {loading ? (
+                    <div className="w-24 h-8 mt-1 rounded-md bg-zinc-200 animate-pulse"></div>
+                  ) : (
+                    <p className="text-2xl font-semibold text-gray-800">Rp {userStats.totalValue.toLocaleString('id-ID')}</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             <div className="p-6 bg-white border shadow-sm rounded-xl border-zinc-200">
@@ -652,18 +700,18 @@ export default function MasterSalaryManagement() {
                     placeholder="Cari pengguna..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="text-sm w-full pl-10 pr-4 py-3 bg-zinc-50 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   />
                 </div>
-                
+
                 <div className="flex items-center gap-2">
-                  <Filter className="w-5 h-5 text-zinc-400" />
+                  <p className="text-sm">Pengguna:</p>
                   <select
                     value={selectedRole}
                     onChange={(e) => setSelectedRole(e.target.value)}
-                    className="flex-1 px-3 py-2 border rounded-lg bg-zinc-50 border-zinc-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    className="flex-1 text-sm px-3 py-2 border rounded-lg bg-zinc-50 border-zinc-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   >
-                    <option value="all">Semua Pengguna</option>
+                    <option value="all">Semua</option>
                     <option value="wastebank_master_collector">Kolektor</option>
                     <option value="wastebank_admin">Bank Sampah</option>
                   </select>
@@ -679,27 +727,25 @@ export default function MasterSalaryManagement() {
                       <button
                         key={user.id}
                         onClick={() => handleSelectUser(user.id)}
-                        className={`w-full p-3 rounded-lg text-left transition-all ${
-                          selectedUserId === user.id
-                            ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm'
-                            : 'bg-white hover:bg-zinc-50 border border-zinc-200'
-                        }`}
+                        className={`w-full p-4 rounded-lg text-left transition-all ${selectedUserId === user.id
+                          ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm'
+                          : 'bg-white hover:bg-zinc-50 border border-zinc-200'
+                          }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
                             <User className="w-5 h-5 mr-2 text-zinc-500" />
                             <div>
-                              <div className="font-medium text-zinc-800">
+                              <div className="text-sm font-medium text-zinc-800">
                                 {user.profile?.fullName || 'Pengguna Tanpa Nama'}
                               </div>
-                              <div className="text-sm text-zinc-500">{user.email}</div>
+                              <div className="text-xs text-zinc-500">{user.email}</div>
                             </div>
                           </div>
-                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                            user.role === 'wastebank_master_collector' 
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-blue-100 text-blue-700'
-                          }`}>
+                          <span className={`text-[10px] font-medium px-2 rounded-full ${user.role === 'wastebank_master_collector'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-blue-100 text-blue-700'
+                            }`}>
                             {user.role === 'wastebank_master_collector' ? 'Kolektor' : 'Bank Sampah'}
                           </span>
                         </div>
@@ -727,13 +773,13 @@ export default function MasterSalaryManagement() {
                       <div className="flex items-center justify-between mb-6">
                         <h2 className="text-xl font-semibold text-zinc-800">
                           {users.find(u => u.id === selectedUserId)?.role === 'wastebank_admin'
-                            ? 'Pembayaran Bank Sampah' 
+                            ? 'Pembayaran Bank Sampah'
                             : 'Gaji Kolektor'}
                         </h2>
                         <button
                           onClick={handlePayment}
                           disabled={loading || !salaryConfig.baseSalary || wasteBankBalance < salaryConfig.baseSalary}
-                          className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-6 py-2.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {loading ? 'Memproses...' : 'Proses Pembayaran'}
                         </button>
@@ -752,7 +798,8 @@ export default function MasterSalaryManagement() {
                             </span>
                             <input
                               type="number"
-                              value={salaryConfig.baseSalary}
+                              value={salaryConfig.baseSalary || ''}
+                              placeholder="0"
                               onChange={(e) => setSalaryConfig(prev => ({
                                 ...prev,
                                 baseSalary: Number(e.target.value)
@@ -781,7 +828,7 @@ export default function MasterSalaryManagement() {
                   <p>Pilih pengguna untuk melihat dan mengonfigurasi detail pembayaran mereka</p>
                 </div>
               )}
-              
+
               {selectedUserId && (
                 <div className="p-6 bg-white border shadow-sm rounded-xl border-zinc-200">
                   <div className="flex items-center justify-between mb-4">
@@ -797,10 +844,10 @@ export default function MasterSalaryManagement() {
                         <div key={transaction.id} className="p-4 border-b border-zinc-100">
                           <div className="flex items-center justify-between mb-1">
                             <span className="font-medium text-zinc-800">
-                              {transaction.type === 'salary_payment' 
-                                ? 'Pembayaran Gaji' 
-                                : transaction.type === 'points_conversion' 
-                                  ? 'Konversi Poin' 
+                              {transaction.type === 'salary_payment'
+                                ? 'Pembayaran Gaji'
+                                : transaction.type === 'points_conversion'
+                                  ? 'Konversi Poin'
                                   : 'Transaksi'}
                             </span>
                             <span className="font-semibold text-emerald-600">
@@ -817,11 +864,10 @@ export default function MasterSalaryManagement() {
                                 minute: '2-digit'
                               })}
                             </span>
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                              transaction.status === 'completed' 
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-yellow-100 text-yellow-700'
-                            }`}>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${transaction.status === 'completed'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-yellow-100 text-yellow-700'
+                              }`}>
                               {transaction.status === 'completed' ? 'Selesai' : 'Tertunda'}
                             </span>
                           </div>
