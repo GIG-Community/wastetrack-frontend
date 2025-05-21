@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Package, ArrowRight, Loader2, Search, CalendarIcon,
-  User, MapPin, AlertCircle, Scale, ArrowUp, Wallet
+  User, MapPin, AlertCircle, Scale, ArrowUp, Wallet, ChevronRight,
+  Info
 } from 'lucide-react';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
 import { Link, useNavigate } from 'react-router-dom';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 // Reusable components
 const Input = ({ className = "", ...props }) => (
@@ -48,7 +50,7 @@ const PickupCard = ({ pickup, onSelectPickup }) => {
   };
 
   // Calculate total bags
-  const totalBags = pickup.wastes 
+  const totalBags = pickup.wastes
     ? Object.values(pickup.wastes).reduce((sum, waste) => sum + Math.ceil(waste.weight / 5), 0)
     : 0;
 
@@ -124,6 +126,12 @@ const PickupCard = ({ pickup, onSelectPickup }) => {
 };
 
 const MasterCollections = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [pickups, setPickups] = useState([]);
@@ -145,7 +153,7 @@ const MasterCollections = () => {
           where('collectorId', '==', currentUser.uid),
           where('status', '==', 'in_progress')
         );
-        
+
         // Set up real-time listener for pickups
         unsubscribePickups = onSnapshot(
           pickupsQuery,
@@ -164,7 +172,7 @@ const MasterCollections = () => {
             setLoading(false);
           }
         );
-        
+
         // Set up real-time listener for user balance
         unsubscribeUser = onSnapshot(
           doc(db, 'users', currentUser.uid),
@@ -184,7 +192,7 @@ const MasterCollections = () => {
         setLoading(false);
       }
     }
-    
+
     // Clean up the subscriptions when the component unmounts
     return () => {
       if (unsubscribePickups) unsubscribePickups();
@@ -197,10 +205,32 @@ const MasterCollections = () => {
   };
 
   // Filter pickups based on search term
-  const filteredPickups = pickups.filter(pickup => 
+  const filteredPickups = pickups.filter(pickup =>
     pickup.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     pickup.location?.address?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Information panel component - modified with collapsible behavior
+  const InfoPanel = ({ title, children }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    return (
+      <div className="text-left p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+        <div className="flex gap-3">
+          <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+              <h3 className="mb-1 font-medium text-blue-800">{title}</h3>
+              <ChevronRight className={`w-4 h-4 text-blue-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+            </div>
+            {isExpanded && (
+              <div className="text-sm text-blue-700">{children}</div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -217,123 +247,122 @@ const MasterCollections = () => {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-zinc-50/50">
       <Sidebar role={userData?.role} onCollapse={setIsSidebarCollapsed} />
-      <main className={`flex-1 p-8 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <main className={`flex-1 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         {/* Header */}
-        <div className="flex flex-col gap-4 mb-8 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-800">Manajemen Pengumpulan</h1>
-            <p className="text-sm text-gray-500">Perbarui berat sampah untuk pengumpulan yang sedang berlangsung</p>
+        <div className="p-6">
+          <div className="flex text-left items-center gap-4 mb-8">
+            <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <Scale className="w-6 h-6 text-emerald-500" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-left text-zinc-800">Manajemen Pengambilan Sampah</h1>
+              <p className="text-sm text-gray-500">Perbarui berat sampah dan hitung poin untuk pengambilan yang sedang berlangsung</p>
+            </div>
           </div>
-          
-          <div className="relative w-full md:w-64">
+
+
+          <InfoPanel title="Informasi">
+            <p className="text-sm mb-2 text-blue-600">
+              Dashboard ini menampilkan data secara realtime dan langsung memperbarui perubahan tanpa perlu memuat ulang halaman.
+            </p>
+          </InfoPanel>
+
+          {/* Komponen pencarian yang memenuhi kontainer */}
+          <div className="relative w-full mb-6">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             <Input
               type="text"
               placeholder="Cari pengumpulan..."
-              className="pl-10"
+              className="w-full pl-10"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-        </div>
 
-        {/* Info Banner */}
-        <div className="p-4 mb-6 border border-blue-200 rounded-lg bg-blue-50">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 mt-0.5 text-blue-500 flex-shrink-0" />
-            <div>
-              <h3 className="font-medium text-blue-800">Data Realtime</h3>
-              <p className="text-sm text-blue-600">
-                Halaman ini menampilkan data secara realtime. Perubahan pada pengumpulan
-                akan segera terlihat tanpa perlu memuat ulang halaman.
+          {/* Collection Stats */}
+          <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-3">
+            <div className="p-5 bg-white border border-gray-200 rounded-xl">
+              <div className="flex items-start justify-between">
+                <div className="text-left">
+                  <p className="text-sm text-gray-500">Total Pengumpulan</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-800">{pickups.length}</p>
+                </div>
+                <div className="hidden p-2 rounded-lg bg-blue-50">
+                  <Package className="w-6 h-6 text-blue-500" />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 bg-white border border-gray-200 rounded-xl">
+              <div className="flex items-start justify-between">
+                <div className="text-left">
+                  <p className="text-sm text-gray-500">Berat Diperlukan</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-800">Semua Jenis</p>
+                </div>
+                <div className="hidden p-2 rounded-lg bg-yellow-50">
+                  <Scale className="w-6 h-6 text-yellow-500" />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 bg-white border border-gray-200 rounded-xl">
+              <div className="flex items-start justify-between">
+                <div className="text-left"> 
+                  <p className="text-sm text-gray-500">Saldo Saat Ini</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-800">
+                    Rp {balance.toLocaleString('id-ID')}
+                  </p>
+                </div>
+                <div className="hidden p-2 rounded-lg bg-emerald-50">
+                  <Wallet className="w-6 h-6 text-emerald-500" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Collections List */}
+          {error ? (
+            <div className="p-4 mb-6 text-red-700 rounded-lg bg-red-50">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                <p>{error}</p>
+              </div>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-2 text-sm font-medium text-red-700 hover:text-red-800"
+              >
+                Coba Lagi
+              </button>
+            </div>
+          ) : filteredPickups.length === 0 ? (
+            <div className="p-8 text-center bg-white border border-gray-200 rounded-xl">
+              <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              <h3 className="mb-2 text-lg font-medium text-gray-700">Tidak Ada Pengumpulan yang Sedang Berlangsung</h3>
+              <p className="max-w-md mx-auto mb-6 text-gray-500">
+                Saat ini tidak ada pengumpulan yang sedang berlangsung yang ditugaskan kepada Anda.
+                Periksa kembali nanti atau hubungi bank sampah.
               </p>
+              <Link
+                to="/dashboard/collector-master/assignments"
+                className="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
+              >
+                Lihat Penugasan <ArrowRight className="w-4 h-4" />
+              </Link>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-6">
+              {filteredPickups.map(pickup => (
+                <PickupCard
+                  key={pickup.id}
+                  pickup={pickup}
+                  onSelectPickup={handleSelectPickup}
+                />
+              ))}
+            </div>
+          )}
         </div>
-
-        {/* Collection Stats */}
-        <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-3">
-          <div className="p-5 bg-white border border-gray-200 rounded-xl">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Total Pengumpulan</p>
-                <p className="mt-1 text-2xl font-semibold text-gray-800">{pickups.length}</p>
-              </div>
-              <div className="p-2 rounded-lg bg-blue-50">
-                <Package className="w-6 h-6 text-blue-500" />
-              </div>
-            </div>
-          </div>
-
-          <div className="p-5 bg-white border border-gray-200 rounded-xl">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Berat Diperlukan</p>
-                <p className="mt-1 text-2xl font-semibold text-gray-800">Semua Jenis</p>
-              </div>
-              <div className="p-2 rounded-lg bg-yellow-50">
-                <Scale className="w-6 h-6 text-yellow-500" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-5 bg-white border border-gray-200 rounded-xl">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Saldo Saat Ini</p>
-                <p className="mt-1 text-2xl font-semibold text-gray-800">
-                  Rp {balance.toLocaleString('id-ID')}
-                </p>
-              </div>
-              <div className="p-2 rounded-lg bg-emerald-50">
-                <Wallet className="w-6 h-6 text-emerald-500" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Collections List */}
-        {error ? (
-          <div className="p-4 mb-6 text-red-700 rounded-lg bg-red-50">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5" />
-              <p>{error}</p>
-            </div>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-2 text-sm font-medium text-red-700 hover:text-red-800"
-            >
-              Coba Lagi
-            </button>
-          </div>
-        ) : filteredPickups.length === 0 ? (
-          <div className="p-8 text-center bg-white border border-gray-200 rounded-xl">
-            <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-            <h3 className="mb-2 text-lg font-medium text-gray-700">Tidak Ada Pengumpulan yang Sedang Berlangsung</h3>
-            <p className="max-w-md mx-auto mb-6 text-gray-500">
-              Saat ini tidak ada pengumpulan yang sedang berlangsung yang ditugaskan kepada Anda.
-              Periksa kembali nanti atau hubungi bank sampah.
-            </p>
-            <Link
-              to="/dashboard/collector-master/assignments"
-              className="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium text-white transition-colors rounded-lg bg-emerald-500 hover:bg-emerald-600"
-            >
-              Ke Penugasan <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {filteredPickups.map(pickup => (
-              <PickupCard
-                key={pickup.id}
-                pickup={pickup}
-                onSelectPickup={handleSelectPickup}
-              />
-            ))}
-          </div>
-        )}
       </main>
     </div>
   );

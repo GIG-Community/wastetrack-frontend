@@ -1,22 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { 
-    MapPin, 
-    Navigation2 as Route,
-    Navigation,
-    Loader2,
-    AlertCircle,
-    Package,
-    ArrowRight,
-    Clock,
-    MapPin as RouteIcon,
-    Info
+import {
+  MapPin,
+  Navigation2 as Route,
+  Navigation,
+  Loader2,
+  AlertCircle,
+  Package,
+  ArrowRight,
+  Clock,
+  MapPin as RouteIcon,
+  Info,
+  ChevronRight
 } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 import 'leaflet/dist/leaflet.css';
 
 // Badge Component
@@ -130,14 +132,14 @@ const MapUpdater = ({ center }) => {
 // Current Location Updater Component with flexible zoom
 const CurrentLocationUpdater = ({ center, active }) => {
   const map = useMap();
-  
+
   useEffect(() => {
     if (active && center) {
       // Use a wider view when following location to see more surrounding pickups
       map.setView(center, 14);
     }
   }, [center, active, map]);
-  
+
   return null;
 };
 
@@ -156,6 +158,12 @@ const formatDistance = (meters) => {
 };
 
 const MasterRoutes = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -186,7 +194,7 @@ const MasterRoutes = () => {
               lng: position.coords.longitude
             };
             setCurrentLocation(newLocation);
-            
+
             // If following current location, update map center
             if (followCurrentLocation) {
               setMapCenter([newLocation.lat, newLocation.lng]);
@@ -202,7 +210,7 @@ const MasterRoutes = () => {
               });
             }
           },
-          { 
+          {
             enableHighAccuracy: true,
             maximumAge: 5000, // Shorter cache time for more frequent updates
             timeout: 10000 // Longer timeout to allow for GPS lock
@@ -234,7 +242,7 @@ const MasterRoutes = () => {
         `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&annotations=true&continue_straight=true`
       );
       const data = await response.json();
-      
+
       if (data.routes && data.routes.length > 0) {
         const route = data.routes[0];
         return {
@@ -268,7 +276,7 @@ const MasterRoutes = () => {
             destinationPoint[0],
             destinationPoint[1]
           );
-          
+
           if (routeData) {
             allRouteCoordinates = [...allRouteCoordinates, ...routeData.coordinates];
             totalDistance += routeData.distance;
@@ -279,7 +287,7 @@ const MasterRoutes = () => {
               duration: routeData.duration
             });
           }
-          
+
           currentPoint = destinationPoint;
         }
 
@@ -321,44 +329,44 @@ const MasterRoutes = () => {
         estimatedWeight: Object.values(pickup.wasteQuantities || {})
           .reduce((sum, quantity) => sum + (quantity * 5), 0) // Estimate 5kg per bag
       }));
-      
+
     let route = [];
     let currentLat = startLat;
     let currentLng = startLng;
-  
+
     while (unvisited.length > 0) {
       let nearestIdx = 0;
       let minDistance = Number.MAX_VALUE;
-  
+
       unvisited.forEach((pickup, idx) => {
         // Calculate distance without limitations
         const distance = Math.sqrt(
-          Math.pow(pickup.coordinates.lat - currentLat, 2) + 
+          Math.pow(pickup.coordinates.lat - currentLat, 2) +
           Math.pow(pickup.coordinates.lng - currentLng, 2)
         );
-        
+
         // Priority based on status (in_progress first)
         const statusPriority = pickup.status === 'in_progress' ? 0.5 : 1;
-        
+
         // Weight factor - higher weight gets higher priority but don't limit maximum
         const weightFactor = pickup.estimatedWeight / 500; // No cap on weight
-        
+
         // Final score - lower is higher priority
         const score = distance * statusPriority * (1 - weightFactor * 0.3);
-        
+
         if (score < minDistance) {
           minDistance = score;
           nearestIdx = idx;
         }
       });
-  
+
       const nextPickup = unvisited[nearestIdx];
       route.push(nextPickup);
       currentLat = nextPickup.coordinates.lat;
       currentLng = nextPickup.coordinates.lng;
       unvisited.splice(nearestIdx, 1);
     }
-  
+
     return route;
   };
 
@@ -370,10 +378,10 @@ const MasterRoutes = () => {
         collection(db, 'masterBankRequests'),
         where('collectorId', '==', currentUser.uid)
       );
-      
+
       // Use onSnapshot instead of getDocs for real-time updates
       const unsubscribe = onSnapshot(
-        pickupsQuery, 
+        pickupsQuery,
         (snapshot) => {
           const allPickupsData = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -385,7 +393,7 @@ const MasterRoutes = () => {
               // Ensure address is properly extracted
               address: data.location?.address || data.address,
               // Handle wastes and waste quantities consistently
-              wasteQuantities: data.wasteQuantities || 
+              wasteQuantities: data.wasteQuantities ||
                 (data.wastes ? Object.keys(data.wastes).reduce((acc, key) => {
                   acc[key] = data.wastes[key].weight || 0;
                   return acc;
@@ -397,8 +405,8 @@ const MasterRoutes = () => {
           });
 
           // Filter for pickups with valid coordinates
-          const pickupsData = allPickupsData.filter(pickup => 
-            pickup.coordinates !== null && 
+          const pickupsData = allPickupsData.filter(pickup =>
+            pickup.coordinates !== null &&
             pickup.coordinates.lat !== undefined
           );
 
@@ -443,6 +451,28 @@ const MasterRoutes = () => {
     }
   };
 
+  // Information panel component - modified with collapsible behavior
+  const InfoPanel = ({ title, children }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    return (
+      <div className="text-left p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+        <div className="flex gap-3">
+          <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+              <h3 className="mb-1 font-medium text-blue-800">{title}</h3>
+              <ChevronRight className={`w-4 h-4 text-blue-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+            </div>
+            {isExpanded && (
+              <div className="text-sm text-blue-700">{children}</div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -473,7 +503,7 @@ const MasterRoutes = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar 
+      <Sidebar
         role={userData?.role}
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
@@ -481,62 +511,71 @@ const MasterRoutes = () => {
       <main className={`flex-1 transition-all duration-300 ease-in-out
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
       >
-        <div className="p-8">
+        <div className="p-6">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <div className="p-2 bg-white border border-gray-200 shadow-sm rounded-xl">
-                <Route className="w-6 h-6 text-emerald-500" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-800">Rute Pengambilan</h1>
-                <p className="text-sm text-gray-500">Optimalkan rute pengambilan sampah Anda</p>
-              </div>
+          <div className="flex text-left items-center gap-4 mb-8">
+            <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
+              <Route className="w-6 h-6 text-emerald-500" />
             </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-800">Rute Pengambilan</h1>
+              <p className="text-sm text-gray-500">Optimalkan rute pengambilan sampah Anda</p>
+            </div>
+          </div>
 
-            {/* Quick Stats */}
-            <div className="flex gap-4">
-              <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl">
-                <p className="text-sm text-gray-500">Pengambilan Tertunda</p>
-                <p className="text-2xl font-semibold text-blue-600">
-                  {pickups.filter(p => p.status === 'assigned' || p.status === 'pending').length}
-                </p>
-              </div>
-              <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl">
-                <p className="text-sm text-gray-500">Dalam Proses</p>
-                <p className="text-2xl font-semibold text-yellow-600">
-                  {pickups.filter(p => p.status === 'in_progress').length}
-                </p>
-              </div>
-              <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl">
-                <p className="text-sm text-gray-500">Selesai Hari Ini</p>
-                <p className="text-2xl font-semibold text-emerald-600">
-                  {pickups.filter(p => {
-                    if (p.status !== 'completed') return false;
-                    const today = new Date();
-                    const pickupDate = new Date(p.completedAt?.seconds * 1000);
-                    return pickupDate.toDateString() === today.toDateString();
-                  }).length}
-                </p>
-              </div>
+          {/* Information Panel */}
+          <InfoPanel title="Informasi">
+            <ul className="ml-4 list-disc">
+              <li>Klik tombol "Ikuti Lokasi Saya" untuk peta mengikuti posisi Anda secara real-time</li>
+              <li>Titik-titik pada peta menunjukkan lokasi pengambilan sampah dengan warna sesuai statusnya</li>
+              <li>Klik pada titik pengambilan untuk melihat detail dan memindahkan peta ke lokasi tersebut</li>
+              <li>Urutan rute yang disarankan mempertimbangkan jarak dan jumlah sampah yang diambil</li>
+            </ul>
+          </InfoPanel>
+
+          {/* Quick Stats */}
+          <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl flex flex-col">
+              <p className="text-sm text-gray-500">Pengambilan Tertunda</p>
+              <p className="text-2xl font-semibold text-blue-600">
+                {pickups.filter(p => p.status === 'assigned' || p.status === 'pending').length}
+              </p>
+            </div>
+            <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl flex flex-col">
+              <p className="text-sm text-gray-500">Dalam Proses</p>
+              <p className="text-2xl font-semibold text-yellow-600">
+                {pickups.filter(p => p.status === 'in_progress').length}
+              </p>
+            </div>
+            <div className="p-4 bg-white border border-gray-200 shadow-sm rounded-xl flex flex-col">
+              <p className="text-sm text-gray-500">Selesai Hari Ini</p>
+              <p className="text-2xl font-semibold text-emerald-600">
+                {pickups.filter(p => {
+                  if (p.status !== 'completed') return false;
+                  const today = new Date();
+                  const pickupDate = new Date(p.completedAt?.seconds * 1000);
+                  return pickupDate.toDateString() === today.toDateString();
+                }).length}
+              </p>
             </div>
           </div>
 
           {/* Location & Route Info */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <button 
+          <div className="flex items-center justify-between my-6">
+            <div className="w-full flex items-center gap-2">
+              <button
                 onClick={handleFollowLocationToggle}
-                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
-                  followCurrentLocation 
-                    ? 'bg-emerald-500 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className={`flex-1 px-4 py-3 rounded-lg flex items-center text-sm justify-center gap-2 transition-colors ${followCurrentLocation
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                  }`}
               >
-                <Navigation className="w-4 h-4" />
-                {followCurrentLocation ? 'Mengikuti Lokasi Anda' : 'Ikuti Lokasi Saya'}
+                <Navigation className="w-4 h-4 flex-shrink-0" />
+                <span className="text-center w-full">
+                  {followCurrentLocation ? 'Mengikuti Lokasi Anda' : 'Ikuti Lokasi Saya'}
+                </span>
               </button>
-              <HelpTooltip 
+              <HelpTooltip
                 title="Ikuti Lokasi"
                 content="Aktifkan fitur ini untuk terus mengikuti posisi Anda saat ini pada peta. Peta akan otomatis berpindah saat Anda bergerak."
               />
@@ -568,9 +607,9 @@ const MasterRoutes = () => {
           {/* Map Container */}
           <div className="overflow-hidden bg-white border border-gray-200 shadow-sm rounded-xl">
             <div className="relative h-[600px]">
-              <MapContainer 
-                center={mapCenter} 
-                zoom={13} 
+              <MapContainer
+                center={mapCenter}
+                zoom={13}
                 className="w-full h-full"
                 key={`map-${mapCenter[0]}-${mapCenter[1]}`} // Add a key to force re-render when center changes
               >
@@ -666,14 +705,14 @@ const MasterRoutes = () => {
                 <h2 className="text-lg font-semibold text-gray-800">
                   Urutan Rute yang Disarankan
                 </h2>
-                <HelpTooltip 
+                <HelpTooltip
                   title="Tentang Rute yang Disarankan"
                   content="Pengurutan rute dioptimalkan berdasarkan jarak dan jumlah sampah. Klik pada lokasi pengambilan untuk melihat detail dan berpindah ke posisi tersebut di peta."
                 />
               </div>
               <div className="space-y-4">
                 {routeStats.segments.map((segment, index) => (
-                  <div 
+                  <div
                     key={segment.pickup.id}
                     className="flex items-center gap-4 p-4 transition-colors rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
                     onClick={() => handlePickupClick(segment.pickup)}
@@ -686,8 +725,8 @@ const MasterRoutes = () => {
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{segment.pickup.userName}</p>
                       <p className="text-sm text-gray-500">
-                        {typeof segment.pickup.address === 'string' 
-                          ? segment.pickup.address 
+                        {typeof segment.pickup.address === 'string'
+                          ? segment.pickup.address
                           : segment.pickup.location?.address || 'Alamat tidak tersedia'}
                       </p>
                       <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
@@ -733,24 +772,6 @@ const MasterRoutes = () => {
               </p>
             </div>
           )}
-
-          {/* Instructions Card */}
-          <div className="p-6 mt-6 border border-blue-200 bg-blue-50 rounded-xl">
-            <div className="flex items-start gap-4">
-              <div className="p-2 bg-blue-100 rounded-full">
-                <Info className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="mb-2 font-medium text-blue-800">Panduan Penggunaan</h3>
-                <ul className="space-y-2 text-sm text-blue-700">
-                  <li>• Klik tombol "Ikuti Lokasi Saya" untuk peta mengikuti posisi Anda secara real-time</li>
-                  <li>• Titik-titik pada peta menunjukkan lokasi pengambilan sampah dengan warna sesuai statusnya</li>
-                  <li>• Klik pada titik pengambilan untuk melihat detail dan memindahkan peta ke lokasi tersebut</li>
-                  <li>• Urutan rute yang disarankan mempertimbangkan jarak dan jumlah sampah yang diambil</li>
-                </ul>
-              </div>
-            </div>
-          </div>
         </div>
       </main>
     </div>
