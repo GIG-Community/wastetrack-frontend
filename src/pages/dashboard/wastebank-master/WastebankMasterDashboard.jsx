@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Building2, 
+import {
+  Building2,
   Users,
   Package,
   TrendingUp,
@@ -14,25 +14,28 @@ import {
   Scale,
   Clock,
   DollarSign,
-  Info
+  Info,
+  ChevronRight,
+  HelpCircle
 } from 'lucide-react';
 import { collection, query, where, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
   Legend
 } from 'recharts';
+import { useSmoothScroll } from '../../../hooks/useSmoothScroll';
 
 const COLORS = ['#10B981', '#6366F1', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
 const WASTE_ICONS = {
@@ -50,7 +53,24 @@ const formatWeight = (weight) => {
   return `${weight.toFixed(1)} kg`;
 };
 
+// Tooltip component for providing additional information
+const TooltipCustom = ({ children, content }) => (
+  <div className="relative flex items-start group">
+    {children}
+    <div className="absolute z-50 invisible w-48 p-2 mb-2 text-xs text-white transition-all duration-200 transform -translate-x-1/2 rounded-lg opacity-0 bottom-full left-1/2 bg-zinc-800 group-hover:opacity-100 group-hover:visible">
+      <div className="text-left">{content}</div>
+      <div className="absolute transform -translate-x-1/2 border-4 border-transparent top-full left-1/2 border-t-zinc-800"></div>
+    </div>
+  </div>
+);
+
 const WastebankMasterDashboard = () => {
+  // Scroll ke atas saat halaman dimuat
+  useSmoothScroll({
+    enabled: true,
+    top: 0,
+    scrollOnMount: true
+  });
   const { userData, currentUser } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -127,7 +147,7 @@ const WastebankMasterDashboard = () => {
         where('role', '==', 'wastebank_master_collector'),
         where('profile.institution', '==', currentUser.uid)
       );
-      
+
       const unsubscribeCollectors = onSnapshot(collectorsQuery, (collectorsSnapshot) => {
         const collectorsData = collectorsSnapshot.docs.map(doc => ({
           id: doc.id,
@@ -139,14 +159,14 @@ const WastebankMasterDashboard = () => {
         console.error('Error fetching collectors:', error);
         setError('Gagal memuat data kolektor');
       });
-      
+
       newUnsubscribes.push(unsubscribeCollectors);
 
       const requestsQuery = query(
         collection(db, 'masterBankRequests'),
         where('masterBankId', '==', currentUser.uid)
       );
-      
+
       const unsubscribeRequests = onSnapshot(requestsQuery, (snapshot) => {
         const requestsData = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -154,7 +174,7 @@ const WastebankMasterDashboard = () => {
         }));
         processPickupData(requestsData);
       });
-      
+
       newUnsubscribes.push(unsubscribeRequests);
       setUnsubscribes(newUnsubscribes);
       setError(null);
@@ -185,13 +205,13 @@ const WastebankMasterDashboard = () => {
         return date.getMonth() === month && date.getFullYear() === year;
       };
 
-      const thisMonthRequests = requestsData.filter(r => 
+      const thisMonthRequests = requestsData.filter(r =>
         isInMonth(r.completedAt, thisMonth, thisYear)
       );
 
       const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
       const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
-      const lastMonthRequests = requestsData.filter(r => 
+      const lastMonthRequests = requestsData.filter(r =>
         isInMonth(r.completedAt, lastMonth, lastMonthYear)
       );
 
@@ -263,7 +283,7 @@ const WastebankMasterDashboard = () => {
           Object.entries(request.wastes).forEach(([type, data]) => {
             if (!wasteTypeTotals[type]) {
               const icon = WASTE_ICONS[type.toLowerCase()] || '📦';
-              
+
               wasteTypeTotals[type] = {
                 name: type.replace(/-/g, ' '),
                 weight: 0,
@@ -288,9 +308,9 @@ const WastebankMasterDashboard = () => {
           'fabric': 'Kain',
           'others': 'Lainnya'
         };
-        
+
         const lowerType = type.toLowerCase();
-        return translations[lowerType] || type.split(' ').map(word => 
+        return translations[lowerType] || type.split(' ').map(word =>
           word.charAt(0).toUpperCase() + word.slice(1)
         ).join(' ');
       };
@@ -301,7 +321,7 @@ const WastebankMasterDashboard = () => {
           name: translateWasteType(type.name)
         }))
         .sort((a, b) => b.weight - a.weight);
-        
+
       setWasteTypes(wasteTypeData);
 
       setRecentPickups(
@@ -318,12 +338,34 @@ const WastebankMasterDashboard = () => {
     }
   };
 
-  const Button = ({ 
-    variant = "primary", 
+  // Information panel component - modified with collapsible behavior
+  const InfoPanel = ({ title, children }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    return (
+      <div className="text-left p-4 mb-6 border border-blue-100 rounded-lg bg-blue-50">
+        <div className="flex gap-3">
+          <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <div className="flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+              <h3 className="mb-1 font-medium text-blue-800">{title}</h3>
+              <ChevronRight className={`w-4 h-4 text-blue-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+            </div>
+            {isExpanded && (
+              <div className="text-sm text-blue-700">{children}</div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const Button = ({
+    variant = "primary",
     size = "md",
-    className = "", 
-    children, 
-    ...props 
+    className = "",
+    children,
+    ...props
   }) => {
     const variants = {
       primary: "bg-emerald-500 hover:bg-emerald-600 text-white",
@@ -355,40 +397,33 @@ const WastebankMasterDashboard = () => {
     );
   };
 
-  const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "success", className = "", infoText }) => (
-    <div className={`bg-white rounded-xl p-6 border border-zinc-200 ${className}`}>
-      <div className="flex items-start justify-between">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2.5 bg-zinc-100 rounded-lg">
-              <Icon className="w-6 h-6 text-zinc-600" />
-            </div>
-            {infoText && (
-              <div className="relative">
-                <button 
-                  onClick={() => setShowInfoTooltip(infoText !== showInfoTooltip ? infoText : null)}
-                  className="p-1 text-zinc-400 hover:text-zinc-600 focus:outline-none"
-                >
-                  <Info className="w-4 h-4" />
-                </button>
-                {showInfoTooltip === infoText && (
-                  <div className="absolute z-10 p-3 text-sm text-white bg-zinc-800 rounded-lg shadow-lg min-w-[200px] max-w-[280px] top-full left-0 mt-1">
-                    {infoText}
-                    <div className="absolute w-2 h-2 rotate-45 bg-zinc-800 -top-1 left-3"></div>
-                  </div>
-                )}
+  // Component for stat cards
+  const StatCard = ({ icon: Icon, label, value, trend, trend_value, variant = "success", className = "", infoText, tooltipCustom = "" }) => {
+    const [showTooltip, setShowTooltip] = useState(false);
+
+    return (
+      <div className={`bg-white rounded-xl text-left p-4 border border-zinc-200 ${className}`}>
+        <div className="flex items-start justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="p-2.5 bg-gray-50 rounded-full">
+                <Icon className="w-5 h-5 text-zinc-600" />
               </div>
-            )}
+              {tooltipCustom && (
+                <TooltipCustom content={tooltipCustom}>
+                  <HelpCircle className="h-3.5 w-3.5 text-zinc-400" />
+                </TooltipCustom>
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-medium text-zinc-600">{label}</p>
+              <p className="mt-2 text-2xl text-left font-semibold text-zinc-800">{value}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-zinc-600">{label}</p>
-            <p className="mt-1 text-2xl font-semibold text-zinc-800">{value}</p>
-          </div>
-        </div>
-        {trend && (
+
           <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm
-            ${variant === 'success' ? 'bg-emerald-50 text-emerald-600' : 
-             variant === 'danger' ? 'bg-red-50 text-red-600' : 'bg-zinc-50 text-zinc-600'}`}
+              ${variant === 'success' ? 'bg-emerald-50 text-emerald-600' :
+              variant === 'danger' ? 'bg-red-50 text-red-600' : 'bg-zinc-50 text-zinc-600'}`}
           >
             {variant === 'success' ? (
               <ArrowUpRight className="w-4 h-4" />
@@ -397,20 +432,21 @@ const WastebankMasterDashboard = () => {
             )}
             {trend_value}
           </div>
-        )}
+
+        </div>
+        {/* {trend && (
+          <p className="mt-2 text-xs text-zinc-500">{trend}</p>
+        )} */}
       </div>
-      {trend && (
-        <p className="mt-2 text-sm text-zinc-500">{trend}</p>
-      )}
-    </div>
-  );
+    );
+  };
 
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       const totalWeight = wasteTypes.reduce((sum, type) => sum + type.weight, 0);
       const percentage = ((data.weight / totalWeight) * 100).toFixed(1);
-      
+
       return (
         <div className="p-3 bg-white border rounded-lg shadow-lg border-zinc-200">
           <p className="flex items-center gap-1.5 font-medium">
@@ -431,17 +467,17 @@ const WastebankMasterDashboard = () => {
 
   const renderLegend = () => {
     const totalWeight = wasteTypes.reduce((sum, type) => sum + type.weight, 0);
-    
+
     return (
-      <div className="mt-4 space-y-2 max-h-[100px] overflow-y-auto pr-2">
+      <div className="mt-4 space-y-2 max-h-[150px] overflow-y-auto pr-2">
         {wasteTypes.map((entry, index) => {
           const percentage = ((entry.weight / totalWeight) * 100).toFixed(1);
           return (
-            <div key={`legend-${index}`} 
+            <div key={`legend-${index}`}
               className="flex items-center justify-between p-1.5 rounded hover:bg-zinc-50"
             >
               <div className="flex items-center gap-2">
-                <div 
+                <div
                   className="flex-shrink-0 w-3 h-3 rounded-full"
                   style={{ backgroundColor: COLORS[index % COLORS.length] }}
                 />
@@ -466,7 +502,7 @@ const WastebankMasterDashboard = () => {
 
   return (
     <div className="flex min-h-screen bg-zinc-50/50">
-      <Sidebar 
+      <Sidebar
         role={userData?.role}
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
@@ -474,9 +510,9 @@ const WastebankMasterDashboard = () => {
       <main className={`flex-1 transition-all duration-300 ease-in-out
         ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
       >
-        <div className="p-8">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 bg-white border shadow-sm rounded-xl border-zinc-200">
+        <div className="p-6">
+          <div className="flex text-left items-center gap-4 mb-8">
+            <div className="p-4 bg-white border shadow-sm rounded-xl border-zinc-200">
               <Building2 className="w-6 h-6 text-emerald-500" />
             </div>
             <div>
@@ -485,18 +521,14 @@ const WastebankMasterDashboard = () => {
             </div>
           </div>
 
-          <div className="p-4 mb-8 border border-blue-200 rounded-lg bg-blue-50">
-            <div className="flex gap-3">
-              <Info className="flex-shrink-0 w-5 h-5 mt-0.5 text-blue-500" />
-              <div>
-                <h3 className="font-medium text-blue-800">Data Realtime</h3>
-                <p className="text-sm text-blue-600">
-                  Dashboard ini menampilkan data secara realtime. Perubahan pada data pengambilan atau kolektor 
-                  akan segera terlihat pada dashboard ini tanpa perlu memuat ulang halaman.
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Information Panel */}
+          <InfoPanel title="Informasi">
+            <p className="text-sm text-blue-600">
+              <li>Dashboard ini menampilkan data secara realtime dan langsung memperbarui perubahan tanpa perlu memuat ulang halaman.</li>
+              <li><span className="font-semibold">Tren Pengumpulan Sampah</span>: Diagram menunjukkan tren harian pengumpulan sampah dan pembayaran customer selama 7 hari terakhir.</li>
+              <li><span className="font-semibold">Distribusi Sampah</span>: Diagram menunjukkan proporsi jenis sampah yang telah dikumpulkan berdasarkan berat.</li>
+            </p>
+          </InfoPanel>
 
           {loading && (
             <div className="flex items-center justify-center h-40">
@@ -514,10 +546,10 @@ const WastebankMasterDashboard = () => {
                 <div>
                   <h3 className="font-medium text-red-800">Terjadi Kesalahan</h3>
                   <p className="text-sm text-red-600">{error}</p>
-                  <Button 
-                    variant="secondary" 
-                    size="sm" 
-                    className="mt-3" 
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="mt-3"
                     onClick={fetchDashboardData}
                   >
                     Coba Lagi
@@ -534,55 +566,59 @@ const WastebankMasterDashboard = () => {
                   icon={DollarSign}
                   label="Saldo Saat Ini"
                   value={`Rp ${stats.balance.toLocaleString('id-ID')}`}
-                  trend="Pembayaran tertunda"
+                  // trend="Pembayaran tertunda"
                   trend_value={`Rp ${stats.pendingPayments.toLocaleString('id-ID')}`}
                   variant={stats.pendingPayments === 0 ? 'success' : 'danger'}
                   infoText="Saldo yang tersedia di akun bank sampah Anda"
+                  tooltipCustom="Saldo yang tersedia di akun bank sampah Anda."
                 />
 
                 <StatCard
                   icon={Scale}
                   label="Total Berat Terkumpul"
                   value={formatWeight(stats.totalWaste)}
-                  trend="vs bulan lalu"
+                  // trend="vs bulan lalu"
                   trend_value={`${((stats.thisMonthWaste - stats.lastMonthWaste) / Math.max(stats.lastMonthWaste, 1) * 100).toFixed(1)}%`}
                   variant={stats.thisMonthWaste >= stats.lastMonthWaste ? 'success' : 'danger'}
                   infoText="Total berat sampah yang telah dikumpulkan"
+                  tooltipCustom="Total berat sampah yang telah dikumpulkan dengan perbandingan jumlah bulan lalu."
                 />
 
                 <StatCard
                   icon={Package}
                   label="Status Pengambilan"
                   value={stats.completedPickups}
-                  trend="Pengambilan saat ini"
+                  // trend="Pengambilan saat ini"
                   trend_value={`${stats.pendingPickups} tertunda`}
                   variant={stats.pendingPickups === 0 ? 'success' : 'danger'}
                   infoText="Jumlah pengambilan sampah yang telah selesai. Pengambilan tertunda adalah permintaan yang belum ditugaskan kepada kolektor."
+                  tooltipCustom="Jumlah pengambilan sampah yang telah selesai."
                 />
 
                 <StatCard
                   icon={Users}
                   label="Kolektor"
                   value={stats.totalCollectors}
-                  trend="Kolektor aktif"
+                  // trend="Kolektor aktif"
                   trend_value={`${stats.activeCollectors} aktif`}
                   variant={stats.activeCollectors === stats.totalCollectors ? 'success' : 'danger'}
                   infoText="Jumlah total kolektor yang terdaftar di bank sampah Anda. Kolektor aktif adalah mereka yang siap menerima tugas pengambilan."
+                  tooltipCustom="Jumlah kolektor yang terdaftar di bank sampah Anda."
                 />
               </div>
 
               <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-3">
                 <div className="p-6 bg-white border lg:col-span-2 rounded-xl border-zinc-200">
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
+                  <div className="text-left flex items-centern mb-6">
+                    <div className="p-3 rounded-lg bg-emerald-50">
+                      <Calendar className="w-5 h-5 text-emerald-500" />
+                    </div>
+                    <div className="items-center ml-4">
                       <h2 className="text-lg font-semibold text-zinc-800">Tren Pengumpulan</h2>
                       <p className="text-sm text-zinc-500">Statistik pengumpulan sampah harian</p>
                     </div>
-                    <div className="p-2 rounded-lg bg-emerald-50">
-                      <Calendar className="w-5 h-5 text-emerald-500" />
-                    </div>
                   </div>
-                  
+
                   <div className="mb-3 text-sm text-center text-zinc-500">
                     <div className="flex flex-col items-center gap-2">
                       <p className="font-medium">Statistik 7 Hari Terakhir</p>
@@ -598,41 +634,29 @@ const WastebankMasterDashboard = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="h-80">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={pickupTrends}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-                        <XAxis 
-                          dataKey="date" 
+                        <XAxis
+                          dataKey="date"
                           stroke="#71717A"
                           fontSize={12}
                         />
-                        <YAxis 
+                        <YAxis
                           yAxisId="left"
                           stroke="#6366F1"
                           fontSize={12}
-                          label={{ 
-                            value: 'Berat Sampah (kg)', 
-                            angle: -90, 
-                            position: 'insideLeft',
-                            style: { fill: '#6366F1' }
-                          }}
                         />
-                        <YAxis 
+                        <YAxis
                           yAxisId="right"
                           orientation="right"
                           stroke="#10B981"
                           fontSize={12}
-                          label={{ 
-                            value: 'Pembayaran (Rupiah)', 
-                            angle: 90, 
-                            position: 'insideRight',
-                            style: { fill: '#10B981' }
-                          }}
                         />
-                        <Tooltip 
-                          contentStyle={{ 
+                        <Tooltip
+                          contentStyle={{
                             backgroundColor: 'white',
                             border: '1px solid #e5e7eb',
                             borderRadius: '0.5rem',
@@ -648,28 +672,28 @@ const WastebankMasterDashboard = () => {
                                 return [value, name];
                             }
                           }}
-                          labelStyle={{ 
-                            color: '#374151', 
+                          labelStyle={{
+                            color: '#374151',
                             fontWeight: 'bold',
                             marginBottom: '0.5rem'
                           }}
                         />
-                        <Line 
+                        <Line
                           yAxisId="left"
-                          type="monotone" 
-                          dataKey="weight" 
+                          type="monotone"
+                          dataKey="weight"
                           name="Berat"
-                          stroke="#6366F1" 
+                          stroke="#6366F1"
                           strokeWidth={2}
                           dot={{ stroke: '#6366F1', fill: '#fff', strokeWidth: 2, r: 4 }}
                           activeDot={{ stroke: '#6366F1', fill: '#6366F1', strokeWidth: 0, r: 6 }}
                         />
-                        <Line 
+                        <Line
                           yAxisId="right"
-                          type="monotone" 
-                          dataKey="bankPayment" 
+                          type="monotone"
+                          dataKey="bankPayment"
                           name="Pembayaran Bank"
-                          stroke="#10B981" 
+                          stroke="#10B981"
                           strokeWidth={2}
                           dot={{ stroke: '#10B981', fill: '#fff', strokeWidth: 2, r: 4 }}
                           activeDot={{ stroke: '#10B981', fill: '#10B981', strokeWidth: 0, r: 6 }}
@@ -677,21 +701,22 @@ const WastebankMasterDashboard = () => {
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
+                  <div>
+                    <p className="text-xs text-zinc-500">
+                      Hari
+                    </p>
+                  </div>
                 </div>
 
                 <div className="p-6 bg-white border rounded-xl border-zinc-200">
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
+                  <div className="flex items-center mb-6">
+                    <div className="p-3 rounded-lg bg-emerald-50">
+                      <Recycle className="w-5 h-5 text-emerald-500" />
+                    </div>
+                    <div className="text-left items-center ml-4">
                       <h2 className="text-lg font-semibold text-zinc-800">Distribusi Sampah</h2>
                       <p className="text-sm text-zinc-500">Berdasarkan berat yang terkumpul</p>
                     </div>
-                    <div className="p-2 rounded-lg bg-emerald-50">
-                      <Recycle className="w-5 h-5 text-emerald-500" />
-                    </div>
-                  </div>
-
-                  <div className="p-3 mb-3 text-sm text-blue-700 border border-blue-100 rounded-lg bg-blue-50">
-                    <p><strong>Cara Membaca Grafik:</strong> Diagram menunjukkan proporsi jenis sampah yang telah dikumpulkan berdasarkan berat.</p>
                   </div>
 
                   <div className="h-80">
@@ -708,19 +733,20 @@ const WastebankMasterDashboard = () => {
                               data={wasteTypes}
                               innerRadius={60}
                               outerRadius={80}
-                              paddingAngle={5}
+                              paddingAngle={0}
                               dataKey="weight"
                               nameKey="name"
-                              label={(entry) => {
-                                const totalWeight = wasteTypes.reduce((sum, type) => sum + type.weight, 0);
-                                const percentage = (entry.weight / totalWeight) * 100;
-                                return percentage >= 15 ? `${entry.icon} ${entry.name}` : '';
-                              }}
+                              // label={(entry) => {
+                              //   const totalWeight = wasteTypes.reduce((sum, type) => sum + type.weight, 0);
+                              //   const percentage = (entry.weight / totalWeight) * 100;
+                              //   return percentage >= 15 ? `${entry.icon} ${entry.name}` : '';
+                              // }}
                               labelLine={false}
+                              stroke="none"
                             >
                               {wasteTypes.map((entry, index) => (
-                                <Cell 
-                                  key={`cell-${index}`} 
+                                <Cell
+                                  key={`cell-${index}`}
                                   fill={COLORS[index % COLORS.length]}
                                 />
                               ))}
@@ -738,11 +764,7 @@ const WastebankMasterDashboard = () => {
                           <span>BERAT & PERSENTASE</span>
                         </div>
                       )}
-                      {renderLegend({ payload: wasteTypes.map((item, index) => ({
-                        value: item.name,
-                        color: COLORS[index % COLORS.length],
-                        payload: item
-                      }))})}
+                      {renderLegend()}
                     </div>
                   </div>
                 </div>
@@ -751,11 +773,16 @@ const WastebankMasterDashboard = () => {
               <div className="bg-white border rounded-xl border-zinc-200">
                 <div className="p-6 border-b border-zinc-200">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold text-zinc-800">Pengambilan Terbaru</h2>
-                      <p className="text-sm text-zinc-500">Daftar pengambilan sampah yang telah selesai</p>
+                    <div className="flex items-center">
+                      <div className="p-3 rounded-lg bg-emerald-50 mr-4">
+                        <Clock className="w-5 h-5 text-emerald-500" />
+                      </div>
+                      <div className="text-left">
+                        <h2 className="text-lg font-semibold text-zinc-800">Pengambilan Terbaru</h2>
+                        <p className="text-sm text-zinc-500">Daftar pengambilan sampah yang telah selesai</p>
+                      </div>
                     </div>
-                    <Button variant="secondary" size="sm">
+                    <Button variant="secondary" size="sm" className="hidden">
                       Lihat Semua
                     </Button>
                   </div>
@@ -773,33 +800,35 @@ const WastebankMasterDashboard = () => {
                       <div key={pickup.id} className="p-6 hover:bg-zinc-50/50">
                         <div className="flex items-start justify-between">
                           <div className="flex items-start gap-4">
-                            <div className="p-2 rounded-lg bg-emerald-50">
-                              <Scale className="w-5 h-5 text-emerald-500" />
+                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-zinc-100">
+                              <span className="font-medium text-zinc-800">
+                                {pickup.wasteBankName.charAt(0) || 'U'}
+                              </span>
                             </div>
-                            <div>
+                            <div className="flex-1 max-w-[1200px]">
                               <div className="flex items-center gap-2">
                                 <h3 className="font-medium text-zinc-800">
                                   {pickup.wasteBankName || 'Unknown User'}
                                 </h3>
                                 <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-                                  Selesai
+                                  {pickup.status || 'Tidak ada status'}
                                 </span>
                               </div>
-                              
+
                               <div className="flex items-center gap-2 mt-1 text-sm text-zinc-600">
                                 <Clock className="w-4 h-4" />
-                                {pickup.completedAt && pickup.completedAt.seconds 
+                                {pickup.completedAt && pickup.completedAt.seconds
                                   ? new Date(pickup.completedAt.seconds * 1000).toLocaleString('id-ID', {
-                                      day: 'numeric',
-                                      month: 'long',
-                                      year: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })
+                                    day: 'numeric',
+                                    month: 'long',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })
                                   : 'Tanggal tidak tersedia'}
                               </div>
-                              
-                              <div className="mt-2">
+
+                              <div className="mt-3">
                                 <div className="flex flex-wrap gap-2">
                                   {Object.entries(pickup.wastes || {}).map(([type, data]) => {
                                     const translations = {
@@ -812,20 +841,20 @@ const WastebankMasterDashboard = () => {
                                       'fabric': 'Kain',
                                       'others': 'Lainnya'
                                     };
-                                    
-                                    const typeDisplay = translations[type.toLowerCase()] || 
-                                      type.split('-').map(word => 
+
+                                    const typeDisplay = translations[type.toLowerCase()] ||
+                                      type.split('-').map(word =>
                                         word.charAt(0).toUpperCase() + word.slice(1)
                                       ).join(' ');
-                                    
+
                                     return (
-                                      <span 
+                                      <span
                                         key={type}
                                         className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg bg-zinc-100 text-zinc-700"
                                       >
-                                        {typeDisplay}: {formatWeight(data.weight)}
+                                        {typeDisplay}: {formatWeight(data.weight || 0)}
                                         <span className="text-zinc-400">•</span>
-                                        Rp {data.value?.toLocaleString('id-ID') || '0'}
+                                        <span className="min-w-16 text-right">Rp {data.value?.toLocaleString('id-ID') || '0'}</span>
                                       </span>
                                     );
                                   })}
@@ -833,13 +862,13 @@ const WastebankMasterDashboard = () => {
                               </div>
                             </div>
                           </div>
-                          
+
                           <div className="text-right">
                             <p className="text-sm font-medium text-emerald-600">
                               Rp {(pickup.totalValue || 0).toLocaleString('id-ID')}
                             </p>
                             <p className="mt-1 text-xs text-zinc-500">
-                              Total Nilai
+                              Total Harga
                             </p>
                           </div>
                         </div>
