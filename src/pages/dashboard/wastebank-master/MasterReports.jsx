@@ -794,7 +794,7 @@ const MasterReports = () => {
                 <div className="p-4 border border-purple-100 rounded-lg bg-purple-50">
                   <h3 className="text-sm font-medium text-purple-800">Rumus Perhitungan Total Dampak:</h3>
                   <p className="mt-2 font-mono text-purple-700">
-                    Total Dampak = Emisi Pengolahan - Penghematan Daur Ulang
+                    Total Dampak = Emisi Pengolahan + Emisi Transportasi
                   </p>
                   <p className="mt-2 text-sm text-purple-600">
                     Nilai negatif berarti aktivitas daur ulang sampah secara keseluruhan mengurangi emisi karbon.
