@@ -72,11 +72,6 @@ const InfoPanel = ({ title, children, defaultExpanded = false }) => {
             <div className="mt-2 text-sm text-blue-700">{children}</div>
           )}
         </div>
-        <div className="flex items-center hidden gap-2">
-        </div>
-        {subValue && (
-          <p className="mt-1 text-sm text-zinc-500">{subValue}</p>
-        )}
       </div>
     </div>
   );
@@ -141,37 +136,31 @@ const Reports = () => {
   // Fetch waste bank location from users collection
   const fetchWasteBankLocation = async (wasteBankId) => {
     try {
-      // Get coordinates from users collection with role wastebank_admin
+      // Modify query to only fetch current user's data
       const usersQuery = query(
         collection(db, "users"),
-        where("role", "==", "wastebank_admin")
+        where("role", "==", "wastebank_admin"),
+        where("id", "==", currentUser.uid)  // Add this condition
       );
       
       const usersSnapshot = await getDocs(usersQuery);
       if (!usersSnapshot.empty) {
-        for (const userDoc of usersSnapshot.docs) {
-          const userData = userDoc.data();
-          
-          // If this user is related to our waste bank, use their coordinates
-          if (userData.profile?.institution === wasteBankId || userData.id === wasteBankId || 
-              currentUser?.uid === userDoc.id) {
-            
-            // Check for coordinates in location field
-            if (userData.location?.coordinates) {
-              return {
-                lat: userData.location.coordinates.latitude || userData.location.coordinates.lat,
-                lng: userData.location.coordinates.longitude || userData.location.coordinates.lng
-              };
-            }
-            
-            // Check for coordinates in profile.location field
-            if (userData.profile?.location?.coordinates) {
-              return {
-                lat: userData.profile.location.coordinates.latitude || userData.profile.location.coordinates.lat,
-                lng: userData.profile.location.coordinates.longitude || userData.profile.location.coordinates.lng
-              };
-            }
-          }
+        const userData = usersSnapshot.docs[0].data();
+        
+        // Check for coordinates in location field
+        if (userData.location?.coordinates) {
+          return {
+            lat: userData.location.coordinates.latitude || userData.location.coordinates.lat,
+            lng: userData.location.coordinates.longitude || userData.location.coordinates.lng
+          };
+        }
+        
+        // Check for coordinates in profile.location field
+        if (userData.profile?.location?.coordinates) {
+          return {
+            lat: userData.profile.location.coordinates.latitude || userData.profile.location.coordinates.lat,
+            lng: userData.profile.location.coordinates.longitude || userData.profile.location.coordinates.lng
+          };
         }
       }
       

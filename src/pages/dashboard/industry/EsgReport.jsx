@@ -34,8 +34,13 @@ import {
   UserCheck, 
   FileCheck, 
   Shield, 
-  AlertTriangle
+  AlertTriangle,
+  TreePine, 
+  Package
 } from 'lucide-react';
+import { emissionFactors } from '../../../lib/carbonConstants';
+import { calculateDistance } from '../../../lib/utils/distanceCalculator';
+import { calculateEmissions, emissionFactorTransport, truckCapacity } from '../../../lib/utils/emissionCalculator';
 
 // Enhanced UI components for better UX
 const InfoPanel = ({ title, children }) => (
@@ -156,6 +161,13 @@ const STATUS_COLORS = {
   processing: 'bg-blue-100 text-blue-800'
 };
 
+const formatCarbonValue = (value) => {
+  if (Math.abs(value) < 0.001) {
+    return `${(value * 1000).toFixed(2)} g CO₂e`;
+  }
+  return `${value.toFixed(4)} kg CO₂e`;
+};
+
 const EsgReport = () => {
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState([]);
@@ -201,6 +213,10 @@ const EsgReport = () => {
   });
 
   const [activeTab, setActiveTab] = useState('environmental');
+  const [totalEmissions, setTotalEmissions] = useState(0);
+  const [totalWasteWeight, setTotalWasteWeight] = useState(0);
+  const [wasteTypeEmissions, setWasteTypeEmissions] = useState([]);
+  const [monthlyEmissionsData, setMonthlyEmissionsData] = useState([]);
 
   const { userData, currentUser } = useAuth();
   const db = getFirestore();
@@ -217,9 +233,12 @@ const EsgReport = () => {
       if (!currentUser) return;
       
       try {
+        setLoading(true);
+        
         const requestsQuery = query(
           collection(db, 'industryRequests'), 
-          where('industryId', '==', currentUser.uid)
+          where('industryId', '==', currentUser.uid),
+          where('status', '==', 'completed')
         );
         const requestsSnapshot = await getDocs(requestsQuery);
         const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -234,7 +253,26 @@ const EsgReport = () => {
         setCollections(collectionsData);
         
         processData(requestsData, collectionsData);
-        await fetchSocialImpactData();
+        
+        try {
+          const socialImpactData = {
+            wasteBankMasters: 0,
+            wasteBankCollectors: 0,
+            collectors: 0,
+            wasteBankAdmins: 0,
+            totalParticipants: 0,
+            jobsCreated: 0,
+            communityEngagement: []
+          };
+          
+          socialImpactData.communityEngagement = [
+            { name: 'Collection Events', count: collectionsData.length }
+          ];
+          
+          setSocialImpact(socialImpactData);
+        } catch (error) {
+          console.error('Error fetching social impact data:', error);
+        }
         
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -245,94 +283,6 @@ const EsgReport = () => {
     
     fetchData();
   }, [currentUser, db]);
-  
-  useEffect(() => {
-    if (requests.length > 0 || collections.length > 0) {
-      processData(requests, collections);
-    }
-  }, [timeframe, requests, collections]);
-  
-  const fetchSocialImpactData = async () => {
-    try {
-      const roles = ['wastebank_master', 'wastebank_master_collector', 'collector', 'wastebank_admin'];
-      
-      const socialImpactData = {
-        wasteBankMasters: 0,
-        wasteBankCollectors: 0,
-        collectors: 0,
-        wasteBankAdmins: 0,
-        totalParticipants: 0,
-        jobsCreated: 0,
-        communityEngagement: []
-      };
-      
-      for (const role of roles) {
-        const usersQuery = query(
-          collection(db, 'users'),
-          where('role', '==', role)
-        );
-        
-        const usersSnapshot = await getDocs(usersQuery);
-        const count = usersSnapshot.docs.length;
-        
-        switch(role) {
-          case 'wastebank_master':
-            socialImpactData.wasteBankMasters = count;
-            break;
-          case 'wastebank_master_collector':
-            socialImpactData.wasteBankCollectors = count;
-            break;
-          case 'collector':
-            socialImpactData.collectors = count;
-            break;
-          case 'wastebank_admin':
-            socialImpactData.wasteBankAdmins = count;
-            break;
-        }
-        
-        socialImpactData.totalParticipants += count;
-      }
-      
-      socialImpactData.jobsCreated = socialImpactData.wasteBankCollectors + socialImpactData.collectors;
-      
-      const eventsQuery = query(
-        collection(db, 'collectionEvents'),
-        limit(50)
-      );
-      
-      try {
-        const eventsSnapshot = await getDocs(eventsQuery);
-        const eventsData = eventsSnapshot.docs.map(doc => doc.data());
-        
-        const eventTypes = eventsData.reduce((acc, event) => {
-          const type = event.type || 'Collection Event';
-          acc[type] = (acc[type] || 0) + 1;
-          return acc;
-        }, {});
-        
-        socialImpactData.communityEngagement = Object.entries(eventTypes).map(([name, count]) => ({
-          name,
-          count
-        }));
-        
-        if (socialImpactData.communityEngagement.length === 0) {
-          socialImpactData.communityEngagement = [
-            { name: 'Collection Events', count: collections.length }
-          ];
-        }
-      } catch (error) {
-        console.error('Error fetching community events:', error);
-        socialImpactData.communityEngagement = [
-          { name: 'Collection Events', count: collections.length }
-        ];
-      }
-      
-      setSocialImpact(socialImpactData);
-      
-    } catch (error) {
-      console.error('Error fetching social impact data:', error);
-    }
-  };
   
   const processData = (requestsData, collectionsData) => {
     const now = new Date();
@@ -347,176 +297,125 @@ const EsgReport = () => {
     }
     
     const filteredRequests = requestsData.filter(req => {
-      const reqDate = req.date?.toDate ? req.date.toDate() : null;
+      const reqDate = req.date?.toDate ? req.date.toDate() : 
+                     req.date ? new Date(req.date) : null;
       return reqDate && reqDate >= startDate;
     });
     
-    const filteredCollections = collectionsData.filter(col => {
-      const colDate = col.createdAt?.toDate ? col.createdAt.toDate() : null;
-      return colDate && colDate >= startDate;
+    let totalEmissionsSum = 0;
+    let totalWasteSum = 0;
+    const wasteTypeStats = {};
+    const monthlyData = {};
+    
+    filteredRequests.forEach(request => {
+      let wastes = request.wastes || {};
+      let emissions = {
+        wasteManagementEmission: 0,
+        transportEmission: 0,
+        recyclingSavings: 0,
+        totalEmission: 0,
+        totalWeight: 0
+      };
+      
+      if (request.wastes && request.wasteWeights) {
+        const distance = 5;
+        
+        emissions = calculateEmissions(request, distance);
+        totalWasteSum += emissions.totalWeight;
+        totalEmissionsSum += emissions.totalEmission;
+        
+        Object.entries(request.wasteWeights).forEach(([wasteType, weight]) => {
+          if (!wasteTypeStats[wasteType]) {
+            wasteTypeStats[wasteType] = {
+              name: wasteType.replace(/-/g, ' '),
+              weight: 0,
+              emissions: 0,
+              savings: 0
+            };
+          }
+          
+          const emissionFactor = emissionFactors[wasteType] || 0.001;
+          wasteTypeStats[wasteType].weight += parseFloat(weight) || 0;
+          
+          if (emissionFactor >= 0) {
+            wasteTypeStats[wasteType].emissions += emissionFactor * parseFloat(weight);
+          } else {
+            wasteTypeStats[wasteType].savings += Math.abs(emissionFactor * parseFloat(weight));
+          }
+        });
+        
+        if (request.completedAt) {
+          const date = request.completedAt.toDate ? request.completedAt.toDate() : 
+                      new Date(request.completedAt);
+          const monthYear = `${date.getMonth() + 1}-${date.getFullYear()}`;
+          
+          if (!monthlyData[monthYear]) {
+            monthlyData[monthYear] = {
+              month: new Intl.DateTimeFormat('id-ID', { month: 'short' }).format(date),
+              year: date.getFullYear(),
+              emissions: 0,
+              savings: 0,
+              totalWeight: 0,
+              count: 0
+            };
+          }
+          
+          monthlyData[monthYear].emissions += emissions.wasteManagementEmission;
+          monthlyData[monthYear].savings += emissions.recyclingSavings;
+          monthlyData[monthYear].totalWeight += emissions.totalWeight;
+          monthlyData[monthYear].count += 1;
+        }
+      }
     });
+    
+    setTotalEmissions(totalEmissionsSum);
+    setTotalWasteWeight(totalWasteSum);
+    
+    const wasteTypeArray = Object.values(wasteTypeStats)
+      .map(type => ({
+        ...type,
+        netEmission: type.emissions - type.savings
+      }))
+      .sort((a, b) => b.weight - a.weight);
+    
+    const wasteTypeEmissionsData = wasteTypeArray.map(type => ({
+      name: type.name,
+      emission: type.emissions,
+      saving: type.savings,
+      netEmission: type.netEmission
+    }));
+    
+    setWasteTypeEmissions(wasteTypeEmissionsData);
+    
+    const monthlyEmissionsArray = Object.values(monthlyData)
+      .map(month => ({
+        ...month,
+        netEmissions: month.emissions - month.savings,
+        label: `${month.month} ${month.year}`
+      }))
+      .sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month.localeCompare(b.month);
+      });
+    
+    setMonthlyEmissionsData(monthlyEmissionsArray);
     
     const totalWeight = filteredRequests.reduce((sum, req) => {
       if (!req.wasteWeights) return sum;
       return sum + Object.values(req.wasteWeights).reduce((w, weight) => w + (parseFloat(weight) || 0), 0);
     }, 0);
     
-    const recyclableWeight = filteredCollections.reduce((sum, col) => sum + (parseFloat(col.totalInputWeight) || 0), 0);
-    
-    const recycledWeight = filteredCollections.reduce((sum, col) => {
-      if (!col.recycledWeights) return sum;
-      return sum + Object.values(col.recycledWeights).reduce((w, item) => {
-        return w + (parseFloat(item.weight) || 0);
-      }, 0);
-    }, 0);
-    
-    const pendingRequests = filteredRequests.filter(req => req.status !== 'completed').length;
-    const completedRequests = filteredRequests.filter(req => req.status === 'completed').length;
-    
-    const recyclingEfficiencyRate = recyclableWeight > 0 
-      ? Math.round((recycledWeight / recyclableWeight) * 100) 
-      : 0;
-    
-    setSummaryStats({
-      totalWeight: parseFloat(totalWeight) || 0,
-      recyclableWeight: parseFloat(recyclableWeight) || 0,
-      recycledWeight: parseFloat(recycledWeight) || 0,
-      pendingRequests,
-      completedRequests,
-      recyclingEfficiencyRate
-    });
-    
-    const wasteTypes = {};
-    filteredRequests.forEach(req => {
-      if (req.wasteWeights) {
-        Object.entries(req.wasteWeights).forEach(([type, weight]) => {
-          wasteTypes[type] = (wasteTypes[type] || 0) + (parseFloat(weight) || 0);
-        });
-      }
-    });
-    
-    const wasteDistributionData = Object.entries(wasteTypes).map(([name, value]) => ({
-      name,
-      value
-    }));
-    
-    setWasteDistribution(wasteDistributionData);
-    
-    const recyclingData = [];
-    const wasteRecyclingMap = {};
-    
-    filteredCollections.forEach(col => {
-      if (col.originalWastes && col.recycledWeights) {
-        Object.keys(col.originalWastes).forEach(wasteType => {
-          const original = parseFloat(col.originalWastes[wasteType]?.weight) || 0;
-          const recycled = parseFloat(col.recycledWeights[wasteType]?.weight) || 0;
-          
-          if (!wasteRecyclingMap[wasteType]) {
-            wasteRecyclingMap[wasteType] = { original: 0, recycled: 0 };
-          }
-          
-          wasteRecyclingMap[wasteType].original += original;
-          wasteRecyclingMap[wasteType].recycled += recycled;
-        });
-      }
-    });
-    
-    Object.entries(wasteRecyclingMap).forEach(([wasteType, data]) => {
-      recyclingData.push({
-        name: wasteType,
-        original: data.original,
-        recycled: data.recycled,
-        efficiency: data.original > 0 ? Math.round((data.recycled / data.original) * 100) : 0
-      });
-    });
-    
-    setRecyclingEfficiency(recyclingData);
-    
-    const weightMonthly = {};
-    
-    filteredRequests.forEach(req => {
-      if (!req.date?.toDate) return;
-      
-      const date = req.date.toDate();
-      const month = `${date.getFullYear()}-${date.getMonth() + 1}`;
-      
-      if (req.wasteWeights) {
-        weightMonthly[month] = (weightMonthly[month] || 0) + 
-          Object.values(req.wasteWeights).reduce((sum, weight) => sum + (parseFloat(weight) || 0), 0);
-      }
-    });
-    
-    const weightData = Object.entries(weightMonthly).map(([month, weight]) => {
-      const [year, monthNum] = month.split('-');
-      return {
-        month: new Date(parseInt(year), parseInt(monthNum) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-        weight
-      };
-    }).sort((a, b) => new Date(a.month) - new Date(b.month));
-    
-    setWeightByMonth(weightData);
-
-    const safeRecycledWeight = parseFloat(recycledWeight) || 0;
-    
     const environmentalMetrics = {
-      co2Reduction: safeRecycledWeight * ENV_CONVERSION.CO2_PER_KG,
-      waterSaved: safeRecycledWeight * ENV_CONVERSION.WATER_PER_KG,
-      energyConserved: safeRecycledWeight * ENV_CONVERSION.ENERGY_PER_KG,
-      landfillReduced: safeRecycledWeight,
-      treesPreserved: Math.round(safeRecycledWeight * ENV_CONVERSION.TREES_PER_KG)
+      co2Reduction: Math.abs(totalEmissionsSum),
+      waterSaved: totalWeight * ENV_CONVERSION.WATER_PER_KG,
+      energyConserved: totalWeight * ENV_CONVERSION.ENERGY_PER_KG,
+      landfillReduced: totalWeight,
+      treesPreserved: Math.round(totalWeight * ENV_CONVERSION.TREES_PER_KG)
     };
     
     setEnvironmentalImpact(environmentalMetrics);
-    
-    const pendingRequestsCount = summaryStats.pendingRequests || 0;
-    const completedRequestsCount = summaryStats.completedRequests || 0;
-    const totalRequests = pendingRequestsCount + completedRequestsCount;
-    
-    let complianceStatus = 'Non-compliant';
-    let sustainabilityScore = 50;
-    
-    if (safeRecycledWeight > 0) {
-      sustainabilityScore += Math.min(safeRecycledWeight / 2, 30);
-      const efficiencyBonus = Math.min(summaryStats.recyclingEfficiencyRate / 2, 20);
-      sustainabilityScore += efficiencyBonus;
-      
-      if (sustainabilityScore >= 80) {
-        complianceStatus = 'Compliant';
-      } else if (sustainabilityScore >= 60) {
-        complianceStatus = 'Partial';
-      }
-    }
-    
-    let lastAuditDate = null;
-    if (collectionsData.length > 0) {
-      const sortedCollections = [...collectionsData]
-        .filter(col => col.recycledAt)
-        .sort((a, b) => {
-          const dateA = a.recycledAt?.toDate?.() || new Date(a.recycledAt);
-          const dateB = b.recycledAt?.toDate?.() || new Date(b.recycledAt);
-          return dateB - dateA;
-        });
-      
-      if (sortedCollections.length > 0) {
-        lastAuditDate = sortedCollections[0].recycledAt?.toDate?.() || 
-                         new Date(sortedCollections[0].recycledAt);
-      }
-    }
-    
-    setGovernanceCompliance({
-      regulatoryCompliance: complianceStatus,
-      reportingFrequency: totalRequests >= 12 ? 'Monthly' : totalRequests >= 4 ? 'Quarterly' : 'Annually',
-      sustainabilityScore: Math.round(sustainabilityScore),
-      pendingIssues: pendingRequestsCount,
-      lastAuditDate
-    });
   };
-  
-  const formatDate = (timestamp) => {
-    if (!timestamp || !timestamp.toDate) return '-';
-    return timestamp.toDate().toLocaleDateString();
-  };
-  
+
   if (loading) {
     return (
       <div className="flex min-h-screen bg-zinc-50/50">
@@ -545,7 +444,6 @@ const EsgReport = () => {
       <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
         <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
           
-          {/* Improved header with more intuitive description */}
           <div className="flex flex-col items-start justify-between gap-4 mb-6 md:flex-row md:items-center">
             <div>
               <h1 className="text-2xl font-bold text-gray-800">Laporan ESG</h1>
@@ -554,7 +452,6 @@ const EsgReport = () => {
               </p>
             </div>
             
-            {/* Timeframe selector for filtering data */}
             <div className="p-1 bg-white border border-gray-200 rounded-lg shadow-sm">
               <div className="flex">
                 <button 
@@ -591,10 +488,8 @@ const EsgReport = () => {
             </div>
           </div>
           
-          {/* Improved tab selector */}
           <TabSelector activeTab={activeTab} setActiveTab={setActiveTab} />
           
-          {/* Summary metrics visible in all tabs */}
           <InfoPanel title="Ringkasan Kinerja ESG">
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               <StatusCard 
@@ -625,474 +520,194 @@ const EsgReport = () => {
             <>
               <div className="grid grid-cols-1 gap-5 mb-6 md:grid-cols-3">
                 <StatusCard
-                  label="Reduksi Emisi CO2"
-                  count={`${(typeof environmentalImpact.co2Reduction === 'number' ? environmentalImpact.co2Reduction.toFixed(1) : '0')} kg`}
-                  icon={Leaf}
-                  description="Mengurangi gas rumah kaca di atmosfer"
+                  label="Total Dampak Karbon"
+                  count={formatCarbonValue(totalEmissions)}
+                  icon={TreePine}
+                  description="Dari semua aktivitas pengolahan sampah"
                   color="primary"
                 />
                 
                 <StatusCard
-                  label="Air Bersih Terselamatkan"
-                  count={`${(typeof environmentalImpact.waterSaved === 'number' ? environmentalImpact.waterSaved.toLocaleString('id-ID') : '0')} L`}
-                  icon={Droplets}
-                  description="Air yang tidak terpakai dalam produksi baru"
+                  label="Total Berat Sampah"
+                  count={`${totalWasteWeight.toFixed(2)} kg`}
+                  icon={Scale}
+                  description={`${wasteTypeEmissions.length} jenis sampah terproses`}
                   color="secondary"
                 />
                 
                 <StatusCard
-                  label="Energi Terhemat"
-                  count={`${(typeof environmentalImpact.energyConserved === 'number' ? environmentalImpact.energyConserved.toFixed(1) : '0')} kWh`}
-                  icon={Zap}
-                  description={`Setara ${Math.round((typeof environmentalImpact.energyConserved === 'number' ? environmentalImpact.energyConserved : 0) / 3.5)} jam penggunaan AC`}
+                  label="Penghematan Daur Ulang"
+                  count={formatCarbonValue(Math.abs(environmentalImpact.co2Reduction))}
+                  icon={Recycle}
+                  description="Karbon yang diselamatkan melalui daur ulang"
                   color="accent"
                 />
               </div>
               
-              {/* Charts section with improved descriptions */}
               <ChartContainer 
-                title="Distribusi Jenis Sampah" 
-                icon={PieChartIcon}
-                hint="Menampilkan komposisi sampah berdasarkan jenisnya"
+                title="Emisi Karbon Bulanan" 
+                icon={BarChart2}
+                hint="Dampak karbon per bulan dari kegiatan daur ulang"
               >
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={wasteDistribution}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {wasteDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => [`${value.toFixed(2)} kg`, 'Berat']} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-              
-              <div className="grid gap-6 mt-6 lg:grid-cols-2">
-                <ChartContainer 
-                  title="Efisiensi Daur Ulang per Jenis" 
-                  icon={BarChart2}
-                  hint="Perbandingan sampah asli dengan hasil daur ulang"
-                >
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={recyclingEfficiency}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip formatter={(value) => [`${value.toFixed(2)} kg`, 'Berat']} />
-                      <Legend />
-                      <Bar name="Sampah Original" dataKey="original" fill="#8884d8" />
-                      <Bar name="Sampah Didaur Ulang" dataKey="recycled" fill="#82ca9d" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-                
-                <ChartContainer 
-                  title="Tren Berat Sampah" 
-                  icon={BarChart2}
-                  hint="Perkembangan jumlah sampah yang dikelola setiap bulan"
-                >
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart
-                      data={weightByMonth}
-                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis />
-                      <Tooltip formatter={(value) => [`${value.toFixed(2)} kg`, 'Berat']} />
-                      <Line type="monotone" dataKey="weight" stroke="#82ca9d" activeDot={{ r: 8 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </div>
-              
-              <div className="p-6 mt-6 border bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-100 rounded-xl">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-lg bg-emerald-100">
-                    <Leaf className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-medium text-emerald-800">Dampak Lingkungan Positif</h3>
-                    <p className="mt-2 text-emerald-700">
-                      Berdasarkan {(typeof summaryStats.recycledWeight === 'number' ? summaryStats.recycledWeight.toFixed(1) : '0')} kg sampah yang berhasil didaur ulang, 
-                      industri Anda telah berkontribusi secara signifikan terhadap pelestarian lingkungan.
-                    </p>
-                    <div className="grid grid-cols-1 gap-4 mt-4 md:grid-cols-3">
-                      <div className="p-3 bg-white rounded-lg shadow-sm">
-                        <h4 className="text-xs font-medium uppercase text-emerald-600">Pengurangan Landfill</h4>
-                        <p className="mt-1 text-2xl font-bold text-emerald-700">
-                          {(typeof environmentalImpact.landfillReduced === 'number' ? environmentalImpact.landfillReduced.toFixed(1) : '0')} kg
-                        </p>
-                        <p className="mt-1 text-xs text-emerald-600">Sampah tidak berakhir di TPA</p>
-                      </div>
-                      <div className="p-3 bg-white rounded-lg shadow-sm">
-                        <h4 className="text-xs font-medium uppercase text-emerald-600">Pohon Terselamatkan</h4>
-                        <p className="mt-1 text-2xl font-bold text-emerald-700">{environmentalImpact.treesPreserved || 0}</p>
-                        <p className="mt-1 text-xs text-emerald-600">Estimasi berdasarkan kertas terdaur ulang</p>
-                      </div>
-                      <div className="p-3 bg-white rounded-lg shadow-sm">
-                        <h4 className="text-xs font-medium uppercase text-emerald-600">Pengurangan Gas Rumah Kaca</h4>
-                        <p className="mt-1 text-2xl font-bold text-emerald-700">
-                          {(typeof environmentalImpact.co2Reduction === 'number' ? environmentalImpact.co2Reduction.toFixed(1) : '0')} kg
-                        </p>
-                        <p className="mt-1 text-xs text-emerald-600">
-                          Setara dengan {(typeof environmentalImpact.co2Reduction === 'number' ? (environmentalImpact.co2Reduction / 0.12).toFixed(0) : '0')} km berkendara
-                        </p>
-                      </div>
+                <div className="h-[300px]">
+                  {monthlyEmissionsData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={monthlyEmissionsData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
+                        <XAxis 
+                          dataKey="label" 
+                          stroke="#71717A"
+                          fontSize={12}
+                        />
+                        <YAxis 
+                          stroke="#71717A"
+                          fontSize={12}
+                          tickFormatter={(value) => 
+                            Math.abs(value) < 0.01 ? 
+                              `${(value * 1000).toFixed(0)}g` : 
+                              `${value.toFixed(2)}kg`
+                          }
+                        />
+                        <Tooltip 
+                          formatter={(value, name) => {
+                            if (name === 'emissions') return [`${value.toFixed(4)} kg CO₂e`, 'Emisi'];
+                            if (name === 'savings') return [`${value.toFixed(4)} kg CO₂e`, 'Penghematan'];
+                            return [value, name];
+                          }}
+                        />
+                        <Bar 
+                          name="emissions" 
+                          dataKey="emissions" 
+                          fill="#EF4444" 
+                          stackId="a"
+                        />
+                        <Bar 
+                          name="savings" 
+                          dataKey="savings" 
+                          fill="#10B981" 
+                          stackId="a"
+                        />
+                        <Legend formatter={(value) => value === 'emissions' ? 'Emisi Karbon' : 'Penghematan Karbon'} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <TreePine className="w-12 h-12 mb-2 text-zinc-300" />
+                      <p className="text-zinc-500">Belum ada data emisi bulanan</p>
                     </div>
-                  </div>
+                  )}
                 </div>
-              </div>
-            </>
-          )}
-          
-          {activeTab === 'social' && (
-            <>
-              {/* Improved social impact section with better explanations */}
-              <div className="grid gap-5 mb-6">
-                <div className="p-6 border border-indigo-100 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl">
-                  <h3 className="flex items-center gap-2 text-lg font-medium text-indigo-800">
-                    <Users className="w-5 h-5 text-indigo-600" />
-                    Dampak Sosial dari Program Daur Ulang
-                  </h3>
-                  <p className="mt-2 text-indigo-700">
-                    Program daur ulang tidak hanya bermanfaat bagi lingkungan, tetapi juga menciptakan dampak sosial positif melalui 
-                    pemberdayaan masyarakat. Berikut adalah dampak sosial dari aktivitas daur ulang industri Anda.
-                  </p>
-                </div>
-              
-                <div className="grid grid-cols-1 gap-5 mb-6 md:grid-cols-2">
-                  <SocialImpactCard
-                    title="Penciptaan Lapangan Kerja"
-                    count={socialImpact.jobsCreated}
-                    description={`${socialImpact.jobsCreated} pekerja aktif terlibat dalam pengumpulan dan pemrosesan sampah, menciptakan peluang ekonomi dan mengurangi pengangguran di komunitas sekitar.`}
-                    icon={UserCheck}
-                    color="bg-blue-50"
-                  />
-                  
-                  <SocialImpactCard
-                    title="Jaringan Bank Sampah"
-                    count={socialImpact.wasteBankMasters}
-                    description={`${socialImpact.wasteBankMasters} bank sampah terhubung dengan program Anda, membantu masyarakat dalam mengelola sampah dan meningkatkan kesadaran lingkungan di berbagai komunitas.`}
-                    icon={Building}
-                    color="bg-amber-50"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 gap-5 mb-6 md:grid-cols-2">
-                  <SocialImpactCard
-                    title="Total Partisipan Aktif"
-                    count={socialImpact.totalParticipants}
-                    description={`${socialImpact.totalParticipants} individu secara aktif berpartisipasi dalam proses pengumpulan, pemilahan, dan pendistribusian sampah daur ulang.`}
-                    icon={Users}
-                    color="bg-emerald-50"
-                  />
-                  
-                  <SocialImpactCard
-                    title="Petugas Pengumpul Sampah"
-                    count={socialImpact.collectors + socialImpact.wasteBankCollectors}
-                    description={`${socialImpact.collectors + socialImpact.wasteBankCollectors} petugas pengumpul aktif bekerja di lapangan untuk mengumpulkan sampah dari berbagai sumber dan memastikan sampah diproses dengan benar.`}
-                    icon={Recycle}
-                    color="bg-indigo-50"
-                  />
-                </div>
-              </div>
+              </ChartContainer>
               
               <ChartContainer 
-                title="Distribusi Peran dalam Daur Ulang" 
-                icon={UserCheck}
-                hint="Perbandingan jumlah partisipan berdasarkan peran"
+                title="Emisi per Jenis Sampah" 
+                icon={Recycle}
+                hint="Dampak lingkungan berdasarkan jenis material"
               >
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: 'Pengelola Bank Sampah', value: socialImpact.wasteBankMasters },
-                        { name: 'Pengumpul Bank Sampah', value: socialImpact.wasteBankCollectors },
-                        { name: 'Pengumpul Independen', value: socialImpact.collectors },
-                        { name: 'Admin Bank Sampah', value: socialImpact.wasteBankAdmins }
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                      label={({ name, percent }) => percent > 0 ? `${name}: ${(percent * 100).toFixed(0)}%` : ''}
-                    >
-                      {[0, 1, 2, 3].map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => [value, 'Jumlah']} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-              
-              {/* Enhanced social impact explanation */}
-              <div className="p-6 mt-6 border border-indigo-100 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                  <div className="p-4 bg-white rounded-lg shadow-sm">
-                    <h4 className="flex items-center gap-2 text-sm font-medium text-indigo-700">
-                      <Users className="w-4 h-4 text-indigo-600" />
-                      Pemberdayaan Komunitas
-                    </h4>
-                    <p className="mt-2 text-sm text-gray-600">
-                      Program daur ulang Anda telah memberdayakan komunitas melalui pendidikan dan pelatihan pengelolaan sampah.
-                      Sebanyak {socialImpact.wasteBankMasters} bank sampah aktif menjadi pusat edukasi lingkungan bagi warga sekitar.
-                    </p>
-                    <div className="p-3 mt-3 rounded-lg bg-indigo-50">
-                      <p className="text-xs text-indigo-700">
-                        <strong>Dampak:</strong> Peningkatan kesadaran lingkungan dan praktik pengelolaan sampah berkelanjutan di komunitas
-                      </p>
+                <div className="h-[300px]">
+                  {wasteTypeEmissions.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart 
+                        data={wasteTypeEmissions.slice(0, 8)} 
+                        layout="vertical"
+                        margin={{ left: 80 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" horizontal={false} />
+                        <XAxis 
+                          type="number"
+                          stroke="#71717A"
+                          fontSize={12}
+                          tickFormatter={(value) => 
+                            Math.abs(value) < 0.01 ? 
+                              `${(value * 1000).toFixed(0)}g` : 
+                              `${value.toFixed(2)}kg`
+                          }
+                        />
+                        <YAxis 
+                          type="category"
+                          dataKey="name" 
+                          stroke="#71717A"
+                          fontSize={12}
+                          width={80}
+                        />
+                        <Tooltip 
+                          formatter={(value, name) => {
+                            return [`${Math.abs(value) < 0.01 ? (value * 1000).toFixed(2) + ' g CO₂e' : value.toFixed(4) + ' kg CO₂e'}`, 
+                            name === 'netEmission' ? 'Dampak Bersih' : name];
+                          }}
+                        />
+                        <Bar 
+                          name="netEmission" 
+                          dataKey="netEmission" 
+                          fill={(entry) => entry.netEmission < 0 ? "#10B981" : "#EF4444"}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full">
+                      <Package className="w-12 h-12 mb-2 text-zinc-300" />
+                      <p className="text-zinc-500">Belum ada data jenis sampah</p>
                     </div>
-                  </div>
-                  
-                  <div className="p-4 bg-white rounded-lg shadow-sm">
-                    <h4 className="flex items-center gap-2 text-sm font-medium text-indigo-700">
-                      <Wallet className="w-4 h-4 text-indigo-600" />
-                      Peningkatan Ekonomi Lokal
-                    </h4>
-                    <p className="mt-2 text-sm text-gray-600">
-                      Dengan {socialImpact.jobsCreated} lapangan kerja yang tercipta, program ini memberikan dampak ekonomi langsung.
-                      Para pekerja mendapatkan penghasilan dari aktivitas pengumpulan, pemilahan, dan pemrosesan sampah.
-                    </p>
-                    <div className="p-3 mt-3 rounded-lg bg-indigo-50">
-                      <p className="text-xs text-indigo-700">
-                        <strong>Dampak:</strong> Peningkatan pendapatan keluarga dan penurunan tingkat pengangguran di komunitas sekitar
-                      </p>
-                    </div>
-                  </div>
+                  )}
                 </div>
-              </div>
+              </ChartContainer>
             </>
           )}
           
-          {activeTab === 'governance' && (
-            <>
-              <div className="grid grid-cols-1 gap-5 mb-6 md:grid-cols-2 lg:grid-cols-3">
-                <StatusCard
-                  label="Status Kepatuhan"
-                  count={governanceCompliance.regulatoryCompliance}
-                  icon={Shield}
-                  description="Terhadap regulasi lingkungan"
-                  color={governanceCompliance.regulatoryCompliance === 'Compliant' ? 'primary' : 'warning'}
-                />
-                
-                <StatusCard
-                  label="Skor Keberlanjutan"
-                  count={`${governanceCompliance.sustainabilityScore}/100`}
-                  icon={FileCheck}
-                  description="Berdasarkan kinerja aktual"
-                  color={governanceCompliance.sustainabilityScore >= 80 ? 'primary' : 'secondary'}
-                />
-                
-                <StatusCard
-                  label="Permintaan Tertunda"
-                  count={governanceCompliance.pendingIssues}
-                  icon={AlertTriangle}
-                  description="Perlu perhatian segera"
-                  color={governanceCompliance.pendingIssues === 0 ? 'primary' : 'warning'}
-                />
-              </div>
-              
-              <ChartContainer title="Kepatuhan Regulasi" icon={Shield}>
-                <div className="p-6">
-                  <div className="w-full h-4 mb-6 bg-gray-200 rounded-full">
-                    <div
-                      className="h-4 rounded-full bg-emerald-500"
-                      style={{ width: `${governanceCompliance.sustainabilityScore}%` }}
-                    ></div>
-                  </div>
-                  
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
-                      <h3 className="mb-2 text-sm font-medium text-gray-700">Aspek Kepatuhan</h3>
-                      <ul className="space-y-2">
-                        <li className="flex items-center gap-2">
-                          <div className="p-1 rounded-full bg-emerald-100">
-                            <CheckCircle className="w-4 h-4 text-emerald-600" />
-                          </div>
-                          <span className="text-sm text-gray-600">Pengelolaan Limbah Terdaftar</span>
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <div className="p-1 rounded-full bg-emerald-100">
-                            <CheckCircle className="w-4 h-4 text-emerald-600" />
-                          </div>
-                          <span className="text-sm text-gray-600">Pelaporan Daur Ulang</span>
-                        </li>
-                        <li className="flex items-center gap-2">
-                          <div className={`p-1 rounded-full ${summaryStats.recyclingEfficiencyRate >= 60 ? 'bg-emerald-100' : 'bg-amber-100'}`}>
-                            {summaryStats.recyclingEfficiencyRate >= 60 ? (
-                              <CheckCircle className="w-4 h-4 text-emerald-600" />
-                            ) : (
-                              <AlertTriangle className="w-4 h-4 text-amber-600" />
-                            )}
-                          </div>
-                          <span className="text-sm text-gray-600">Target Efisiensi Daur Ulang (Min. 60%)</span>
-                        </li>
-                      </ul>
-                    </div>
-                    
-                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
-                      <h3 className="mb-2 text-sm font-medium text-gray-700">Detail Pelaporan</h3>
-                      <p className="mb-4 text-sm text-gray-600">
-                        Frekuensi: {governanceCompliance.reportingFrequency}
-                      </p>
-                      <p className="mb-4 text-sm text-gray-600">
-                        Pembaruan Terakhir: {governanceCompliance.lastAuditDate?.toLocaleDateString('id-ID') || 'Belum ada'}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Permintaan Tertunda: {governanceCompliance.pendingIssues} permintaan
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </ChartContainer>
-              
-              <div className="p-6 mt-6 border border-blue-100 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <FileCheck className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-medium text-blue-800">Kepatuhan & Tata Kelola</h3>
-                    <p className="mt-2 text-blue-700">
-                      {(typeof summaryStats.recycledWeight === 'number' && summaryStats.recycledWeight > 0) ? (
-                        `Operasi daur ulang industri Anda telah memproses ${summaryStats.recycledWeight.toFixed(1)} kg sampah dengan 
-                        efisiensi ${summaryStats.recyclingEfficiencyRate}%, menghasilkan skor keberlanjutan ${governanceCompliance.sustainabilityScore}/100.`
-                      ) : (
-                        "Belum ada data daur ulang yang tercatat. Mulailah melakukan pendauran ulang untuk meningkatkan skor keberlanjutan Anda."
-                      )}
-                    </p>
-                    <div className="grid grid-cols-1 gap-4 mt-4 md:grid-cols-2">
-                      <div className="p-4 bg-white rounded-lg shadow-sm">
-                        <h4 className="text-sm font-medium text-blue-700">Peraturan Yang Relevan</h4>
-                        <ul className="mt-2 space-y-2 text-sm text-gray-600">
-                          <li>• PP No. 22/2021 tentang Penyelenggaraan Perlindungan dan Pengelolaan Lingkungan Hidup</li>
-                          <li>• UU No. 18/2008 tentang Pengelolaan Sampah</li>
-                          <li>• Peraturan Daerah tentang Pengelolaan Sampah</li>
-                        </ul>
-                      </div>
-                      <div className="p-4 bg-white rounded-lg shadow-sm">
-                        <h4 className="text-sm font-medium text-blue-700">Rekomendasi Peningkatan</h4>
-                        <ul className="mt-2 space-y-2 text-sm text-gray-600">
-                          {governanceCompliance.regulatoryCompliance !== 'Compliant' && (
-                            <li>• Tingkatkan efisiensi daur ulang ke minimal 60%</li>
-                          )}
-                          {governanceCompliance.pendingIssues > 0 && (
-                            <li>• Selesaikan {governanceCompliance.pendingIssues} permintaan tertunda</li>
-                          )}
-                          <li>• Lakukan audit rutin terhadap proses daur ulang</li>
-                          {summaryStats.recycledWeight === 0 && (
-                            <li>• Mulai melakukan aktivitas daur ulang sampah</li>
-                          )}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-          
-          {/* Improved action buttons with clearer purposes */}
-
-// Gantikan action buttons di bagian bawah halaman
-// Temukan bagian ini dalam komponen:
-<div className="grid grid-cols-1 gap-4 mt-8 md:grid-cols-2 lg:grid-cols-4">
-  <ActionButton 
-    icon={Download} 
-    label="Unduh Laporan PDF" 
-    variant="primary" 
-    onClick={() => {/*...*/}} 
-  />
-  <ActionButton 
-    icon={Calendar} 
-    label="Jadwalkan Audit ESG" 
-    variant="default" 
-    onClick={() => {/*...*/}} 
-  />
-  <ActionButton 
-    icon={GlobeIcon} 
-    label="Bagikan ke Media Sosial" 
-    variant="secondary" 
-    onClick={() => {/*...*/}} 
-  />
-  
-  {/* Ganti tombol "Laporan ESG Lengkap" dengan AiReportButton */}
-  <AiReportButton 
-    reportData={{
-      chartDescriptions: [
-        {
-          title: "Distribusi Jenis Sampah",
-          description: `Diagram menunjukkan komposisi sampah berdasarkan jenisnya`
-        },
-        {
-          title: "Tren Berat Sampah",
-          description: `Grafik perkembangan jumlah sampah yang dikelola setiap bulan`
-        }
-      ],
-      displayedMetrics: [
-        {
-          name: "Reduksi Emisi CO2",
-          value: `${(typeof environmentalImpact.co2Reduction === 'number' ? environmentalImpact.co2Reduction.toFixed(1) : '0')} kg`,
-          description: "Mengurangi gas rumah kaca di atmosfer"
-        },
-        {
-          name: "Air Bersih Terselamatkan",
-          value: `${(typeof environmentalImpact.waterSaved === 'number' ? environmentalImpact.waterSaved.toLocaleString('id-ID') : '0')} L`,
-          description: "Air yang tidak terpakai dalam produksi baru"
-        },
-        {
-          name: "Energi Terhemat",
-          value: `${(typeof environmentalImpact.energyConserved === 'number' ? environmentalImpact.energyConserved.toFixed(1) : '0')} kWh`,
-          description: "Energi yang dihemat melalui daur ulang"
-        },
-        {
-          name: "Total Sampah Dikelola",
-          value: `${summaryStats.totalWeight.toFixed(2)} kg`,
-          description: "Jumlah sampah yang telah diproses"
-        }
-      ],
-      wasteDistribution: wasteDistribution.map(type => ({
-        name: type.name,
-        weight: type.value,
-        impact: type.value * 0.5 // estimasi dampak karbon
-      })),
-      mapData: {
-        wasteBankLocations: socialImpact.wasteBankMasters || 0,
-        industryLocations: 1,
-        totalLocations: (socialImpact.totalParticipants || 0) + 1
-      },
-      performanceTrends: {
-        timePeriod: timeframe,
-        recyclingEfficiency: `${summaryStats.recyclingEfficiencyRate}%`,
-        sustainabilityScore: governanceCompliance.sustainabilityScore
-      }
-    }}
-    role="industry"
-  />
-</div>
-
-          {/* More informative footer */}
-          <div className="p-4 mt-8 text-sm text-center text-gray-500 border-t border-gray-200">
-            <p>Data ESG terakhir diperbarui: {new Date().toLocaleString('id-ID', {
-              dateStyle: 'medium',
-              timeStyle: 'short'
-            })}</p>
-            <p className="mt-1">Laporan ESG ini sesuai dengan standar Global Reporting Initiative (GRI) - WasteTrack v1.0</p>
+          <div className="flex justify-end mt-8">
+            <AiReportButton 
+              reportData={{
+                chartDescriptions: [
+                  {
+                    title: "Emisi Karbon Bulanan",
+                    description: `Dampak karbon per bulan dari kegiatan pengolahan sampah industri`
+                  },
+                  {
+                    title: "Emisi per Jenis Sampah",
+                    description: `Dampak lingkungan berdasarkan jenis material`
+                  }
+                ],
+                displayedMetrics: [
+                  {
+                    name: "Total Dampak Karbon",
+                    value: formatCarbonValue(totalEmissions),
+                    description: `${requests.length} total pengolahan`
+                  },
+                  {
+                    name: "Total Berat Sampah",
+                    value: `${totalWasteWeight.toFixed(2)} kg`,
+                    description: `${wasteTypeEmissions.length} jenis sampah`
+                  },
+                  {
+                    name: "Air Bersih Terselamatkan",
+                    value: `${(typeof environmentalImpact.waterSaved === 'number' ? environmentalImpact.waterSaved.toLocaleString('id-ID') : '0')} L`,
+                    description: "Air yang tidak terpakai dalam produksi baru"
+                  },
+                  {
+                    name: "Penghematan Daur Ulang",
+                    value: formatCarbonValue(Math.abs(environmentalImpact.co2Reduction)),
+                    description: "Karbon yang diselamatkan melalui daur ulang"
+                  }
+                ],
+                wasteDistribution: wasteTypeEmissions.map(type => ({
+                  name: type.name,
+                  weight: type.weight || 0,
+                  impact: type.netEmission
+                })),
+                mapData: {
+                  wasteBankLocations: socialImpact.wasteBankMasters || 0,
+                  industryLocations: 1,
+                  totalLocations: (socialImpact.totalParticipants || 0) + 1
+                },
+                performanceTrends: {
+                  timePeriod: timeframe,
+                  emissionTrend: monthlyEmissionsData.length > 1 ?
+                    (monthlyEmissionsData[monthlyEmissionsData.length-1].netEmissions <
+                    monthlyEmissionsData[0].netEmissions ? "membaik" : "meningkat") : "stabil"
+                }
+              }}
+              role="industry"
+            />
           </div>
         </div>
       </main>
