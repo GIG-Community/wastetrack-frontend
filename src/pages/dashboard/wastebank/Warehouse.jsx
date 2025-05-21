@@ -378,7 +378,7 @@ const Warehouse = () => {
           <InfoPanel title="Informasi">
             <p className="text-sm text-blue-600">
               <li>Halaman ini menampilkan data secara realtime dan langsung memperbarui perubahan tanpa perlu memuat ulang halaman.</li>
-              <li><span className="font-semibold">Distribusi Sampah</span>: abel ini menunjukkan jenis sampah berdasarkan volume terbanyak ke terkecil. Persentase menunjukkan proporsi dari total sampah yang ada.</li>
+              <li><span className="font-semibold">Distribusi Sampah</span>: tabel ini menunjukkan jenis sampah berdasarkan volume terbanyak ke terkecil. Persentase menunjukkan proporsi dari total sampah yang ada.</li>
             </p>
           </InfoPanel>
 
@@ -409,7 +409,7 @@ const Warehouse = () => {
                   <div className="p-3 rounded-lg bg-emerald-50">
                     <Box className="w-5 h-5 text-emerald-500" />
                   </div>
-                  <div className="items-center ml-4 ">
+                  <div className="items-center ml-4">
                     <h2 className="text-lg font-semibold text-zinc-800">Dimensi Gudang</h2>
                     <p className="text-sm text-zinc-500">Atur ukuran gudang penyimpanan sampah</p>
                   </div>
@@ -641,7 +641,7 @@ const Warehouse = () => {
                       .map(item => (
                         <div key={item.type} className="pb-4 border-b border-zinc-200">
                           <div className="flex justify-between mb-2">
-                            <div>
+                            <div className="text-left">
                               <span className="text-sm font-medium text-zinc-700">
                                 {item.translatedType}
                               </span>

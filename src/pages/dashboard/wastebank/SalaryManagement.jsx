@@ -698,7 +698,7 @@ export default function SalaryManagement() {
                       <button
                         key={user.id}
                         onClick={() => handleSelectUser(user.id)}
-                        className={`w-full p-3 rounded-lg text-left transition-all ${selectedUserId === user.id && !showIncomingTransfers
+                        className={`w-full p-4 rounded-lg text-left transition-all ${selectedUserId === user.id && !showIncomingTransfers
                           ? 'bg-emerald-50 border-2 border-emerald-500 shadow-sm'
                           : 'bg-white hover:bg-zinc-50 border border-zinc-200'
                           }`}
@@ -707,13 +707,13 @@ export default function SalaryManagement() {
                           <div className="flex items-center">
                             <User className="w-5 h-5 mr-2 text-zinc-500" />
                             <div>
-                              <div className="font-medium text-zinc-800">
+                              <div className="text-sm font-medium text-zinc-800">
                                 {user.profile?.fullName || 'Pengguna Tanpa Nama'}
                               </div>
-                              <div className="text-sm text-zinc-500">{user.email}</div>
+                              <div className="text-xs text-zinc-500">{user.email}</div>
                             </div>
                           </div>
-                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${user.role === 'collector'
+                          <span className={`text-[10px] font-medium px-2 rounded-full ${user.role === 'collector'
                             ? 'bg-emerald-100 text-emerald-700'
                             : 'bg-blue-100 text-blue-700'
                             }`}>
