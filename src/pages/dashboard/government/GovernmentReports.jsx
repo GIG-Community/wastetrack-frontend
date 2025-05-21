@@ -13,7 +13,8 @@ import {
   Recycle,
   DropletIcon,
   Scale,
-  HelpCircle
+  HelpCircle,
+  Truck
 } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
@@ -33,49 +34,11 @@ import {
   Cell
 } from 'recharts';
 
+// Import carbon calculation utilities
+import { emissionFactors } from '../../../lib/carbonConstants';
+import { calculateDistance } from '../../../lib/utils/distanceCalculator';
+import { calculateEmissions, emissionFactorTransport, truckCapacity } from '../../../lib/utils/emissionCalculator';
 import AiReportButton from '../../../components/AiReportButton';
-
-// Enhanced Environmental Impact Constants
-const IMPACT_FACTORS = {
-  organic: { 
-    carbon: 2.5,    // kg CO2 saved per kg (composting vs landfill)
-    water: 1000,    // liters saved per kg
-    landfill: 0.2,  // m³ saved per kg
-    carbonOffset: 0.8 // carbon credit potential (tons CO2e)
-  },
-  plastic: { 
-    carbon: 6.0,    // kg CO2 saved per kg (recycling vs new production)
-    water: 2000,    // liters saved per kg
-    landfill: 0.1,  // m³ saved per kg
-    trees: 0.1,     // trees saved per kg
-    carbonOffset: 2.0 // carbon credit potential (tons CO2e)
-  },
-  paper: { 
-    carbon: 3.3,    // kg CO2 saved per kg (recycling vs new production)
-    water: 1500,    // liters saved per kg
-    landfill: 0.15, // m³ saved per kg
-    trees: 0.2,     // trees saved per kg
-    carbonOffset: 1.2 // carbon credit potential (tons CO2e)
-  },
-  metal: { 
-    carbon: 9.0,    // kg CO2 saved per kg (recycling vs new production)
-    water: 3000,    // liters saved per kg
-    landfill: 0.05,  // m³ saved per kg
-    carbonOffset: 3.5 // carbon credit potential (tons CO2e)
-  },
-  glass: {
-    carbon: 0.8,    // kg CO2 saved per kg
-    water: 500,     // liters saved per kg
-    landfill: 0.08, // m³ saved per kg
-    carbonOffset: 0.3 // carbon credit potential (tons CO2e)
-  },
-  electronics: {
-    carbon: 20.0,   // kg CO2 saved per kg
-    water: 4000,    // liters saved per kg
-    landfill: 0.1,  // m³ saved per kg
-    carbonOffset: 8.0 // carbon credit potential (tons CO2e)
-  }
-};
 
 const COLORS = ['#10B981', '#6366F1', '#F59E0B', '#EF4444'];
 const TRANSACTION_COLORS = {
@@ -125,63 +88,84 @@ const FilterButton = ({ active, onClick, color = 'emerald', children }) => {
   );
 };
 
-// Standalone calculateImpact function to avoid reference error
-const calculateEnvironmentalImpact = (wastes = {}) => {
+// Replace calculateEnvironmentalImpact function with simplified carbon-focused version
+const calculateEnvironmentalImpact = (wastes = {}, distance = 0) => {
   try {
     let impact = {
       carbon: 0,
-      water: 0,
-      trees: 0,
       landfill: 0,
       carbonOffset: 0,
-      potentialCredits: 0
+      potentialCredits: 0,
+      transportEmissions: 0,
+      processingEmissions: 0,
+      totalEmissions: 0
     };
 
-    // Check if wastes is null or undefined
     if (!wastes) {
-      console.warn('Waste data is missing. Using dummy values.');
-      // Return dummy values if wastes data is missing
-      return {
-        carbon: 0.5,
-        water: 100,
-        trees: 0.1,
-        landfill: 0.05,
-        carbonOffset: 0.2,
-        potentialCredits: 0.01
-      };
+      console.warn('Waste data is missing. Using zero values.');
+      return impact;
     }
 
-    // Process each waste type
+    let totalWeight = 0;
+    let recyclingSavings = 0;
+    let wasteManagementEmission = 0;
+
+    // Calculate impacts for each waste type using emission factors
     Object.entries(wastes).forEach(([type, data]) => {
       if (!data || !data.weight) return;
       
-      // Get impact factors for this waste type
-      const factors = IMPACT_FACTORS[type] || IMPACT_FACTORS.plastic; // Default to plastic if type not found
-
-      // Calculate impacts
-      impact.carbon += factors.carbon * data.weight;
-      impact.water += factors.water * data.weight;
-      impact.landfill += factors.landfill * data.weight;
-      impact.carbonOffset += factors.carbonOffset * data.weight;
-      impact.potentialCredits += (factors.carbonOffset * data.weight * 0.001); // Convert to tons
-
-      // Add tree impact if applicable
-      if (factors.trees) {
-        impact.trees += factors.trees * data.weight;
+      const weight = Number(data.weight);
+      totalWeight += weight;
+      
+      // Use emission factors from imported constants
+      const emissionFactor = emissionFactors[type] || 0;
+      
+      if (emissionFactor < 0) {
+        // Negative factor means recycling savings
+        recyclingSavings += Math.abs(emissionFactor) * weight;
+        impact.carbonOffset += Math.abs(emissionFactor) * weight;
+      } else {
+        // Positive factor means emissions
+        wasteManagementEmission += emissionFactor * weight;
+        impact.processingEmissions += emissionFactor * weight;
       }
+      
+      // Landfill space saved estimation (cubic meters)
+      const density = 
+        type.includes('plastic') ? 0.1 :
+        type.includes('paper') || type.includes('kardus') ? 0.15 :
+        type.includes('metal') ? 0.05 :
+        type.includes('glass') ? 0.08 : 0.2; // default for organic
+      
+      impact.landfill += weight * density;
+      
+      // Potential carbon credits (very rough estimate)
+      impact.potentialCredits += (recyclingSavings * 0.001); // Convert kg to tons
     });
+
+    // Calculate transport emissions if distance is provided
+    let transportEmission = 0;
+    if (distance > 0 && totalWeight > 0) {
+      const truckTrips = Math.ceil(totalWeight / truckCapacity);
+      transportEmission = emissionFactorTransport * distance * truckTrips;
+      impact.transportEmissions = transportEmission;
+    }
+
+    // Calculate total carbon impact
+    impact.carbon = wasteManagementEmission - recyclingSavings;
+    impact.totalEmissions = wasteManagementEmission + transportEmission - recyclingSavings;
 
     return impact;
   } catch (error) {
     console.error('Error calculating impact:', error);
-    // Return default values in case of error
     return {
-      carbon: 1,
-      water: 200,
-      trees: 0.2,
-      landfill: 0.1,
-      carbonOffset: 0.3,
-      potentialCredits: 0.02
+      carbon: 0,
+      landfill: 0,
+      carbonOffset: 0,
+      potentialCredits: 0,
+      transportEmissions: 0,
+      processingEmissions: 0,
+      totalEmissions: 0
     };
   }
 };
@@ -248,8 +232,6 @@ const GovernmentReports = () => {
   const [stats, setStats] = useState({
     totalImpact: {
       carbon: 0,
-      water: 0,
-      trees: 0,
       landfill: 0
     },
     wasteTypes: [],
@@ -278,7 +260,10 @@ const GovernmentReports = () => {
     monthlyOffset: [],
     wasteTypeOffset: [],
     projectedSavings: 0,
-    carbonEfficiency: 0
+    carbonEfficiency: 0,
+    transportEmissions: 0,
+    processingEmissions: 0,
+    distanceTraveled: 0
   });
 
   // Toggle function for transaction filters
@@ -505,11 +490,11 @@ const GovernmentReports = () => {
   }, [dateRange]);
 
   // Enhanced impact calculation - reference the standalone function
-  const calculateImpact = (wastes = {}) => {
-    return calculateEnvironmentalImpact(wastes);
+  const calculateImpact = (wastes = {}, distance = 0) => {
+    return calculateEnvironmentalImpact(wastes, distance);
   };
 
-  // Calculate statistics with enhanced analytics
+  // Update the calculateStatistics function to fix the avgMonthlyOffset error
   const calculateStatistics = (wasteBanks, masterBanks, industries, pickups, masterRequests, industryRequests) => {
     try {
       // Calculate waste bank performance
@@ -584,30 +569,78 @@ const GovernmentReports = () => {
         .sort((a, b) => b.totalValue - a.totalValue)
         .slice(0, 5);
 
-      // Calculate total environmental impact from all transactions
+      // Calculate total environmental impact from all transactions (focused on carbon)
       const totalImpact = {
         carbon: 0,
-        water: 0,
-        trees: 0,
         landfill: 0
       };
 
+      // Track total distance for carbon calculations
+      let totalDistanceTraveled = 0;
+      let totalTransportEmissions = 0;
+      let totalProcessingEmissions = 0;
+      let totalCarbonOffset = 0;
+      let totalPotentialCredits = 0;
+      let totalWeight = 0;
+
       // Process small bank pickups
       pickups.forEach(pickup => {
-        const impact = calculateImpact(pickup.wastes);
+        let distance = 0;
+        
+        // Calculate distance if coordinates are available
+        if (pickup.coordinates && pickup.wasteBankCoordinates) {
+          distance = calculateDistance(
+            pickup.coordinates.lat, 
+            pickup.coordinates.lng,
+            pickup.wasteBankCoordinates.lat, 
+            pickup.wasteBankCoordinates.lng
+          );
+          totalDistanceTraveled += distance;
+        }
+        
+        const impact = calculateEnvironmentalImpact(pickup.wastes, distance);
         totalImpact.carbon += impact.carbon;
-        totalImpact.water += impact.water;
-        totalImpact.trees += impact.trees;
         totalImpact.landfill += impact.landfill;
+        
+        totalTransportEmissions += impact.transportEmissions;
+        totalProcessingEmissions += impact.processingEmissions;
+        totalCarbonOffset += impact.carbonOffset;
+        totalPotentialCredits += impact.potentialCredits;
+        
+        // Calculate total weight
+        Object.values(pickup.wastes || {}).forEach(waste => {
+          totalWeight += waste.weight || 0;
+        });
       });
 
       // Process master bank requests
       masterRequests.forEach(request => {
-        const impact = calculateImpact(request.wastes);
+        let distance = 0;
+        
+        // Calculate distance if coordinates are available
+        if (request.location?.coordinates && request.masterBankCoordinates) {
+          distance = calculateDistance(
+            request.location.coordinates.lat, 
+            request.location.coordinates.lng,
+            request.masterBankCoordinates.lat, 
+            request.masterBankCoordinates.lng
+          );
+          totalDistanceTraveled += distance;
+        }
+        
+        const impact = calculateEnvironmentalImpact(request.wastes, distance);
         totalImpact.carbon += impact.carbon;
-        totalImpact.water += impact.water;
-        totalImpact.trees += impact.trees;
         totalImpact.landfill += impact.landfill;
+        
+        totalTransportEmissions += impact.transportEmissions;
+        totalProcessingEmissions += impact.processingEmissions;
+        totalCarbonOffset += impact.carbonOffset;
+        totalPotentialCredits += impact.potentialCredits;
+        
+        // Calculate total weight
+        Object.values(request.wastes || {}).forEach(waste => {
+          totalWeight += waste.weight || 0;
+        });
       });
 
       // Calculate waste type distribution combining both pickups and master requests
@@ -770,7 +803,7 @@ const GovernmentReports = () => {
         }
       });
 
-      // Calculate monthly trends combining both types
+      // Calculate monthly trends but only focus on carbon
       const monthlyData = {};
       const processTransaction = (transaction, type) => {
         // Add null check for completedAt
@@ -811,8 +844,8 @@ const GovernmentReports = () => {
           };
         }
 
-        const impact = calculateImpact(transaction.wastes);
-        monthlyData[monthKey].impact += impact.carbon;
+        const impact = calculateEnvironmentalImpact(transaction.wastes);
+        monthlyData[monthKey].impact += Math.abs(impact.carbon);
 
         if (type === 'small') {
           monthlyData[monthKey].smallBankValue += transaction.totalValue || 0;
@@ -831,8 +864,8 @@ const GovernmentReports = () => {
       masterRequests.forEach(request => processTransaction(request, 'master'));
 
       // Enhanced carbon offset calculations
-      let totalCarbonOffset = 0;
-      let totalPotentialCredits = 0;
+      totalCarbonOffset = 0;
+      totalPotentialCredits = 0;
       const monthlyOffset = {};
       const wasteTypeOffset = {};
 
@@ -919,32 +952,37 @@ const GovernmentReports = () => {
         .sort((a, b) => a.month.localeCompare(b.month));
 
       let projectedSavings = 0;
+      let avgMonthlyOffset = 0; // Define outside if statement so it's in scope later
+      
       if (monthlyOffsetArray.length > 0) {
-        const avgMonthlyOffset = monthlyOffsetArray.reduce((sum, item) => sum + item.offset, 0) / monthlyOffsetArray.length;
+        avgMonthlyOffset = monthlyOffsetArray.reduce((sum, item) => sum + item.offset, 0) / monthlyOffsetArray.length;
         projectedSavings = avgMonthlyOffset * 12; // Annual projection
       }
 
       // Calculate carbon efficiency (offset per kg of waste)
-      const totalWeight = Object.values(wasteTypeOffset).reduce((sum, type) => sum + type.weight, 0);
       const carbonEfficiency = totalWeight > 0 ? totalCarbonOffset / totalWeight : 0;
 
       // Update carbon stats
       setCarbonStats({
         totalOffset: totalCarbonOffset,
         potentialCredits: totalPotentialCredits,
-        monthlyOffset: monthlyOffsetArray,
-        wasteTypeOffset: Object.entries(wasteTypeOffset).map(([type, data]) => ({
+        transportEmissions: totalTransportEmissions,
+        processingEmissions: totalProcessingEmissions,
+        totalEmissions: totalProcessingEmissions + totalTransportEmissions - totalCarbonOffset,
+        distanceTraveled: totalDistanceTraveled,
+        monthlyOffset: monthlyOffsetArray || [],
+        wasteTypeOffset: Object.entries(wasteTypeOffset || {}).map(([type, data]) => ({
           type,
           ...data
         })),
-        projectedSavings,
+        projectedSavings: avgMonthlyOffset * 12, // Now avgMonthlyOffset is in scope
         carbonEfficiency
       });
 
-      // Update stats state with all calculated data
+      // Update stats state but remove water and trees
       setStats({
         totalImpact,
-        wasteTypes: Object.entries(wasteTypes).map(([type, data]) => ({
+        wasteTypes: Object.entries(wasteTypes || {}).map(([type, data]) => ({
           name: type.charAt(0).toUpperCase() + type.slice(1),
           ...data
         })),
@@ -1251,16 +1289,6 @@ const GovernmentReports = () => {
         description: "Total emisi yang berhasil dicegah"
       },
       {
-        name: "Pohon Terselamatkan", 
-        value: `${Math.round(stats.totalImpact.trees)} pohon`,
-        description: "Setara pohon yang tidak ditebang"
-      },
-      {
-        name: "Air Terhemat",
-        value: `${Math.round(stats.totalImpact.water / 1000)} m³`,
-        description: "Air yang berhasil dihemat"
-      },
-      {
         name: "Tempat Pembuangan",
         value: `${stats.totalImpact.landfill.toFixed(1)} m³`,
         description: "Ruang TPA yang dihemat"
@@ -1386,18 +1414,6 @@ const GovernmentReports = () => {
               label="Dampak Karbon"
               value={`${Math.round(stats.totalImpact.carbon)} kg CO₂e`}
               subValue="Total emisi yang berhasil dicegah"
-            />
-            <StatCard
-              icon={TreesIcon}
-              label="Pohon Terselamatkan"
-              value={`${Math.round(stats.totalImpact.trees)} pohon`}
-              subValue="Setara pohon yang tidak ditebang"
-            />
-            <StatCard
-              icon={DropletIcon}
-              label="Air Terhemat"
-              value={`${Math.round(stats.totalImpact.water / 1000)} m³`}
-              subValue="Air yang berhasil dihemat"
             />
             <StatCard
               icon={Building2}
@@ -1623,7 +1639,14 @@ const GovernmentReports = () => {
               </div>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.monthlyTrends}>
+                  <BarChart 
+                    data={[...stats.monthlyTrends].sort((a, b) => {
+                      // Extract year and month for proper chronological sorting
+                      const aDate = new Date(`${a.month} 1, ${a.year || new Date().getFullYear()}`);
+                      const bDate = new Date(`${b.month} 1, ${b.year || new Date().getFullYear()}`);
+                      return aDate - bDate;
+                    })}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
                     <XAxis 
                       dataKey="month" 
@@ -1656,7 +1679,7 @@ const GovernmentReports = () => {
               </div>
             </ChartCard>
 
-            {/* Waste Type Distribution with Scrollable List */}
+            {/* Waste Type Distribution with Bar Chart */}
             <ChartCard 
               title="Dampak per Jenis Sampah" 
               description="Kontribusi pengurangan karbon berdasarkan jenis sampah"
@@ -1664,39 +1687,62 @@ const GovernmentReports = () => {
               <div className="p-4 mb-2 text-xs text-gray-600 rounded-lg bg-gray-50">
                 <p className="font-medium">Cara Membaca Grafik ini:</p>
                 <ul className="mt-1 ml-4 list-disc">
-                  <li>Grafik menunjukkan persentase kontribusi masing-masing jenis sampah</li>
-                  <li>Semakin besar bagian, semakin besar kontribusi terhadap pengurangan karbon</li>
-                  <li>Daftar di bawah grafik menunjukkan detail nilai untuk setiap jenis sampah</li>
+                  <li>Grafik menunjukkan dampak karbon masing-masing jenis sampah</li>
+                  <li>Panjang batang menunjukkan kontribusi terhadap pengurangan karbon</li>
+                  <li>Warna yang berbeda menunjukkan jenis sampah yang berbeda</li>
                 </ul>
               </div>
-              <div className="h-[250px]">
+              <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={stats.wasteTypes}
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="impact"
+                  <BarChart
+                    layout="vertical"
+                    data={stats.wasteTypes
+                      .slice(0, 10)
+                      .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))}
+                    margin={{ left: 20, right: 20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis 
+                      type="number"
+                      stroke="#71717A" 
+                      fontSize={12}
+                      tickFormatter={(value) => `${value.toFixed(1)} kg`}
+                    />
+                    <YAxis 
+                      dataKey="name" 
+                      type="category" 
+                      width={100}
+                      stroke="#71717A" 
+                      fontSize={12}
+                      tickFormatter={(value) => value.length > 15 ? `${value.substring(0, 15)}...` : value}
+                    />
+                    <Tooltip
+                      formatter={(value) => [`${value.toFixed(2)} kg CO₂e`, 'Dampak Karbon']}
+                      labelFormatter={(label) => `Jenis: ${label}`}
+                    />
+                    <Bar 
+                      dataKey="impact" 
+                      name="Dampak"
+                      radius={[0, 4, 4, 0]}
+                      fill={(entry) => {
+                        // Use different colors based on whether the impact is positive or negative
+                        return entry.impact < 0 ? '#10B981' : '#EF4444';
+                      }}
                     >
                       {stats.wasteTypes.map((entry, index) => (
-                        <Cell 
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length] || "#000000"} // Provide fallback color
-                        />
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
-                    </Pie>
-                    <Tooltip 
-                      formatter={(value) => [`${value.toFixed(1)} kg CO₂e`]}
-                    />
-                  </PieChart>
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
-
+              
               <div className="mt-4 overflow-y-auto max-h-[150px] pr-2">
                 <p className="mb-2 text-sm font-medium text-gray-700">Rincian per Jenis Sampah:</p>
                 <div className="space-y-3">
-                  {stats.wasteTypes.map((type, index) => (
+                  {stats.wasteTypes
+                    .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
+                    .map((type, index) => (
                     <div key={type.name} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div 
@@ -1706,7 +1752,7 @@ const GovernmentReports = () => {
                         <span className="text-sm font-medium text-gray-700">{type.name}</span>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-medium text-gray-800">
+                        <p className={`text-sm font-medium ${type.impact < 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                           {Math.round(type.impact)} kg CO₂e
                         </p>
                         <p className="text-xs text-gray-500">
@@ -1745,28 +1791,6 @@ const GovernmentReports = () => {
                   
                   <div className="p-4 rounded-lg bg-white/50">
                     <div className="flex items-center gap-2 mb-2">
-                      <TreesIcon className="w-5 h-5 text-emerald-600" />
-                      <span className="text-sm font-medium text-emerald-800">Pohon Terselamatkan</span>
-                    </div>
-                    <p className="text-lg font-semibold text-emerald-900">
-                      {Math.round(stats.totalImpact.trees)} pohon
-                    </p>
-                    <p className="mt-1 text-xs text-emerald-700">setara pohon yang dilindungi</p>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-white/50">
-                    <div className="flex items-center gap-2 mb-2">
-                      <DropletIcon className="w-5 h-5 text-emerald-600" />
-                      <span className="text-sm font-medium text-emerald-800">Air Terhemat</span>
-                    </div>
-                    <p className="text-lg font-semibold text-emerald-900">
-                      {Math.round(stats.totalImpact.water / 1000)} m³
-                    </p>
-                    <p className="mt-1 text-xs text-emerald-700">air yang dihemat</p>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-white/50">
-                    <div className="flex items-center gap-2 mb-2">
                       <Package className="w-5 h-5 text-emerald-600" />
                       <span className="text-sm font-medium text-emerald-800">Tempat Pembuangan</span>
                     </div>
@@ -1781,9 +1805,8 @@ const GovernmentReports = () => {
                   <h4 className="font-medium text-emerald-800">Apa artinya angka-angka ini?</h4>
                   <ul className="mt-2 ml-4 text-sm list-disc text-emerald-700">
                     <li>Pengurangan {Math.round(stats.totalImpact.carbon)} kg CO₂e setara dengan {Math.round(stats.totalImpact.carbon/150)} orang tidak menggunakan kendaraan bermotor selama sebulan</li>
-                    <li>{Math.round(stats.totalImpact.trees)} pohon yang terselamatkan dapat menyerap polusi untuk sekitar {Math.round(stats.totalImpact.trees*5)} orang</li>
-                    <li>Air yang dihemat ({Math.round(stats.totalImpact.water / 1000)} m³) setara dengan kebutuhan {Math.round((stats.totalImpact.water / 1000) / 0.15)} orang untuk mandi selama sebulan</li>
-                    <li>Ruang TPA yang dihemat ({stats.totalImpact.landfill.toFixed(1)} m³) setara dengan volume {Math.round(stats.totalImpact.landfill / 0.5)} mobil</li>
+                    <li>Ruang TPA yang dihemat ({stats.totalImpact.landfill ? stats.totalImpact.landfill.toFixed(1) : '0'}) m³ setara dengan volume {Math.round((stats.totalImpact.landfill || 0) / 0.5)} mobil</li>
+                    <li>Transportasi sampah menghasilkan sekitar {(carbonStats.transportEmissions || 0).toFixed(2)} kg CO₂e emisi dari {(carbonStats.distanceTraveled || 0).toFixed(1)} km jarak tempuh</li>
                   </ul>
                 </div>
               </div>
