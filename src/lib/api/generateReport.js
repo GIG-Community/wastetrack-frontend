@@ -78,7 +78,7 @@ async function getAIInsights(reportData, dateRange) {
 
     // CRITICAL: Hardcode the API URL to your Next.js server's port (e.g., 3000)
     const apiUrl = 'http://localhost:3000/api/gemini'; // ADJUST PORT IF NECESSARY
-    console.log(`Attempting API call to: ${apiUrl}. Ensure Next.js server is on this port.`);
+    // console.log(`Attempting API call to: ${apiUrl}. Ensure Next.js server is on this port.`);
     const response = await axios.post(apiUrl, { // Using the hardcoded URL
       prompt: prompt
     });

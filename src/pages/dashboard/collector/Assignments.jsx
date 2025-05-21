@@ -296,7 +296,7 @@ const Assignments = () => {
               };
             });
 
-            console.log('Data penugasan berhasil diambil:', assignmentsData);
+            // console.log('Data penugasan berhasil diambil:', assignmentsData);
             setAssignments(assignmentsData);
             setError(null);
             setLoading(false);

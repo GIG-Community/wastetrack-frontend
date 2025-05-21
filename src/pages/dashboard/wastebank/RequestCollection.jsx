@@ -417,14 +417,14 @@ const RequestCollection = () => {
       if (previousStatus !== 'completed' && newStatus === 'completed') {
         const { completionCallback } = requestData;
         if (completionCallback && completionCallback.collectionIds && completionCallback.collectionIds.length > 0) {
-          console.log(`Memproses ${completionCallback.collectionIds.length} pembaruan koleksi`);
+          // console.log(`Memproses ${completionCallback.collectionIds.length} pembaruan koleksi`);
 
           const batch = writeBatch(db);
           for (const collection of completionCallback.collectionIds) {
             const pickupRef = doc(db, 'pickups', collection.id);
             const pickupDoc = await getDoc(pickupRef);
             if (!pickupDoc.exists()) {
-              console.log(`Pengambilan ${collection.id} tidak ditemukan`);
+              // console.log(`Pengambilan ${collection.id} tidak ditemukan`);
               continue;
             }
 

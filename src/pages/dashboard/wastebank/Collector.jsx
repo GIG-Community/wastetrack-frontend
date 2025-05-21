@@ -158,7 +158,7 @@ const Employees = () => {
   useEffect(() => {
     let unsubscribe;
     if (userData && userData.id) {
-      console.log('userData tersedia:', userData); // Debug log
+      // console.log('userData tersedia:', userData); // Debug log
       unsubscribe = setupCollectorsListener();
     }
 
@@ -178,8 +178,8 @@ const Employees = () => {
         return;
       }
 
-      console.log('Mengambil data petugas untuk bank sampah:', userData.id);
-      console.log('Peran pengguna saat ini:', userData.role);
+      // console.log('Mengambil data petugas untuk bank sampah:', userData.id);
+      // console.log('Peran pengguna saat ini:', userData.role);
 
       const collectorsQuery = query(
         collection(db, 'users'),
@@ -191,11 +191,11 @@ const Employees = () => {
       const unsubscribe = onSnapshot(
         collectorsQuery,
         (snapshot) => {
-          console.log('Ukuran snapshot kueri:', snapshot.size); // Debug log
+          // console.log('Ukuran snapshot kueri:', snapshot.size); // Debug log
 
           const collectorsData = snapshot.docs.map(doc => {
             const data = doc.data();
-            console.log('Data petugas:', data); // Debug individual collector data
+            // console.log('Data petugas:', data); // Debug individual collector data
             return {
               id: doc.id,
               ...data,
@@ -204,7 +204,7 @@ const Employees = () => {
             };
           });
 
-          console.log('Data petugas yang diproses:', collectorsData);
+          // console.log('Data petugas yang diproses:', collectorsData);
           setCollectors(collectorsData);
 
           const activeCount = collectorsData.filter(c => c.status === 'active').length;

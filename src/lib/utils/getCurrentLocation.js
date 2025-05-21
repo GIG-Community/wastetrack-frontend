@@ -61,7 +61,7 @@ const getCurrentLocation = ({
             
             // Use ITS Zero Point as fallback if enabled
             if (useITSFallback) {
-                console.log('Using ITS Zero Point Monument as fallback due to geolocation not being supported');
+                // console.log('Using ITS Zero Point Monument as fallback due to geolocation not being supported');
                 onSuccess({
                     ...ITS_ZERO_POINT,
                     accuracy: 0, // Indicate this is a fallback, not real accuracy
@@ -81,14 +81,14 @@ const getCurrentLocation = ({
                 // Check if accuracy is good enough
                 if (accuracy > minAccuracy && retryCount < maxRetries) {
                     retryCount++;
-                    console.log(`Location accuracy (${accuracy}m) exceeds threshold (${minAccuracy}m). Retrying... (${retryCount}/${maxRetries})`);
+                    // console.log(`Location accuracy (${accuracy}m) exceeds threshold (${minAccuracy}m). Retrying... (${retryCount}/${maxRetries})`);
                     setTimeout(getLocation, 1000);
                     return;
                 }
 
                 // If we've reached max retries and accuracy is still poor, use ITS Zero Point if enabled
                 if (accuracy > minAccuracy && retryCount >= maxRetries && useITSFallback) {
-                    console.log(`Max retries (${maxRetries}) reached with poor accuracy (${accuracy}m). Using ITS Zero Point Monument as fallback.`);
+                    // console.log(`Max retries (${maxRetries}) reached with poor accuracy (${accuracy}m). Using ITS Zero Point Monument as fallback.`);
                     onLoading(false);
                     onSuccess({
                         ...ITS_ZERO_POINT,
@@ -186,7 +186,7 @@ const getCurrentLocation = ({
 
                 // Use ITS Zero Point as fallback if enabled
                 if (useITSFallback) {
-                    console.log(`Using ITS Zero Point Monument as fallback due to geolocation error: ${error.code}`);
+                    // console.log(`Using ITS Zero Point Monument as fallback due to geolocation error: ${error.code}`);
                     onSuccess({
                         ...ITS_ZERO_POINT,
                         accuracy: 0, // Indicate this is a fallback, not real accuracy
