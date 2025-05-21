@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Scale,
   ChevronRight,
+  ChevronLeft,
   Info,
 } from 'lucide-react';
 import { collection, query, where, updateDoc, doc, onSnapshot } from 'firebase/firestore';
@@ -440,7 +441,7 @@ const Assignments = () => {
           disabled={currentPage === 1}
           className="px-3 py-1 text-sm bg-white border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
-          Sebelumnya
+          <ChevronLeft />
         </button>
         {[...Array(totalPages)].map((_, index) => (
           <button
@@ -459,7 +460,7 @@ const Assignments = () => {
           disabled={currentPage === totalPages}
           className="px-3 py-1 text-sm bg-white border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
-          Selanjutnya
+          <ChevronRight />
         </button>
       </div>
     </div>
