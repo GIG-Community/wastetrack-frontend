@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
+import { useAuth } from '../hooks/useAuth';
 import Swal from 'sweetalert2';
 import {
   LayoutDashboard,
@@ -43,6 +44,7 @@ import {
 const Sidebar = ({ role, onCollapse }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { userData } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -84,6 +86,7 @@ const Sidebar = ({ role, onCollapse }) => {
       'Marketplace': <ShoppingCart {...iconProps} />,
       'Request Induk': <Truck {...iconProps} />,
       'Salary': <Wallet {...iconProps} />,
+      'Profile': <Users {...iconProps} />,
       
       // Indonesian translations
       'Dasbor': <LayoutDashboard {...iconProps} />,
@@ -122,6 +125,7 @@ const Sidebar = ({ role, onCollapse }) => {
       'Permintaan Induk': <Truck {...iconProps} />,
       'Gaji': <Wallet {...iconProps} />,
       'Manajemen Gaji': <Wallet {...iconProps} />,
+      'Profil': <Users {...iconProps} />
     };
     return icons[label] || <ChevronRight {...iconProps} />;
   };
@@ -307,6 +311,42 @@ const Sidebar = ({ role, onCollapse }) => {
 
       {/* Logout Button */}
       <div className="absolute left-0 right-0 px-4 bottom-4">
+        <Link
+  to={`/dashboard/${role === 'super_admin' ? 'super-admin' : 
+      role === 'wastebank_admin' ? 'wastebank' : 
+      role === 'wastebank_master' ? 'wastebank-master' :
+      role === 'wastebank_master_collector' ? 'collector-master' :
+      role}/profile`}
+  className={`w-full flex items-center gap-3 p-3 rounded-lg mb-2
+    ${location.pathname.includes('/profile') 
+      ? 'bg-emerald-50 text-emerald-600' 
+      : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'}
+    transition-all ${isCollapsed ? 'justify-center' : ''}`}
+>
+  {!isCollapsed ? (
+    <>
+      {/* Avatar */}
+      <div className="flex-shrink-0">        
+        <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+          {userData?.profile?.institution ? 
+            userData.profile.institution.substring(0, 2).toUpperCase() : 
+            '?'}
+        </div>
+      </div>
+      
+      {/* User Info */}
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-gray-900 truncate">
+          {userData?.profile?.institution || userData?.profile?.institutionName || 'Institution'}
+        </div>
+        <div className="text-xs text-gray-500 truncate">
+          {userData?.email || 'user@email.com'}
+        </div>
+      </div>
+    </>  ) : (
+    <Users size={20} className={location.pathname.includes('/profile') ? 'text-emerald-600' : ''} />
+  )}
+</Link>
         <button
           onClick={handleLogout}
           disabled={isLoggingOut}
