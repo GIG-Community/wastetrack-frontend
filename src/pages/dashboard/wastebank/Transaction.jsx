@@ -778,11 +778,16 @@ const Transaction = () => {
       pickup.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       pickup.location?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    // Date filtering
-    const pickupDate = pickup.date ? new Date(pickup.date.seconds * 1000) : null;
-    const matchesDateRange = (!startDate || !endDate || !pickupDate) ? true : (
-      pickupDate >= new Date(startDate) &&
-      pickupDate <= new Date(endDate)
+    // Date filtering - using createdAt to match the display grouping
+    const createdDate = pickup.createdAt?.seconds 
+      ? new Date(pickup.createdAt.seconds * 1000)
+      : pickup.createdAt 
+      ? new Date(pickup.createdAt)
+      : null;
+      
+    const matchesDateRange = (!startDate || !endDate || !createdDate) ? true : (
+      createdDate >= new Date(startDate + 'T00:00:00') &&
+      createdDate <= new Date(endDate + 'T23:59:59')
     );
 
     return matchesStatus && matchesSearch && matchesDateRange;
@@ -927,31 +932,35 @@ const Transaction = () => {
               className="border-emerald-200"
               tooltip="Permintaan pengumpulan yang telah berhasil diselesaikan"
             />
-          </div>
-
-          {/* Combined Filters, Search, and Sort - Single Row Layout */}
+          </div>          
+          
+          {/* Search Field - Top Row */}
+          <div className="mb-2">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <Input
+                type="text"
+                placeholder="Cari berdasarkan nama pelanggan atau lokasi..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-12 sm:placeholder:text-sm py-3"
+              />
+            </div>
+          </div>          
+          
+          {/* Filters and Sort - Bottom Row */}
           <div className="mb-6">
-            <div className="flex flex-col md:flex-row items-center gap-3">
-              {/* Search Field */}
-              <div className="relative flex-grow w-full">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                <Input
-                  type="text"
-                  placeholder="Cari berdasarkan nama pelanggan atau lokasi..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 sm:placeholder:text-sm py-3"
-                />
-              </div>
-
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3">
               {/* Date Range - Compact Inline Format */}
-              <div className="flex items-center gap-2 w-full md:w-auto">
+              <div className="flex items-center gap-2 w-full md:flex-1">
+                <span className="text-sm font-semibold text-gray-600 whitespace-nowrap">Dibuat:</span>
                 <Input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
                   placeholder="mm/dd/yy"
-                  className="w-full md:w-40 py-3"
+                  className="flex-1 md:w-auto py-3"
+                  title="Tanggal mulai (berdasarkan tanggal dibuat)"
                 />
                 <span className="text-gray-400">-</span>
                 <Input
@@ -959,17 +968,18 @@ const Transaction = () => {
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                   placeholder="mm/dd/yy"
-                  className="w-full md:w-40 py-3"
+                  className="flex-1 md:w-auto py-3"
+                  title="Tanggal akhir (berdasarkan tanggal dibuat)"
                 />
               </div>
 
               {/* Status Filter with Label */}
-              <div className="flex items-center gap-2 w-full md:w-auto">
-                <span className="text-sm text-gray-600 whitespace-nowrap">Status:</span>
+              <div className="flex items-center gap-2 w-full md:flex-1 md:justify-center">
+                <span className="text-sm font-semibold text-gray-600 whitespace-nowrap">Status:</span>
                 <Select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
-                  className="w-full md:w-40 py-3"
+                  className="flex-1 md:w-auto py-3"
                 >
                   <option value="all">Semua</option>
                   <option value="pending">Menunggu</option>
@@ -980,8 +990,8 @@ const Transaction = () => {
               </div>
 
               {/* Sort Dropdown with Label */}
-              <div className="flex items-center gap-2 w-full md:w-auto">
-                <span className="text-sm text-gray-600 whitespace-nowrap">Urutkan:</span>
+              <div className="flex items-center gap-2 w-full md:flex-1 md:justify-end">
+                <span className="text-sm font-smibold text-gray-600 whitespace-nowrap">Urutkan:</span>
                 <Select
                   value={`${sortBy}-${sortOrder}`}
                   onChange={(e) => {
@@ -989,7 +999,7 @@ const Transaction = () => {
                     setSortBy(newSortBy);
                     setSortOrder(newSortOrder);
                   }}
-                  className="w-full md:w-40 py-3"
+                  className="flex-1 md:w-auto py-3"
                 >
                   <option value="createdAt-desc">Terbaru Dibuat</option>
                   <option value="createdAt-asc">Terlama Dibuat</option>
@@ -1024,15 +1034,55 @@ const Transaction = () => {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 gap-6 mb-6">
-                  {paginatedPickups.map((pickup) => (
-                    <PickupCard
-                      key={pickup.id}
-                      pickup={pickup}
-                      onStatusChange={openChangeStatusModal}
-                      onUpdatePoints={handleUpdatePoints}
-                      isProcessing={processing}
-                    />
+                <div className="mb-6">
+                  {Object.entries(
+                    paginatedPickups.reduce((groups, pickup) => {
+                      // Handle both Firebase timestamp format and direct date
+                      const createdDate = pickup.createdAt?.seconds
+                        ? new Date(pickup.createdAt.seconds * 1000)
+                        : pickup.createdAt
+                          ? new Date(pickup.createdAt)
+                          : new Date();
+
+                      const date = createdDate.toLocaleDateString('id-ID', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      });
+
+                      if (!groups[date]) {
+                        groups[date] = [];
+                      }
+                      groups[date].push(pickup);
+                      return groups;
+                    }, {})
+                  ).map(([date, pickups]) => (
+                    <div key={date} className="mb-8">
+                      {/* Header Tanggal */}
+                      <div className="sticky top-0 z-10 bg-[#f2f8fc] py-4 mb-4">
+                        <div className="flex items-center gap-3">
+                          <Calendar className="w-5 h-5 text-emerald-600" />
+                          <h3 className="text-lg font-semibold text-gray-800">{date}</h3>
+                          <span className="px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-100 rounded-full">
+                            {pickups.length} pengumpulan
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Pickup Cards untuk tanggal ini */}
+                      <div className="grid grid-cols-1 gap-6">
+                        {pickups.map((pickup) => (
+                          <PickupCard
+                            key={pickup.id}
+                            pickup={pickup}
+                            onStatusChange={openChangeStatusModal}
+                            onUpdatePoints={handleUpdatePoints}
+                            isProcessing={processing}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
                 <Pagination />

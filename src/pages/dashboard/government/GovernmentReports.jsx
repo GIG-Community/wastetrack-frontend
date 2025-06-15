@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import L from 'leaflet';
-import { 
+import {
   LeafyGreen,
   Loader2,
   AlertCircle,
@@ -21,13 +21,13 @@ import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../hooks/useAuth';
 import Sidebar from '../../../components/Sidebar';
 import 'leaflet/dist/leaflet.css';
-import { 
-  BarChart, 
+import {
+  BarChart,
   Bar,
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -113,13 +113,13 @@ const calculateEnvironmentalImpact = (wastes = {}, distance = 0) => {
     // Calculate impacts for each waste type using emission factors
     Object.entries(wastes).forEach(([type, data]) => {
       if (!data || !data.weight) return;
-      
+
       const weight = Number(data.weight);
       totalWeight += weight;
-      
+
       // Use emission factors from imported constants
       const emissionFactor = emissionFactors[type] || 0;
-      
+
       if (emissionFactor < 0) {
         // Negative factor means recycling savings
         recyclingSavings += Math.abs(emissionFactor) * weight;
@@ -129,16 +129,16 @@ const calculateEnvironmentalImpact = (wastes = {}, distance = 0) => {
         wasteManagementEmission += emissionFactor * weight;
         impact.processingEmissions += emissionFactor * weight;
       }
-      
+
       // Landfill space saved estimation (cubic meters)
-      const density = 
+      const density =
         type.includes('plastic') ? 0.1 :
-        type.includes('paper') || type.includes('kardus') ? 0.15 :
-        type.includes('metal') ? 0.05 :
-        type.includes('glass') ? 0.08 : 0.2; // default for organic
-      
+          type.includes('paper') || type.includes('kardus') ? 0.15 :
+            type.includes('metal') ? 0.05 :
+              type.includes('glass') ? 0.08 : 0.2; // default for organic
+
       impact.landfill += weight * density;
-      
+
       // Potential carbon credits (very rough estimate)
       impact.potentialCredits += (recyclingSavings * 0.001); // Convert kg to tons
     });
@@ -293,7 +293,7 @@ const GovernmentReports = () => {
   // Fetch data
   useEffect(() => {
     setLoading(true);
-    
+
     try {
       // Create query references
       const wasteBankQuery = query(
@@ -310,36 +310,36 @@ const GovernmentReports = () => {
       );
       const pickupsQuery = query(collection(db, 'pickups'));
       const masterRequestsQuery = query(collection(db, 'masterBankRequests'));
-      const industryRequestsQuery = query(collection(db, 'industryRequests')); 
-      
+      const industryRequestsQuery = query(collection(db, 'industryRequests'));
+
       // Create unsubscribe functions array for cleanup
       const unsubscribes = [];
-      
+
       // Data containers
       let wasteBankData = [];
       let masterBankData = [];
       let industryData = [];
       let pickupsData = [];
       let masterRequestsData = [];
-      let industryRequestsData = []; 
-      
+      let industryRequestsData = [];
+
       // Counter to track when all data sources are loaded
       let dataSourcesLoaded = 0;
       const totalDataSources = 6; // Updated to 6 to include industry users
-      
+
       // Process data once all sources are loaded
       const processData = () => {
         if (dataSourcesLoaded < totalDataSources) return;
-        
+
         // Filter completed pickups
         const completedPickups = pickupsData.filter(pickup => pickup.status === 'completed');
-        
+
         // Filter completed master requests
         const completedMasterRequests = masterRequestsData.filter(request => request.status === 'completed');
-        
+
         // Filter completed industry requests
         const completedIndustryRequests = industryRequestsData.filter(request => request.status === 'completed');
-        
+
         // Set the data states
         setWasteBanks(wasteBankData);
         setMasterBanks(masterBankData);
@@ -347,22 +347,22 @@ const GovernmentReports = () => {
         setPickupData(completedPickups);
         setMasterRequests(completedMasterRequests);
         setIndustryRequests(completedIndustryRequests);
-        
+
         // Process statistics with all data
         calculateStatistics(
-          wasteBankData, 
-          masterBankData, 
+          wasteBankData,
+          masterBankData,
           industryData,
-          completedPickups, 
-          completedMasterRequests, 
+          completedPickups,
+          completedMasterRequests,
           completedIndustryRequests
         );
-        
+
         setLoading(false);
       };
-      
+
       // Set up real-time listeners
-      
+
       // Listen for waste banks
       const wasteBankUnsubscribe = onSnapshot(
         wasteBankQuery,
@@ -381,7 +381,7 @@ const GovernmentReports = () => {
         }
       );
       unsubscribes.push(wasteBankUnsubscribe);
-      
+
       // Listen for master banks
       const masterBankUnsubscribe = onSnapshot(
         masterBankQuery,
@@ -400,7 +400,7 @@ const GovernmentReports = () => {
         }
       );
       unsubscribes.push(masterBankUnsubscribe);
-      
+
       // Listen for industry users
       const industryUnsubscribe = onSnapshot(
         industryQuery,
@@ -419,7 +419,7 @@ const GovernmentReports = () => {
         }
       );
       unsubscribes.push(industryUnsubscribe);
-      
+
       // Listen for pickups
       const pickupsUnsubscribe = onSnapshot(
         pickupsQuery,
@@ -438,7 +438,7 @@ const GovernmentReports = () => {
         }
       );
       unsubscribes.push(pickupsUnsubscribe);
-      
+
       // Listen for master requests
       const masterRequestsUnsubscribe = onSnapshot(
         masterRequestsQuery,
@@ -457,7 +457,7 @@ const GovernmentReports = () => {
         }
       );
       unsubscribes.push(masterRequestsUnsubscribe);
-      
+
       // Listen for industry requests
       const industryRequestsUnsubscribe = onSnapshot(
         industryRequestsQuery,
@@ -476,12 +476,12 @@ const GovernmentReports = () => {
         }
       );
       unsubscribes.push(industryRequestsUnsubscribe);
-      
+
       // Cleanup function to unsubscribe from all listeners when component unmounts
       return () => {
         unsubscribes.forEach(unsubscribe => unsubscribe());
       };
-      
+
     } catch (err) {
       console.error('Error setting up data listeners:', err);
       setError('Failed to load data');
@@ -514,9 +514,9 @@ const GovernmentReports = () => {
       };
 
       // Calculate averages
-      bankPerformance.small.avgTransactionValue = 
+      bankPerformance.small.avgTransactionValue =
         bankPerformance.small.totalValue / (bankPerformance.small.totalTransactions || 1);
-      bankPerformance.master.avgTransactionValue = 
+      bankPerformance.master.avgTransactionValue =
         bankPerformance.master.totalValue / (bankPerformance.master.totalTransactions || 1);
 
       // Calculate top performing waste banks
@@ -534,7 +534,7 @@ const GovernmentReports = () => {
 
         smallBankStats[pickup.wasteBankId].transactions += 1;
         smallBankStats[pickup.wasteBankId].totalValue += pickup.totalValue || 0;
-        
+
         Object.values(pickup.wastes || {}).forEach(waste => {
           smallBankStats[pickup.wasteBankId].totalWeight += waste.weight || 0;
         });
@@ -555,7 +555,7 @@ const GovernmentReports = () => {
 
         masterBankStats[request.masterBankId].transactions += 1;
         masterBankStats[request.masterBankId].totalValue += request.totalValue || 0;
-        
+
         Object.values(request.wastes || {}).forEach(waste => {
           masterBankStats[request.masterBankId].totalWeight += waste.weight || 0;
         });
@@ -586,27 +586,27 @@ const GovernmentReports = () => {
       // Process small bank pickups
       pickups.forEach(pickup => {
         let distance = 0;
-        
+
         // Calculate distance if coordinates are available
         if (pickup.coordinates && pickup.wasteBankCoordinates) {
           distance = calculateDistance(
-            pickup.coordinates.lat, 
+            pickup.coordinates.lat,
             pickup.coordinates.lng,
-            pickup.wasteBankCoordinates.lat, 
+            pickup.wasteBankCoordinates.lat,
             pickup.wasteBankCoordinates.lng
           );
           totalDistanceTraveled += distance;
         }
-        
+
         const impact = calculateEnvironmentalImpact(pickup.wastes, distance);
         totalImpact.carbon += impact.carbon;
         totalImpact.landfill += impact.landfill;
-        
+
         totalTransportEmissions += impact.transportEmissions;
         totalProcessingEmissions += impact.processingEmissions;
         totalCarbonOffset += impact.carbonOffset;
         totalPotentialCredits += impact.potentialCredits;
-        
+
         // Calculate total weight
         Object.values(pickup.wastes || {}).forEach(waste => {
           totalWeight += waste.weight || 0;
@@ -616,27 +616,27 @@ const GovernmentReports = () => {
       // Process master bank requests
       masterRequests.forEach(request => {
         let distance = 0;
-        
+
         // Calculate distance if coordinates are available
         if (request.location?.coordinates && request.masterBankCoordinates) {
           distance = calculateDistance(
-            request.location.coordinates.lat, 
+            request.location.coordinates.lat,
             request.location.coordinates.lng,
-            request.masterBankCoordinates.lat, 
+            request.masterBankCoordinates.lat,
             request.masterBankCoordinates.lng
           );
           totalDistanceTraveled += distance;
         }
-        
+
         const impact = calculateEnvironmentalImpact(request.wastes, distance);
         totalImpact.carbon += impact.carbon;
         totalImpact.landfill += impact.landfill;
-        
+
         totalTransportEmissions += impact.transportEmissions;
         totalProcessingEmissions += impact.processingEmissions;
         totalCarbonOffset += impact.carbonOffset;
         totalPotentialCredits += impact.potentialCredits;
-        
+
         // Calculate total weight
         Object.values(request.wastes || {}).forEach(waste => {
           totalWeight += waste.weight || 0;
@@ -736,7 +736,7 @@ const GovernmentReports = () => {
       pickups.forEach(pickup => {
         if (pickup.coordinates && pickup.coordinates.lat && pickup.coordinates.lng) {
           const totalWeight = Object.values(pickup.wastes || {}).reduce((sum, waste) => sum + (Number(waste.weight) || 0), 0);
-          
+
           transactionLocations.push({
             id: pickup.id,
             type: 'pickup',
@@ -756,11 +756,11 @@ const GovernmentReports = () => {
 
       // Process master bank request locations
       masterRequests.forEach(request => {
-        if (request.location && request.location.coordinates && 
-            request.location.coordinates.lat && request.location.coordinates.lng) {
-          
+        if (request.location && request.location.coordinates &&
+          request.location.coordinates.lat && request.location.coordinates.lng) {
+
           const totalWeight = Object.values(request.wastes || {}).reduce((sum, waste) => sum + (Number(waste.weight) || 0), 0);
-          
+
           transactionLocations.push({
             id: request.id,
             type: 'masterRequest',
@@ -780,12 +780,12 @@ const GovernmentReports = () => {
 
       // Process industry request locations
       industryRequests.forEach(request => {
-        if (request.location && request.location.coordinates && 
-            request.location.coordinates.lat && request.location.coordinates.lng) {
-          
-          const totalWeight = request.totalWeight || 
+        if (request.location && request.location.coordinates &&
+          request.location.coordinates.lat && request.location.coordinates.lng) {
+
+          const totalWeight = request.totalWeight ||
             Object.values(request.wastes || {}).reduce((sum, waste) => sum + (Number(waste.weight) || 0), 0);
-          
+
           transactionLocations.push({
             id: request.id,
             type: 'industryRequest',
@@ -808,11 +808,11 @@ const GovernmentReports = () => {
       const processTransaction = (transaction, type) => {
         // Add null check for completedAt
         if (!transaction.completedAt) return;
-        
+
         // Check if completedAt is a Firebase timestamp or regular date
         const timestamp = transaction.completedAt;
         let date;
-        
+
         if (timestamp.seconds) {
           // Firebase Timestamp
           date = new Date(timestamp.seconds * 1000);
@@ -827,9 +827,9 @@ const GovernmentReports = () => {
           console.warn('Invalid timestamp format:', timestamp);
           return;
         }
-        
+
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        
+
         if (!monthlyData[monthKey]) {
           monthlyData[monthKey] = {
             month: date.toLocaleString('default', { month: 'short' }),
@@ -885,7 +885,7 @@ const GovernmentReports = () => {
           } else {
             date = new Date(pickup.completedAt);
           }
-          
+
           const monthKey = date.toISOString().slice(0, 7);
           monthlyOffset[monthKey] = (monthlyOffset[monthKey] || 0) + impact.carbonOffset;
         }
@@ -922,7 +922,7 @@ const GovernmentReports = () => {
           } else {
             date = new Date(request.completedAt);
           }
-          
+
           const monthKey = date.toISOString().slice(0, 7);
           monthlyOffset[monthKey] = (monthlyOffset[monthKey] || 0) + impact.carbonOffset;
         }
@@ -953,7 +953,7 @@ const GovernmentReports = () => {
 
       let projectedSavings = 0;
       let avgMonthlyOffset = 0; // Define outside if statement so it's in scope later
-      
+
       if (monthlyOffsetArray.length > 0) {
         avgMonthlyOffset = monthlyOffsetArray.reduce((sum, item) => sum + item.offset, 0) / monthlyOffsetArray.length;
         projectedSavings = avgMonthlyOffset * 12; // Annual projection
@@ -1005,23 +1005,23 @@ const GovernmentReports = () => {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        
+
         {/* User location markers (facilities) */}
         {showBankLocations && stats.locations
-          .filter(location => 
-            facilityFilters.length === 0 || 
+          .filter(location =>
+            facilityFilters.length === 0 ||
             facilityFilters.includes(location.role)
           )
           .map((location) => {
             if (!location.coordinates?.lat || !location.coordinates?.lng) return null;
-            
+
             const roleColor = USER_ROLE_COLORS[location.role] || USER_ROLE_COLORS.default;
-            
+
             return (
               <React.Fragment key={location.id}>
                 <Circle
                   center={[location.coordinates.lat, location.coordinates.lng]}
-                  radius={300} // Standard size for facility markers
+                  // radius={300} // Standard size for facility markers
                   pathOptions={{
                     color: roleColor,
                     fillColor: roleColor,
@@ -1046,9 +1046,9 @@ const GovernmentReports = () => {
                         {location.name}
                       </h3>
                       <p className="mt-1 text-sm font-semibold text-gray-600">
-                        {location.role === 'wastebank_admin' ? 'Bank Sampah Unit' : 
-                         location.role === 'wastebank_master' ? 'Bank Sampah Induk' : 
-                         location.role === 'industry' ? 'Industri' : 'Fasilitas'}
+                        {location.role === 'wastebank_admin' ? 'Bank Sampah Unit' :
+                          location.role === 'wastebank_master' ? 'Bank Sampah Induk' :
+                            location.role === 'industry' ? 'Industri' : 'Fasilitas'}
                       </p>
                       <p className="mt-1 text-sm text-gray-500">
                         {location.address}
@@ -1079,23 +1079,23 @@ const GovernmentReports = () => {
                 </Marker>
               </React.Fragment>
             );
-        })}
-        
+          })}
+
         {/* Transaction Location Markers with multi-filter support */}
-        {stats.transactionLocations
-          .filter(tx => 
-            transactionFilters.length === 0 || 
+        {/* {stats.transactionLocations
+          .filter(tx =>
+            transactionFilters.length === 0 ||
             transactionFilters.includes(tx.type)
           )
           .map((transaction) => {
             if (!transaction.coordinates?.lat || !transaction.coordinates?.lng) return null;
-            
+
             // Determine marker color based on transaction type
             const color = TRANSACTION_COLORS[transaction.type];
-            
+
             // Scale radius based on weight (make it smaller for clarity)
             const radius = Math.min(Math.max(transaction.totalWeight * 50, 200), 1000);
-            
+
             return (
               <React.Fragment key={`tx-${transaction.id}`}>
                 <Circle
@@ -1122,9 +1122,9 @@ const GovernmentReports = () => {
                   <Popup>
                     <div className="max-w-xs p-2">
                       <h3 className="font-medium text-gray-900">
-                        {transaction.type === 'pickup' ? 'Pickup Personal' : 
-                        transaction.type === 'masterRequest' ? 'Master Bank Request' : 
-                        'Industry Request'}
+                        {transaction.type === 'pickup' ? 'Pickup Personal' :
+                          transaction.type === 'masterRequest' ? 'Master Bank Request' :
+                            'Industry Request'}
                       </h3>
                       <p className="mt-1 text-sm text-gray-500 break-words">
                         {transaction.address}
@@ -1156,8 +1156,8 @@ const GovernmentReports = () => {
                         </p>
                         <p className="text-xs text-gray-500">
                           {transaction.date && new Date(
-                            typeof transaction.date === 'object' && transaction.date.seconds 
-                              ? transaction.date.seconds * 1000 
+                            typeof transaction.date === 'object' && transaction.date.seconds
+                              ? transaction.date.seconds * 1000
                               : transaction.date
                           ).toLocaleDateString('id-ID')}
                         </p>
@@ -1167,7 +1167,7 @@ const GovernmentReports = () => {
                 </Marker>
               </React.Fragment>
             );
-        })}
+          })} */}
       </>
     );
   };
@@ -1179,7 +1179,7 @@ const GovernmentReports = () => {
         <div className="flex items-center justify-between mb-1">
           <h4 className="text-sm font-medium text-gray-800">Legenda Peta:</h4>
           {(transactionFilters.length > 0 || facilityFilters.length > 0) && (
-            <button 
+            <button
               onClick={clearFilters}
               className="text-xs text-gray-500 underline hover:text-gray-700"
             >
@@ -1187,9 +1187,9 @@ const GovernmentReports = () => {
             </button>
           )}
         </div>
-        
+
         {/* Transaction Types Legend */}
-        <div className="mb-3">
+        <div className="hidden mb-3">
           <h5 className="mb-1 text-xs font-medium text-gray-600">Jenis Transaksi:</h5>
           <div className="mb-3 space-y-1.5">
             <div className={`flex items-center gap-2 p-0.5 rounded ${transactionFilters.includes('pickup') ? 'bg-emerald-50' : ''}`}>
@@ -1206,7 +1206,7 @@ const GovernmentReports = () => {
             </div>
           </div>
         </div>
-        
+
         {/* Facility Types Legend */}
         {showBankLocations && (
           <div className="pt-2 mb-3 border-t border-gray-200">
@@ -1230,7 +1230,7 @@ const GovernmentReports = () => {
       </div>
     );
   };
-  
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -1258,7 +1258,7 @@ const GovernmentReports = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar 
+      <Sidebar
         role={userData?.role}
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
@@ -1268,54 +1268,54 @@ const GovernmentReports = () => {
           {/* Header with Indonesian Language */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-             <div className="flex items-center gap-4">
-  <Select
-    value={dateRange}
-    onChange={(e) => setDateRange(e.target.value)}
-    className="w-44"
-  >
-    <option value="month">Bulan Ini</option>
-    <option value="quarter">3 Bulan Terakhir</option>
-    <option value="year">Tahun Ini</option>
-    <option value="all">Semua Waktu</option>
-  </Select>
-  
-  <AiReportButton 
-  reportData={{
-    displayedMetrics: [
-      {
-        name: "Dampak Karbon",
-        value: `${Math.round(stats.totalImpact.carbon)} kg CO₂e`,
-        description: "Total emisi yang berhasil dicegah"
-      },
-      {
-        name: "Tempat Pembuangan",
-        value: `${stats.totalImpact.landfill.toFixed(1)} m³`,
-        description: "Ruang TPA yang dihemat"
-      }
-    ],
-    wasteDistribution: stats.wasteTypes.map(type => ({
-      name: type.name,
-      weight: type.weight,
-      impact: type.impact
-    })),
-    mapData: {
-      wasteBankLocations: stats.locations.filter(l => l.role === 'wastebank_admin').length,
-      masterBankLocations: stats.locations.filter(l => l.role === 'wastebank_master').length,
-      industryLocations: stats.locations.filter(l => l.role === 'industry').length,
-      transactionCount: stats.transactionLocations.length
-    },
-    performanceTrends: {
-      timePeriod: dateRange,
-      topPerformers: stats.bankPerformance.small.topPerformers.slice(0, 3).map(p => p.name),
-      carbonTrend: carbonStats.monthlyOffset.length > 1 ? 
-        (carbonStats.monthlyOffset[carbonStats.monthlyOffset.length-1].offset > 
-         carbonStats.monthlyOffset[0].offset ? "meningkat" : "menurun") : "stabil"
-    }
-  }}
-/>
-</div>
-  
+              <div className="flex items-center gap-4">
+                <Select
+                  value={dateRange}
+                  onChange={(e) => setDateRange(e.target.value)}
+                  className="w-44"
+                >
+                  <option value="month">Bulan Ini</option>
+                  <option value="quarter">3 Bulan Terakhir</option>
+                  <option value="year">Tahun Ini</option>
+                  <option value="all">Semua Waktu</option>
+                </Select>
+
+                <AiReportButton
+                  reportData={{
+                    displayedMetrics: [
+                      {
+                        name: "Dampak Karbon",
+                        value: `${Math.round(stats.totalImpact.carbon)} kg CO₂e`,
+                        description: "Total emisi yang berhasil dicegah"
+                      },
+                      {
+                        name: "Tempat Pembuangan",
+                        value: `${stats.totalImpact.landfill.toFixed(1)} m³`,
+                        description: "Ruang TPA yang dihemat"
+                      }
+                    ],
+                    wasteDistribution: stats.wasteTypes.map(type => ({
+                      name: type.name,
+                      weight: type.weight,
+                      impact: type.impact
+                    })),
+                    mapData: {
+                      wasteBankLocations: stats.locations.filter(l => l.role === 'wastebank_admin').length,
+                      masterBankLocations: stats.locations.filter(l => l.role === 'wastebank_master').length,
+                      industryLocations: stats.locations.filter(l => l.role === 'industry').length,
+                      transactionCount: stats.transactionLocations.length
+                    },
+                    performanceTrends: {
+                      timePeriod: dateRange,
+                      topPerformers: stats.bankPerformance.small.topPerformers.slice(0, 3).map(p => p.name),
+                      carbonTrend: carbonStats.monthlyOffset.length > 1 ?
+                        (carbonStats.monthlyOffset[carbonStats.monthlyOffset.length - 1].offset >
+                          carbonStats.monthlyOffset[0].offset ? "meningkat" : "menurun") : "stabil"
+                    }
+                  }}
+                />
+              </div>
+
               <div className="p-2 bg-white border border-gray-200 shadow-sm rounded-xl">
                 <LeafyGreen className="w-6 h-6 text-emerald-500" />
               </div>
@@ -1427,119 +1427,191 @@ const GovernmentReports = () => {
           <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-3">
             {/* Map Container with Instructions */}
             <div className="overflow-hidden bg-white border border-gray-200 shadow-sm lg:col-span-2 rounded-xl">
-              <div className="p-4 border-b border-gray-100 bg-gray-50">
-                <h3 className="font-medium text-gray-800">Peta Sebaran Transaksi & Fasilitas</h3>
+              <div className="p-6 bg-white rounded-xl border-zinc-200">
+                <h2 className="font-medium text-gray-800">Peta Sebaran Fasilitas</h2>
                 <p className="text-xs text-gray-500">
-                  Visualisasi menunjukkan lokasi transaksi dan fasilitas pengelolaan sampah. 
+                  Visualisasi menunjukkan lokasi fasilitas pengelolaan sampah.
                   Anda dapat memilih kombinasi filter untuk melihat data spesifik.
                 </p>
-                
+
                 {/* Enhanced filtering UI with multiple selection */}
-                <div className="flex flex-wrap gap-6 p-3 mt-3 bg-white border border-gray-100 rounded-lg">
+                <div className="flex flex-wrap gap-6 p-3 mt-3 bg-white rounded-lg">
                   {/* Facility filters */}
-                  <div className="flex-1 min-w-[250px]">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-medium text-gray-600">Fasilitas:</p>
-                      <FilterButton
-                        active={showBankLocations}
-                        onClick={() => setShowBankLocations(!showBankLocations)}
-                        color="gray"
-                      >
-                        {showBankLocations ? 'Tampilkan' : 'Sembunyikan'}
-                      </FilterButton>
-                    </div>
-                    
-                    {showBankLocations && (
-                      <div className="flex flex-wrap gap-1">
-                        <FilterButton
-                          active={facilityFilters.length === 0}
-                          onClick={() => setFacilityFilters([])}
-                          color="gray"
-                        >
-                          Semua Fasilitas
-                        </FilterButton>
-                        
-                        <FilterButton
-                          active={facilityFilters.includes('wastebank_admin')}
-                          onClick={() => toggleFacilityFilter('wastebank_admin')}
-                          color="emerald"
-                        >
-                          Bank Sampah Unit
-                        </FilterButton>
-                        
-                        <FilterButton
-                          active={facilityFilters.includes('wastebank_master')}
-                          onClick={() => toggleFacilityFilter('wastebank_master')}
-                          color="indigo"
-                        >
-                          Bank Sampah Induk
-                        </FilterButton>
-                        
-                        <FilterButton
-                          active={facilityFilters.includes('industry')}
-                          onClick={() => toggleFacilityFilter('industry')}
-                          color="amber"
-                        >
-                          Industri
-                        </FilterButton>
+                  <div className="flex-1 min-w-[280px]">
+                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                      {/* Header Section */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                          <p className="text-sm font-semibold text-gray-700">Filter Fasilitas</p>
+                        </div>
+                        {facilityFilters.length > 0 && (
+                          <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+                            {facilityFilters.length} aktif
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  
-                  {/* Transaction type filters - can be combined */}
-                  <div className="flex-1 min-w-[250px]">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-medium text-gray-600">Jenis Transaksi:</p>
-                      {transactionFilters.length > 0 && (
-                        <FilterButton
-                          active={false}
-                          onClick={() => setTransactionFilters([])}
-                          color="gray"
-                        >
-                          Hapus Filter
-                        </FilterButton>
+
+                      {/* Filter Options */}
+                      {showBankLocations && (
+                        <div className="space-y-3">
+                          {/* Reset Filter */}
+                          <div className="pb-2 border-b border-gray-200">
+                            <FilterButton
+                              active={facilityFilters.length === 0}
+                              onClick={() => setFacilityFilters([])}
+                              color="gray"
+                            >
+                              <span className="text-xs font-medium">Semua Fasilitas</span>
+                            </FilterButton>
+                          </div>
+
+                          {/* Facility Type Filters */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-3 gap-2">
+                            <FilterButton
+                              active={facilityFilters.includes('wastebank_admin')}
+                              onClick={() => toggleFacilityFilter('wastebank_admin')}
+                              color="emerald"
+                            >
+                              <div className="text-center">
+                                <div className="text-xs font-medium">Bank Sampah</div>
+                                <div className="text-xs opacity-75">Unit</div>
+                              </div>
+                            </FilterButton>
+
+                            <FilterButton
+                              active={facilityFilters.includes('wastebank_master')}
+                              onClick={() => toggleFacilityFilter('wastebank_master')}
+                              color="indigo"
+                            >
+                              <div className="text-center">
+                                <div className="text-xs font-medium">Bank Sampah</div>
+                                <div className="text-xs opacity-75">Induk</div>
+                              </div>
+                            </FilterButton>
+
+                            <FilterButton
+                              active={facilityFilters.includes('industry')}
+                              onClick={() => toggleFacilityFilter('industry')}
+                              color="amber"
+                            >
+                              <div className="text-center">
+                                <div className="text-xs font-medium">Industri</div>
+                                <div className="text-xs opacity-75">Pengolahan</div>
+                              </div>
+                            </FilterButton>
+                          </div>
+
+                          {/* Active Filters Count */}
+                          {facilityFilters.length > 0 && (
+                            <div className="pt-2 border-t border-gray-200">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-500">
+                                  {facilityFilters.length} filter aktif
+                                </span>
+                                <button
+                                  onClick={() => setFacilityFilters([])}
+                                  className="text-xs text-red-500 hover:text-red-700 font-medium"
+                                >
+                                  Reset
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
-                    
-                    <div className="flex flex-wrap gap-1">
-                      <FilterButton
-                        active={transactionFilters.length === 0}
-                        onClick={() => setTransactionFilters([])}
-                        color="gray"
-                      >
-                        Semua Transaksi
-                      </FilterButton>
-                      
-                      <FilterButton
-                        active={transactionFilters.includes('pickup')}
-                        onClick={() => toggleTransactionFilter('pickup')}
-                        color="emerald"
-                      >
-                        Pickup Personal
-                      </FilterButton>
-                      
-                      <FilterButton
-                        active={transactionFilters.includes('masterRequest')}
-                        onClick={() => toggleTransactionFilter('masterRequest')}
-                        color="indigo"
-                      >
-                        Master Bank Request
-                      </FilterButton>
-                      
-                      <FilterButton
-                        active={transactionFilters.includes('industryRequest')}
-                        onClick={() => toggleTransactionFilter('industryRequest')}
-                        color="amber"
-                      >
-                        Industry Request
-                      </FilterButton>
+                  </div>
+
+                  {/* Transaction type filters - can be combined */}
+                  <div className="hidden flex-1 min-w-[280px]">
+                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                      {/* Header Section */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <p className="text-sm font-semibold text-gray-700">Filter Jenis Transaksi</p>
+                        </div>
+                        {transactionFilters.length > 0 && (
+                          <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+                            {transactionFilters.length} aktif
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Filter Options */}
+                      <div className="space-y-3">
+                        {/* Reset Filter */}
+                        <div className="pb-2 border-b border-gray-200">
+                          <FilterButton
+                            active={transactionFilters.length === 0}
+                            onClick={() => setTransactionFilters([])}
+                            color="gray"
+                          >
+                            <span className="text-xs font-medium">Semua Transaksi</span>
+                          </FilterButton>
+                        </div>
+
+                        {/* Transaction Type Filters */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-3 gap-2">
+                          <FilterButton
+                            active={transactionFilters.includes('pickup')}
+                            onClick={() => toggleTransactionFilter('pickup')}
+                            color="emerald"
+                          >
+                            <div className="text-center">
+                              <div className="text-xs font-medium">Pickup</div>
+                              <div className="text-xs opacity-75">Personal</div>
+                            </div>
+                          </FilterButton>
+
+                          <FilterButton
+                            active={transactionFilters.includes('masterRequest')}
+                            onClick={() => toggleTransactionFilter('masterRequest')}
+                            color="indigo"
+                          >
+                            <div className="text-center">
+                              <div className="text-xs font-medium">Master Bank</div>
+                              <div className="text-xs opacity-75">Request</div>
+                            </div>
+                          </FilterButton>
+
+                          <FilterButton
+                            active={transactionFilters.includes('industryRequest')}
+                            onClick={() => toggleTransactionFilter('industryRequest')}
+                            color="amber"
+                          >
+                            <div className="text-center">
+                              <div className="text-xs font-medium">Industry</div>
+                              <div className="text-xs opacity-75">Request</div>
+                            </div>
+                          </FilterButton>
+
+                          {/* Active Filters Count */}
+                          {transactionFilters.length > 0 && (
+                            <div className="pt-2 border-t border-gray-200">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-500">
+                                  {transactionFilters.length} filter aktif
+                                </span>
+                                <button
+                                  onClick={() => setTransactionFilters([])}
+                                  className="text-xs text-red-500 hover:text-red-700 font-medium"
+                                >
+                                  Reset
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Filter summary */}
                 {(facilityFilters.length > 0 || transactionFilters.length > 0) && (
-                  <div className="p-2 mt-2 border border-blue-100 rounded-md bg-blue-50">
+                  <div className="hidden p-2 mt-2 border border-blue-100 rounded-md bg-blue-50">
                     <p className="flex items-center text-xs text-blue-700">
                       <span className="mr-1 font-medium">Filter aktif:</span>
                       {facilityFilters.length > 0 && (
@@ -1566,9 +1638,9 @@ const GovernmentReports = () => {
                 )}
               </div>
               <div className="relative h-[450px]">
-                <MapContainer 
-                  center={mapCenter} 
-                  zoom={13} 
+                <MapContainer
+                  center={mapCenter}
+                  zoom={13}
                   className="w-full h-full"
                 >
                   {renderMapContent()}
@@ -1591,7 +1663,7 @@ const GovernmentReports = () => {
                   .sort((a, b) => b.totalValue - a.totalValue)
                   .slice(0, 5)
                   .map((location, index) => (
-                    <div 
+                    <div
                       key={location.id}
                       className="flex items-center gap-4 p-4 rounded-lg bg-gray-50"
                     >
@@ -1625,8 +1697,8 @@ const GovernmentReports = () => {
           {/* Charts Row in Indonesian */}
           <div className="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-2">
             {/* Monthly Trends */}
-            <ChartCard 
-              title="Tren Dampak Bulanan" 
+            <ChartCard
+              title="Tren Dampak Bulanan"
               description="Berat sampah terkumpul dan dampak karbon per bulan"
             >
               <div className="p-4 mb-2 text-xs text-gray-600 rounded-lg bg-gray-50">
@@ -1639,7 +1711,7 @@ const GovernmentReports = () => {
               </div>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart 
+                  <BarChart
                     data={[...stats.monthlyTrends].sort((a, b) => {
                       // Extract year and month for proper chronological sorting
                       const aDate = new Date(`${a.month} 1, ${a.year || new Date().getFullYear()}`);
@@ -1648,25 +1720,25 @@ const GovernmentReports = () => {
                     })}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#E4E4E7" />
-                    <XAxis 
-                      dataKey="month" 
+                    <XAxis
+                      dataKey="month"
                       stroke="#71717A"
                       fontSize={12}
                     />
-                    <YAxis 
+                    <YAxis
                       yAxisId="left"
                       stroke="#71717A"
                       fontSize={12}
                       tickFormatter={(value) => `${value} kg`}
                     />
-                    <YAxis 
+                    <YAxis
                       yAxisId="right"
                       orientation="right"
                       stroke="#71717A"
                       fontSize={12}
                       tickFormatter={(value) => `${value} CO₂e`}
                     />
-                    <Tooltip 
+                    <Tooltip
                       formatter={(value, name) => {
                         if (name === 'weight') return [`${value.toFixed(1)} kg`, 'Berat Sampah'];
                         return [`${value.toFixed(1)} kg CO₂e`, 'Dampak Karbon'];
@@ -1680,8 +1752,8 @@ const GovernmentReports = () => {
             </ChartCard>
 
             {/* Waste Type Distribution with Bar Chart */}
-            <ChartCard 
-              title="Dampak per Jenis Sampah" 
+            <ChartCard
+              title="Dampak per Jenis Sampah"
               description="Kontribusi pengurangan karbon berdasarkan jenis sampah"
             >
               <div className="p-4 mb-2 text-xs text-gray-600 rounded-lg bg-gray-50">
@@ -1702,17 +1774,17 @@ const GovernmentReports = () => {
                     margin={{ left: 20, right: 20 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis 
+                    <XAxis
                       type="number"
-                      stroke="#71717A" 
+                      stroke="#71717A"
                       fontSize={12}
                       tickFormatter={(value) => `${value.toFixed(1)} kg`}
                     />
-                    <YAxis 
-                      dataKey="name" 
-                      type="category" 
+                    <YAxis
+                      dataKey="name"
+                      type="category"
                       width={100}
-                      stroke="#71717A" 
+                      stroke="#71717A"
                       fontSize={12}
                       tickFormatter={(value) => value.length > 15 ? `${value.substring(0, 15)}...` : value}
                     />
@@ -1720,8 +1792,8 @@ const GovernmentReports = () => {
                       formatter={(value) => [`${value.toFixed(2)} kg CO₂e`, 'Dampak Karbon']}
                       labelFormatter={(label) => `Jenis: ${label}`}
                     />
-                    <Bar 
-                      dataKey="impact" 
+                    <Bar
+                      dataKey="impact"
                       name="Dampak"
                       radius={[0, 4, 4, 0]}
                       fill={(entry) => {
@@ -1736,31 +1808,31 @@ const GovernmentReports = () => {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              
+
               <div className="mt-4 overflow-y-auto max-h-[150px] pr-2">
                 <p className="mb-2 text-sm font-medium text-gray-700">Rincian per Jenis Sampah:</p>
                 <div className="space-y-3">
                   {stats.wasteTypes
                     .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
                     .map((type, index) => (
-                    <div key={type.name} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        />
-                        <span className="text-sm font-medium text-gray-700">{type.name}</span>
+                      <div key={type.name} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                          />
+                          <span className="text-sm font-medium text-gray-700">{type.name}</span>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-sm font-medium ${type.impact < 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {Math.round(type.impact)} kg CO₂e
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {type.weight.toFixed(1)} kg terkumpul
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className={`text-sm font-medium ${type.impact < 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {Math.round(type.impact)} kg CO₂e
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {type.weight.toFixed(1)} kg terkumpul
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </div>
             </ChartCard>
@@ -1788,7 +1860,7 @@ const GovernmentReports = () => {
                     </p>
                     <p className="mt-1 text-xs text-emerald-700">emisi yang tercegah</p>
                   </div>
-                  
+
                   <div className="p-4 rounded-lg bg-white/50">
                     <div className="flex items-center gap-2 mb-2">
                       <Package className="w-5 h-5 text-emerald-600" />
@@ -1804,7 +1876,7 @@ const GovernmentReports = () => {
                 <div className="p-4 mt-4 border rounded-lg border-emerald-200 bg-white/70">
                   <h4 className="font-medium text-emerald-800">Apa artinya angka-angka ini?</h4>
                   <ul className="mt-2 ml-4 text-sm list-disc text-emerald-700">
-                    <li>Pengurangan {Math.round(stats.totalImpact.carbon)} kg CO₂e setara dengan {Math.round(stats.totalImpact.carbon/150)} orang tidak menggunakan kendaraan bermotor selama sebulan</li>
+                    <li>Pengurangan {Math.round(stats.totalImpact.carbon)} kg CO₂e setara dengan {Math.round(stats.totalImpact.carbon / 150)} orang tidak menggunakan kendaraan bermotor selama sebulan</li>
                     <li>Ruang TPA yang dihemat ({stats.totalImpact.landfill ? stats.totalImpact.landfill.toFixed(1) : '0'}) m³ setara dengan volume {Math.round((stats.totalImpact.landfill || 0) / 0.5)} mobil</li>
                     <li>Transportasi sampah menghasilkan sekitar {(carbonStats.transportEmissions || 0).toFixed(2)} kg CO₂e emisi dari {(carbonStats.distanceTraveled || 0).toFixed(1)} km jarak tempuh</li>
                   </ul>

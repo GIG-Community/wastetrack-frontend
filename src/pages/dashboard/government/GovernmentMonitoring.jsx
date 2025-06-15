@@ -1387,8 +1387,8 @@ const GovernmentMonitoring = () => {
                   className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="all">Semua Bank</option>
-                  <option value="master">Bank Master</option>
-                  <option value="regular">Bank Reguler</option>
+                  <option value="master">Bank Induk</option>
+                  <option value="regular">Bank Unit</option>
                 </select>
                 <select
                   value={filters.compliance}
