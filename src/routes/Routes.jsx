@@ -44,6 +44,7 @@ import OrderConfirmation from '../pages/dashboard/customer/OrderConfirmation';
 import CustomerProfile from '../pages/dashboard/customer/Profile';
 import PickLocation from '../components/PickLocation';
 import GovernmentDashboard from '../pages/dashboard/government/GovernmentDashboard';
+import WastebankProfile from '../pages/dashboard/wastebank/Profile';
 import WastebankReports from '../pages/dashboard/government/GovernmentReports';
 import GovernmentMonitoring from '../pages/dashboard/government/GovernmentMonitoring';
 import GovernmentAnalytics from '../pages/dashboard/government/GovernmentAnalytics';
@@ -64,6 +65,7 @@ import MasterAssignment from '../pages/dashboard/collector-master/MasterAssignme
 import MasterCollections from '../pages/dashboard/collector-master/MasterCollections';
 import MasterCollectorDashboard from '../pages/dashboard/collector-master/MasterCollectorDashboard';
 import MasterRoutes from '../pages/dashboard/collector-master/MasterRoutes';
+import WastebankMasterProfile from '../pages/dashboard/wastebank-master/Profile';
 import MasterUpdateCollection from '../pages/dashboard/collector-master/MasterUpdateCollection';
 import MarketplaceDashboard from '../pages/dashboard/marketplace/MarketplaceDashboard';
 import Products from '../pages/dashboard/marketplace/Products';
@@ -129,6 +131,7 @@ const AppRoutes = () => (
           <Route path="transactions" element={<Transactions />} />
           <Route path="salary" element={<SalaryManagement />} />
           <Route path="request-induk" element={<RequestCollection />} />
+          <Route path="profile" element={<WastebankProfile />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
@@ -208,6 +211,7 @@ const AppRoutes = () => (
           <Route path="salary" element={<MasterSalaryManagement />} />
           <Route path="reports" element={<MasterReports />} />
           <Route path="requests" element={<MasterRequestCollection />} />
+          <Route path="profile" element={<WastebankMasterProfile />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </ProtectedRoute>
