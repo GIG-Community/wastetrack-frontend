@@ -914,7 +914,7 @@ export default function RecyclingHub() {
       />
 
       <main className={`flex-1 transition-all duration-300 ease-in-out
-        ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
+        ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}
       >
         <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-8">

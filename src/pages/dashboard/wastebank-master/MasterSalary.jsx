@@ -614,7 +614,7 @@ export default function MasterSalaryManagement() {
       />
 
       <main className={`flex-1 transition-all duration-300 ease-in-out overflow-auto
-        ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
+        ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}
       >
         <div className="p-6">
           <div className="flex text-left items-center gap-4 mb-8">

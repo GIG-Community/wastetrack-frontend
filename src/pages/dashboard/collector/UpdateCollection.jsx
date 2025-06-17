@@ -188,7 +188,7 @@ const UpdateCollection = () => {
     return (
       <div className="flex min-h-screen bg-gray-50">
         <Sidebar role={userData?.role} onCollapse={setIsSidebarCollapsed} />
-        <main className={`flex-1 p-8 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+        <main className={`flex-1 p-8 ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
           </div>
@@ -201,7 +201,7 @@ const UpdateCollection = () => {
     return (
       <div className="flex min-h-screen bg-gray-50">
         <Sidebar role={userData?.role} onCollapse={setIsSidebarCollapsed} />
-        <main className={`flex-1 p-8 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+        <main className={`flex-1 p-8 ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
           <div className="flex flex-col items-center justify-center h-full gap-4">
             <AlertCircle className="w-8 h-8 text-red-500" />
             <p className="text-gray-600">{error}</p>
@@ -220,7 +220,7 @@ const UpdateCollection = () => {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar role={userData?.role} onCollapse={setIsSidebarCollapsed} />
-      <main className={`flex-1 p-8 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <main className={`flex-1 p-8 ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <button

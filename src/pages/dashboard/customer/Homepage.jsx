@@ -308,12 +308,12 @@ const HomePage = () => {
                     pickup.status === 'completed' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
                       pickup.status === 'in_progress' ? 'bg-orange-100 text-orange-800 border border-orange-200' :
                         pickup.status === 'assigned' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
-                          pickup.status === 'canceled' ? 'bg-red-100 text-red-800 border border-red-200' :
+                          pickup.status === 'cancelled' ? 'bg-red-100 text-red-800 border border-red-200' :
                             'bg-gray-100 text-gray-800 border border-gray-200'}`}
                 >
                   {pickup.status === 'pending' ? 'Menunggu' :
                     pickup.status === 'completed' ? 'Selesai' :
-                      pickup.status === 'canceled' ? 'Dibatalkan' :
+                      pickup.status === 'cancelled' ? 'Dibatalkan' :
                         pickup.status === 'in_progress' ? 'Proses' :
                           pickup.status === 'assigned' ? 'Ditugaskan' :
                             pickup.status}

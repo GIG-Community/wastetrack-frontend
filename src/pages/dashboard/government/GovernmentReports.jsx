@@ -1263,7 +1263,7 @@ const GovernmentReports = () => {
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
 
-      <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
         <div className="p-8">
           {/* Header with Indonesian Language */}
           <div className="flex items-center justify-between mb-8">
