@@ -415,7 +415,7 @@ export default function WastebankAdmin() {
       />
 
       <main className={`flex-1 transition-all duration-300 ease-in-out
-        ${isSidebarCollapsed ? 'ml-20' : 'ml-64'} p-8`}>
+        ${isSidebarCollapsed ? 'ml-20' : 'ml-72'} p-8`}>
         
         {/* Header */}
         <div className="flex justify-between items-center mb-8">

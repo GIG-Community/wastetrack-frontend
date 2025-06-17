@@ -870,7 +870,7 @@ const Transaction = () => {
       />
 
       <main className={`flex-1 transition-all duration-300 ease-in-out
-        ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
+        ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}
       >
         <div className="p-6">
           {/* Header */}

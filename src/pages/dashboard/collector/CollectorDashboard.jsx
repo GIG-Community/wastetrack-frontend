@@ -481,7 +481,7 @@ const CollectorDashboard = () => {
       <div className="flex min-h-screen bg-zinc-50/50">
         <Sidebar role={userData?.role} onCollapse={setIsSidebarCollapsed} />
         <main className={`flex-1 transition-all duration-300 ease-in-out
-          ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
+          ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}
         >
           <div className="flex items-center justify-center h-screen">
             <div className="flex flex-col items-center gap-2">
@@ -499,7 +499,7 @@ const CollectorDashboard = () => {
       <div className="flex min-h-screen bg-zinc-50/50">
         <Sidebar role={userData?.role} onCollapse={setIsSidebarCollapsed} />
         <main className={`flex-1 transition-all duration-300 ease-in-out
-          ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
+          ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}
         >
           <div className="p-8">
             <div className="p-6 mb-8 border border-red-200 bg-red-50 rounded-xl">
@@ -533,7 +533,7 @@ const CollectorDashboard = () => {
       />
 
       <main className={`flex-1 transition-all duration-300 ease-in-out
-        ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}
+        ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}
       >
         <div className="p-6">
           {/* Header */}

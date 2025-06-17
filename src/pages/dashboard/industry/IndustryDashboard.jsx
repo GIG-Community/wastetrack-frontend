@@ -528,7 +528,7 @@ const IndustryDashboard = () => {
           role={userData?.role}
           onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
         />
-        <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+        <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
           <div className="flex items-center justify-center min-h-screen">
             <div className="max-w-md p-8 text-center bg-white border border-gray-100 shadow-lg rounded-xl">
               <div className="relative w-16 h-16 mx-auto">
@@ -554,7 +554,7 @@ const IndustryDashboard = () => {
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
       
-      <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
         <div className="px-4 py-8 mx-auto max-w-7xl sm:px-6 lg:px-8">
           {/* Header Section */}
           <div className="flex flex-col justify-between gap-4 mb-8 md:flex-row md:items-center">

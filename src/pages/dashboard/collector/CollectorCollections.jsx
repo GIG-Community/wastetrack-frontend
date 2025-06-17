@@ -342,7 +342,7 @@ const CollectorCollections = () => {
     return (
       <div className="flex min-h-screen bg-gray-50">
         <Sidebar role={userData?.role} onCollapse={setIsSidebarCollapsed} />
-        <main className={`flex-1 p-8 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+        <main className={`flex-1 p-8 ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
             <span className="ml-2 text-gray-600">Memuat data pengambilan...</span>
@@ -355,7 +355,7 @@ const CollectorCollections = () => {
   return (
     <div className="flex min-h-screen bg-zinc-50/50">
       <Sidebar role={userData?.role} onCollapse={setIsSidebarCollapsed} />
-      <main className={`flex-1 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <main className={`flex-1 ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
         {/* Header */}
         <div className="p-6">
           <div className="flex text-left items-center gap-4 mb-8">

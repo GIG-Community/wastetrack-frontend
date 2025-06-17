@@ -349,7 +349,7 @@ const Products = () => {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar collapsed={isSidebarCollapsed} setCollapsed={setIsSidebarCollapsed} role="marketplace" />
-      <main className={`flex-1 p-4 md:p-8 overflow-y-auto transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <main className={`flex-1 p-4 md:p-8 overflow-y-auto transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
         <div className="mx-auto max-w-7xl">
           <div className="flex items-center justify-between mb-6">
             <div>

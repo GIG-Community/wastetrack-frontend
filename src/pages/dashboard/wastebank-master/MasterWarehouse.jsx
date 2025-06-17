@@ -656,7 +656,7 @@ const MasterWarehouse = () => {
           role={userData?.role}
           onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
         />
-        <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+        <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
           <div className="flex items-center justify-center h-screen">
             <div className="flex flex-col items-center gap-2">
               <div className="w-12 h-12 border-b-2 rounded-full animate-spin border-emerald-500" />
@@ -675,7 +675,7 @@ const MasterWarehouse = () => {
         onCollapse={(collapsed) => setIsSidebarCollapsed(collapsed)}
       />
 
-      <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <main className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
         <div className="p-6">
           {/* Header */}
           <div className="flex text-left items-center gap-4 mb-8">

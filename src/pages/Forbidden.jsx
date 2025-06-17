@@ -25,7 +25,10 @@ const Forbidden = () => {
     const text = content[language] || content.en;
 
     return (
-        <div className="min-h-screen flex items-center justify-center sm:bg-gradient-to-r from-red-50 to-orange-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen flex items-center justify-center sm:bg-gradient-to-r from-red-50 to-orange-50"
+            style={{
+                margin: '-24px -24px'
+            }}>
             <div className="max-w-md w-full space-y-4 text-center">
                 <div>
                     <h1 className="text-8xl sm:text-9xl font-extrabold text-red-600 tracking-widest">

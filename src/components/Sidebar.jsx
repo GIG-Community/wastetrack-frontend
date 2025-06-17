@@ -19,6 +19,7 @@ import {
   MapPin,
   Calendar,
   Navigation,
+  CircleDollarSign,
   Award,
   History,
   PieChart,
@@ -87,7 +88,8 @@ const Sidebar = ({ role, onCollapse }) => {
       'Request Induk': <Truck {...iconProps} />,
       'Salary': <Wallet {...iconProps} />,
       'Profile': <Users {...iconProps} />,
-      
+      'Price Management': <CircleDollarSign {...iconProps} />,
+
       // Indonesian translations
       'Dasbor': <LayoutDashboard {...iconProps} />,
       'Manajemen Pengguna': <Users {...iconProps} />,
@@ -110,7 +112,7 @@ const Sidebar = ({ role, onCollapse }) => {
       'Manajemen Daur Ulang': <PieChart {...iconProps} />,
       'Penyimpanan Industri': <Warehouse {...iconProps} />,
       'Waste Hub': <Recycle {...iconProps} />,
-      'Laporan ESG' : <FileText {...iconProps} />,
+      'Laporan ESG': <FileText {...iconProps} />,
       'Manajemen Karbon': <Factory {...iconProps} />,
       'Analitik': <AreaChart {...iconProps} />,
       'Produk': <Package {...iconProps} />,
@@ -125,7 +127,8 @@ const Sidebar = ({ role, onCollapse }) => {
       'Permintaan Induk': <Truck {...iconProps} />,
       'Gaji': <Wallet {...iconProps} />,
       'Manajemen Gaji': <Wallet {...iconProps} />,
-      'Profil': <Users {...iconProps} />
+      'Profil': <Users {...iconProps} />,
+      'Manajemen Harga': <CircleDollarSign {...iconProps} />
     };
     return icons[label] || <ChevronRight {...iconProps} />;
   };
@@ -143,6 +146,7 @@ const Sidebar = ({ role, onCollapse }) => {
       wastebank_admin: [
         { label: 'Dasbor', path: '/dashboard/wastebank' },
         { label: 'Manajemen Kolektor', path: '/dashboard/wastebank/employees' },
+        { label: 'Manajemen Harga', path: '/dashboard/wastebank/price' },
         { label: 'Transaksi', path: '/dashboard/wastebank/transactions' },
         { label: 'Penyimpanan Gudang', path: '/dashboard/wastebank/warehouse-storage' },
         { label: 'Gaji', path: '/dashboard/wastebank/salary' },
@@ -176,7 +180,7 @@ const Sidebar = ({ role, onCollapse }) => {
         { label: 'Penyimpanan Industri', path: '/dashboard/industry/warehouse' },
         { label: 'Manajemen Gaji', path: '/dashboard/industry/salary' },
         { label: 'Laporan ESG', path: '/dashboard/industry/reports' },
-        
+
       ],
       marketplace: [
         { label: 'Dasbor', path: '/dashboard/marketplace' },
@@ -187,17 +191,18 @@ const Sidebar = ({ role, onCollapse }) => {
       wastebank_master: [
         { label: 'Dasbor', path: '/dashboard/wastebank-master' },
         { label: 'Manajemen Kolektor', path: '/dashboard/wastebank-master/collectors' },
+        { label: 'Manajemen Harga', path: '/dashboard/wastebank-master/price' },
         { label: 'Transaksi', path: '/dashboard/wastebank-master/transactions' },
         { label: 'Penyimpanan Gudang', path: '/dashboard/wastebank-master/warehouse' },
         { label: 'Gaji', path: '/dashboard/wastebank-master/salary' },
         { label: 'Permintaan Induk', path: '/dashboard/wastebank-master/requests' },
         { label: 'Laporan', path: '/dashboard/wastebank-master/reports' },
       ],
-      wastebank_master_collector: [ 
-          { label: 'Dasbor', path: '/dashboard/collector-master' },
-          { label: 'Tugas Saya', path: '/dashboard/collector-master/assignments' },
-          { label: 'Koleksi', path: '/dashboard/collector-master/collections' },
-          { label: 'Rute', path: '/dashboard/collector-master/routes' }
+      wastebank_master_collector: [
+        { label: 'Dasbor', path: '/dashboard/collector-master' },
+        { label: 'Tugas Saya', path: '/dashboard/collector-master/assignments' },
+        { label: 'Koleksi', path: '/dashboard/collector-master/collections' },
+        { label: 'Rute', path: '/dashboard/collector-master/routes' }
       ]
     };
     return menuConfigs[role] || [];
@@ -208,38 +213,47 @@ const Sidebar = ({ role, onCollapse }) => {
   const handleLogout = async () => {
     try {
       const result = await Swal.fire({
-        title: 'Logout Confirmation',
-        text: 'Are you sure you want to logout?',
+        title: 'Konfirmasi Logout',
+        text: 'Apakah Anda yakin ingin keluar?',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#10B981',
         cancelButtonColor: '#EF4444',
-        confirmButtonText: 'Yes, logout',
-        cancelButtonText: 'Cancel',
+        confirmButtonText: 'Ya, Keluar',
+        cancelButtonText: 'Tidak',
         customClass: {
-          popup: 'rounded-lg',
-          title: 'text-lg font-semibold text-gray-800',
-          htmlContainer: 'text-gray-600',
-          confirmButton: 'font-medium',
-          cancelButton: 'font-medium'
-        }
+          popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+          title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+          htmlContainer: 'text-sm sm:text-base text-gray-600',
+          confirmButton: 'text-sm sm:text-base',
+          cancelButton: 'text-sm sm:text-base'
+        },
+        // Mencegah perubahan padding pada body
+        padding: '1em',
+        heightAuto: false,
+        scrollbarPadding: false
       });
 
       if (result.isConfirmed) {
         setIsLoggingOut(true);
         await signOut(auth);
-        
+
         await Swal.fire({
-          title: 'Logged Out Successfully',
-          text: 'You have been logged out of your account',
+          title: 'Berhasil Keluar',
+          text: 'Anda telah berhasil keluar dari akun Anda.',
           icon: 'success',
           confirmButtonColor: '#10B981',
           timer: 1500,
           timerProgressBar: true,
           showConfirmButton: false,
           customClass: {
-            popup: 'rounded-lg'
-          }
+            popup: 'w-[90%] max-w-sm sm:max-w-md rounded-md sm:rounded-lg',
+            title: 'text-xl sm:text-2xl font-semibold text-gray-800',
+          },
+          // Mencegah perubahan padding pada body
+          padding: '1em',
+          heightAuto: false,
+          scrollbarPadding: false
         });
 
         navigate('/login');
@@ -261,14 +275,20 @@ const Sidebar = ({ role, onCollapse }) => {
   };
 
   return (
-    <aside 
+    <aside
       className={`bg-white border-r border-gray-200 shadow-lg transition-all duration-300 ease-in-out
-        ${isCollapsed ? 'w-20' : 'w-64'} h-screen fixed left-0 top-0`}
-    >
-      {/* Logo Section */}
+        ${isCollapsed ? 'w-20' : 'w-72'} h-screen fixed left-0 top-0`}
+    >      {/* Logo Section */}
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
         {!isCollapsed && (
-          <span className="text-lg font-semibold text-emerald-600">WasteTrack</span>
+          <div className="flex items-center">
+            <img
+              src="/web-logo.svg"
+              alt="WasteTrack Logo"
+              className="h-10 w-10 mr-2"
+            />
+            <span className="text-md font-semibold text-emerald-600">WasteTrack</span>
+          </div>
         )}
         <button
           onClick={() => {
@@ -293,8 +313,8 @@ const Sidebar = ({ role, onCollapse }) => {
               key={index}
               to={item.path}
               className={`group flex items-center gap-3 p-3 rounded-lg transition-all
-                ${isActive 
-                  ? 'bg-emerald-50 text-emerald-600' 
+                ${isActive
+                  ? 'bg-emerald-50 text-emerald-600'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'}
                 ${isCollapsed ? 'justify-center' : ''}`}
             >
@@ -312,41 +332,41 @@ const Sidebar = ({ role, onCollapse }) => {
       {/* Logout Button */}
       <div className="absolute left-0 right-0 px-4 bottom-4">
         <Link
-  to={`/dashboard/${role === 'super_admin' ? 'super-admin' : 
-      role === 'wastebank_admin' ? 'wastebank' : 
-      role === 'wastebank_master' ? 'wastebank-master' :
-      role === 'wastebank_master_collector' ? 'collector-master' :
-      role}/profile`}
-  className={`w-full flex items-center gap-3 p-3 rounded-lg mb-2
-    ${location.pathname.includes('/profile') 
-      ? 'bg-emerald-50 text-emerald-600' 
-      : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'}
+          to={`/dashboard/${role === 'super_admin' ? 'super-admin' :
+            role === 'wastebank_admin' ? 'wastebank' :
+              role === 'wastebank_master' ? 'wastebank-master' :
+                role === 'wastebank_master_collector' ? 'collector-master' :
+                  role}/profile`}
+          className={`w-full flex items-center gap-3 p-3 rounded-lg mb-2
+    ${location.pathname.includes('/profile')
+              ? 'bg-emerald-50 text-emerald-600'
+              : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'}
     transition-all ${isCollapsed ? 'justify-center' : ''}`}
->
-  {!isCollapsed ? (
-    <>
-      {/* Avatar */}
-      <div className="flex-shrink-0">        
-        <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-          {userData?.profile?.institution ? 
-            userData.profile.institution.substring(0, 2).toUpperCase() : 
-            '?'}
-        </div>
-      </div>
-      
-      {/* User Info */}
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-gray-900 truncate">
-          {userData?.profile?.institution || userData?.profile?.institutionName || 'Institution'}
-        </div>
-        <div className="text-xs text-gray-500 truncate">
-          {userData?.email || 'user@email.com'}
-        </div>
-      </div>
-    </>  ) : (
-    <Users size={20} className={location.pathname.includes('/profile') ? 'text-emerald-600' : ''} />
-  )}
-</Link>
+        >
+          {!isCollapsed ? (
+            <>
+              {/* Avatar */}
+              <div className="flex-shrink-0">
+                <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                  {userData?.profile?.institution ?
+                    userData.profile.institution.substring(0, 2).toUpperCase() :
+                    '?'}
+                </div>
+              </div>
+
+              {/* User Info */}
+              <div className="flex-1 min-w-0 text-left">
+                <div className="text-sm font-medium text-gray-900 truncate">
+                  {userData?.profile?.institution || userData?.profile?.institutionName || 'Institution'}
+                </div>
+                <div className="text-xs text-gray-500 truncate">
+                  {userData?.email || 'user@email.com'}
+                </div>
+              </div>
+            </>) : (
+            <Users size={20} className={location.pathname.includes('/profile') ? 'text-emerald-600' : ''} />
+          )}
+        </Link>
         <button
           onClick={handleLogout}
           disabled={isLoggingOut}
