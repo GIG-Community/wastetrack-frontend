@@ -14,11 +14,13 @@ import ServerError from '../pages/ServerError';
 import Maintenance from '../pages/Maintenance';
 import DevelopmentModal from '../components/DevelopmentModal';
 
-// Import dashboard spesifik
+// Import Admin Routes
 import SuperAdminDashboard from '../pages/dashboard/super-admin/SuperAdminDashboard';
 import Users from '../pages/dashboard/super-admin/Users';
 import WasteBanks from '../pages/dashboard/super-admin/WasteBanks';
 import SystemSettings from '../pages/dashboard/super-admin/SystemSettings';
+
+// Import Wastebank Routes
 import WastebankAdminDashboard from '../pages/dashboard/wastebank/WastebankDashboard';
 import Warehouse from '../pages/dashboard/wastebank/Warehouse';
 import Employees from '../pages/dashboard/wastebank/Collector';
@@ -26,11 +28,17 @@ import Reports from '../pages/dashboard/wastebank/Reports';
 import Transactions from '../pages/dashboard/wastebank/Transaction';
 import SalaryManagement from '../pages/dashboard/wastebank/SalaryManagement';
 import RequestCollection from '../pages/dashboard/wastebank/RequestCollection';
+import PriceManagement from '../pages/dashboard/wastebank/PriceManagement';
+import WastebankProfile from '../pages/dashboard/wastebank/Profile';
+
+// Import Wastebank Collector Routes
 import CollectorDashboard from '../pages/dashboard/collector/CollectorDashboard';
 import Assignments from '../pages/dashboard/collector/Assignments';
 import CollectorRoutes from '../pages/dashboard/collector/CollectorRoutes';
 import UpdateCollection from '../pages/dashboard/collector/UpdateCollection';
 import CollectorCollections from '../pages/dashboard/collector/CollectorCollections';
+
+// Import Customer Routes
 import CustomerDashboard from '../pages/dashboard/customer/CustomerDashboard';
 import SchedulePickup from '../pages/dashboard/customer/SchedulePickup';
 import DetectWaste from '../pages/dashboard/customer/DetectWaste';
@@ -42,18 +50,22 @@ import ProductDetails from '../pages/dashboard/customer/ProductDetails';
 import Checkout from '../pages/dashboard/customer/Checkout';
 import OrderConfirmation from '../pages/dashboard/customer/OrderConfirmation';
 import CustomerProfile from '../pages/dashboard/customer/Profile';
-import PickLocation from '../components/PickLocation';
+
+// Import Government Routes
 import GovernmentDashboard from '../pages/dashboard/government/GovernmentDashboard';
-import WastebankProfile from '../pages/dashboard/wastebank/Profile';
 import WastebankReports from '../pages/dashboard/government/GovernmentReports';
 import GovernmentMonitoring from '../pages/dashboard/government/GovernmentMonitoring';
 import GovernmentAnalytics from '../pages/dashboard/government/GovernmentAnalytics';
+
+// Import Industry Routes
 import IndustryDashboard from '../pages/dashboard/industry/IndustryDashboard';
 import EsgReport from '../pages/dashboard/industry/EsgReport';
 import RecycledHubIndustry from '../pages/dashboard/industry/RecycledHubIndustry';
 import RecycleManagement from '../pages/dashboard/industry/RecycleManagement';
 import IndustryWarehouse from '../pages/dashboard/industry/IndustryWarehouse';
 import IndustrySalary from '../pages/dashboard/industry/IndustrySalary';
+
+// Import Wastebank Master Routes
 import WastebankMasterDashboard from '../pages/dashboard/wastebank-master/WastebankMasterDashboard';
 import MasterTransaction from '../pages/dashboard/wastebank-master/MasterTransaction';
 import MasterCollector from '../pages/dashboard/wastebank-master/MasterCollector';
@@ -61,15 +73,23 @@ import MasterReports from '../pages/dashboard/wastebank-master/MasterReports';
 import MasterWarehouse from '../pages/dashboard/wastebank-master/MasterWarehouse';
 import MasterSalaryManagement from '../pages/dashboard/wastebank-master/MasterSalary';
 import MasterRequestCollection from '../pages/dashboard/wastebank-master/RequestCollection';
+import MasterPriceManagement from '../pages/dashboard/wastebank-master/PriceManagement';
+import WastebankMasterProfile from '../pages/dashboard/wastebank-master/Profile';
+
+// Import Collector Master Routes
 import MasterAssignment from '../pages/dashboard/collector-master/MasterAssignments';
 import MasterCollections from '../pages/dashboard/collector-master/MasterCollections';
 import MasterCollectorDashboard from '../pages/dashboard/collector-master/MasterCollectorDashboard';
 import MasterRoutes from '../pages/dashboard/collector-master/MasterRoutes';
-import WastebankMasterProfile from '../pages/dashboard/wastebank-master/Profile';
 import MasterUpdateCollection from '../pages/dashboard/collector-master/MasterUpdateCollection';
+
+// Import Marketplace Routes
 import MarketplaceDashboard from '../pages/dashboard/marketplace/MarketplaceDashboard';
 import Products from '../pages/dashboard/marketplace/Products';
 import Orders from '../pages/dashboard/marketplace/Orders';
+
+// Import other components
+import PickLocation from '../components/PickLocation';
 
 const AppRoutes = () => (
   <Routes>
@@ -127,6 +147,7 @@ const AppRoutes = () => (
           <Route path="/" element={<WastebankAdminDashboard />} />
           <Route path="warehouse-storage" element={<Warehouse />} />
           <Route path="employees" element={<Employees />} />
+          <Route path="price" element={<PriceManagement />} />
           <Route path="reports" element={<Reports />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="salary" element={<SalaryManagement />} />
@@ -211,6 +232,7 @@ const AppRoutes = () => (
           <Route path="salary" element={<MasterSalaryManagement />} />
           <Route path="reports" element={<MasterReports />} />
           <Route path="requests" element={<MasterRequestCollection />} />
+          <Route path="price" element={<MasterPriceManagement />} />
           <Route path="profile" element={<WastebankMasterProfile />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
